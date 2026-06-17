@@ -8,6 +8,7 @@ import httpx
 
 from app.core.contracts.request_executor import RequestExecutor, ResponseResult
 from app.core.contracts.variable_resolver import VariableResolver
+from app.core.engine.auth import build_auth
 from app.core.engine.variable_resolver import DefaultVariableResolver
 from app.core.models.context import ExecutionContext
 from app.core.models.history import HistoryEntry, RunStatus
@@ -100,6 +101,9 @@ class HttpRequestExecutor(RequestExecutor):
                 headers[self._resolver.resolve(h.key, ctx)] = self._resolver.resolve(
                     h.value, ctx
                 )
+        auth = build_auth(request.auth_type, request.auth_config)
+        if auth:
+            headers = auth.apply_to_headers(headers)
         return headers
 
     def _build_params(

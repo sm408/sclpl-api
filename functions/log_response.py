@@ -10,11 +10,13 @@ logger = logging.getLogger(__name__)
 
 
 def run(ctx):
-    if ctx.response:
+    response = ctx.metadata.get("response")
+    if response:
         logger.info(
-            "Response: %s %s -> %s",
+            "Response: %s %s -> %s (%dms)",
             ctx.request.method if ctx.request else "?",
             ctx.request.url if ctx.request else "?",
-            getattr(ctx.response, "status_code", "?"),
+            getattr(response, "status_code", "?"),
+            getattr(response, "duration_ms", 0),
         )
     return ctx
