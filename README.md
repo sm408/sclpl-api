@@ -65,7 +65,10 @@ docs/
   planning/                    roadmap, non-goals, dev strategy
   decisions/                   architecture decision records
   adr/                         detailed ADR files
-.mimocode/                     project-local MiMo skills, agents, tools
+.mimocode/
+  skills/                      11 project-local MiMo skills
+  agents/                      5 specialized subagents
+  tools/                       3 project-aware custom tools
 ```
 
 ## Intended future application skeleton

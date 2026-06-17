@@ -42,6 +42,8 @@ Roadmap, strategy, and development guidance:
 - `UI_PHILOSOPHY.md` — UI design principles
 - `WORKFLOWS.md` — workflow progression strategy
 - `future_roadmap.md` — longer-term vision
+- `CHANGELOG.md` — project change log
+- `CONTRIBUTING.md` — contributor guidance
 
 ## decisions/
 
