@@ -1,0 +1,39 @@
+# Legacy material — kept locally but not tracked
+legacy/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+dist/
+build/
+*.egg
+.eggs/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# SQLite (user data)
+*.db
+*.db-journal
+*.db-wal
+
+# Secrets
+.env
+.env.*
+*.pem
+*.key
