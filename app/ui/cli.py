@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import csv
 import json
 import sys
 from pathlib import Path
@@ -12,9 +13,9 @@ from rich.table import Table
 from app.core.engine.hooks import FunctionHookRunner
 from app.core.engine.variable_resolver import DefaultVariableResolver
 from app.core.models.context import ExecutionContext
-from app.core.models.environment import Environment, Variable, VariableScope
+from app.core.models.environment import Environment, Variable
 from app.core.models.request import HttpMethod, RequestDef, RequestParam
-from app.core.models.workflow import WorkflowDef, WorkflowStep, StepType, RetryConfig
+from app.core.models.workflow import RetryConfig, RetryStrategy, StepType, WorkflowDef, WorkflowStep
 from app.ui.app import App
 
 app = typer.Typer(
@@ -24,69 +25,11 @@ app = typer.Typer(
 )
 console = Console()
 
+DB_OPTION = typer.Option("data/sclplapi.db", "--db", help="Database path")
+
 
 def _run(coro):
     return asyncio.run(coro)
-
-
-@app.command()
-def run(
-    url: str = typer.Argument(help="Request URL"),
-    method: str = typer.Option("GET", "-m", "--method", help="HTTP method"),
-    header: list[str] = typer.Option([], "-H", "--header", help="Headers (Key: Value)"),
-    body: str | None = typer.Option(None, "-b", "--body", help="Request body"),
-    env_name: str | None = typer.Option(None, "-e", "--env", help="Environment name"),
-    db_path: str = typer.Option("data/sclplapi.db", help="Database path"),
-):
-    """Execute a single HTTP request."""
-    _run(_run_request(url, method, header, body, env_name, db_path))
-
-
-async def _run_request(url, method, headers_raw, body, env_name, db_path):
-    async with App(db_path) as application:
-        env = None
-        variables: dict[str, str] = {}
-
-        if env_name:
-            envs = await application.environments.list_all()
-            env = next((e for e in envs if e["name"] == env_name), None)
-            if not env:
-                console.print(f"[red]Environment '{env_name}' not found[/red]")
-                raise typer.Exit(1)
-            for v in env.get("variables", []):
-                variables[v["key"]] = v["value"]
-
-        parsed_headers = []
-        for h in headers_raw:
-            key, _, value = h.partition(":")
-            parsed_headers.append(RequestParam(key=key.strip(), value=value.strip()))
-
-        request = RequestDef(
-            id="cli",
-            name=f"{method} {url}",
-            method=HttpMethod(method.upper()),
-            url=url,
-            headers=parsed_headers,
-            body=body,
-        )
-
-        resolver = DefaultVariableResolver()
-        ctx = ExecutionContext(
-            environment=_dict_to_env(env) if env else None,
-            variables=variables,
-        )
-        ctx.variables = resolver.build_variable_map(ctx)
-
-        hook_runner = FunctionHookRunner()
-        ctx = await hook_runner.run_pre_request(ctx)
-
-        result, entry = await application.request_executor.execute_with_history(request, ctx)
-        await application.history.save(entry)
-
-        ctx.metadata["response"] = result
-        await hook_runner.run_post_response(ctx)
-
-        _print_response(result.status_code, result.headers, result.body, result.duration_ms, result.error)
 
 
 def _dict_to_env(d: dict) -> Environment:
@@ -101,11 +44,9 @@ def _print_response(status_code, headers, body, duration_ms, error):
     if error:
         console.print(f"[red]Error: {error}[/red]")
         return
-
     color = "green" if status_code < 400 else "red"
     console.print(f"[{color}]{status_code}[/{color}] {duration_ms}ms")
     console.print()
-
     try:
         parsed = json.loads(body)
         console.print_json(json.dumps(parsed, indent=2))
@@ -114,6 +55,115 @@ def _print_response(status_code, headers, body, duration_ms, error):
             console.print(body[:2000])
 
 
+def _parse_headers(headers_raw: list[str]) -> list[RequestParam]:
+    parsed = []
+    for h in headers_raw:
+        key, _, value = h.partition(":")
+        parsed.append(RequestParam(key=key.strip(), value=value.strip()))
+    return parsed
+
+
+async def _get_active_env(application) -> tuple[dict | None, dict[str, str]]:
+    env = await application.environments.get_active()
+    variables: dict[str, str] = {}
+    if env:
+        for v in env.get("variables", []):
+            variables[v["key"]] = v["value"]
+    return env, variables
+
+
+async def _resolve_ctx(application, env_name: str | None = None, use_active: bool = True) -> tuple[dict | None, ExecutionContext]:
+    env = None
+    variables: dict[str, str] = {}
+
+    if env_name:
+        envs = await application.environments.list_all()
+        env = next((e for e in envs if e["name"] == env_name), None)
+        if not env:
+            console.print(f"[red]Environment '{env_name}' not found[/red]")
+            raise typer.Exit(1)
+        for v in env.get("variables", []):
+            variables[v["key"]] = v["value"]
+    elif use_active:
+        env, variables = await _get_active_env(application)
+
+    resolver = DefaultVariableResolver()
+    ctx = ExecutionContext(
+        environment=_dict_to_env(env) if env else None,
+        variables=variables,
+    )
+    ctx.variables = resolver.build_variable_map(ctx)
+    return env, ctx
+
+
+# ──────────────────────────────────────────────────────────────────────
+# RUN
+# ──────────────────────────────────────────────────────────────────────
+
+@app.command()
+def run(
+    url: str = typer.Argument(help="Request URL"),
+    method: str = typer.Option("GET", "-m", "--method", help="HTTP method"),
+    header: list[str] = typer.Option([], "-H", "--header", help="Headers (Key:Value)"),
+    body: str | None = typer.Option(None, "-b", "--body", help="Request body"),
+    body_type: str | None = typer.Option(None, help="Body type: json, form, raw"),
+    auth_type: str | None = typer.Option(None, help="Auth type: bearer, basic, api_key"),
+    auth_token: str | None = typer.Option(None, help="Auth token (bearer)"),
+    auth_user: str | None = typer.Option(None, help="Auth username (basic)"),
+    auth_pass: str | None = typer.Option(None, help="Auth password (basic)"),
+    auth_key: str | None = typer.Option(None, help="API key value"),
+    auth_header: str = typer.Option("X-API-Key", help="API key header name"),
+    env_name: str | None = typer.Option(None, "-e", "--env", help="Environment name (default: active)"),
+    db: str = DB_OPTION,
+):
+    """Execute a single HTTP request."""
+    _run(_run_request(url, method, header, body, body_type, auth_type,
+                      auth_token, auth_user, auth_pass, auth_key, auth_header, env_name, db))
+
+
+async def _run_request(url, method, headers_raw, body, body_type, auth_type,
+                       auth_token, auth_user, auth_pass, auth_key, auth_header, env_name, db_path):
+    async with App(db_path) as application:
+        env, ctx = await _resolve_ctx(application, env_name)
+        parsed_headers = _parse_headers(headers_raw)
+
+        auth_config = {}
+        if auth_type == "bearer" and auth_token:
+            auth_config = {"token": auth_token}
+        elif auth_type == "basic" and auth_user:
+            auth_config = {"username": auth_user, "password": auth_pass or ""}
+        elif auth_type == "api_key" and auth_key:
+            auth_config = {"key": auth_key, "header_name": auth_header}
+
+        request = RequestDef(
+            id="cli",
+            name=f"{method} {url}",
+            method=HttpMethod(method.upper()),
+            url=url,
+            headers=parsed_headers,
+            body=body,
+            body_type=body_type,
+            auth_type=auth_type,
+            auth_config=auth_config,
+        )
+
+        hook_runner = FunctionHookRunner()
+        ctx.request = request
+        ctx = await hook_runner.run_pre_request(ctx)
+
+        result, entry = await application.request_executor.execute_with_history(request, ctx)
+        await application.history.save(entry)
+
+        ctx.metadata["response"] = result
+        await hook_runner.run_post_response(ctx)
+
+        _print_response(result.status_code, result.headers, result.body, result.duration_ms, result.error)
+
+
+# ──────────────────────────────────────────────────────────────────────
+# BATCH
+# ──────────────────────────────────────────────────────────────────────
+
 @app.command()
 def batch(
     csv_file: str = typer.Argument(help="CSV file path"),
@@ -121,24 +171,21 @@ def batch(
     method: str = typer.Option("GET", "-m", "--method", help="HTTP method"),
     header: list[str] = typer.Option([], "-H", "--header", help="Headers"),
     body: str | None = typer.Option(None, "-b", "--body", help="Request body template"),
-    db_path: str = typer.Option("data/sclplapi.db", help="Database path"),
+    env_name: str | None = typer.Option(None, "-e", "--env", help="Environment name"),
+    save_history: bool = typer.Option(True, help="Save each request to history"),
+    db: str = DB_OPTION,
 ):
     """Execute a request for each row in a CSV file."""
-    _run(_run_batch(csv_file, url, method, header, body, db_path))
+    _run(_run_batch(csv_file, url, method, header, body, env_name, save_history, db))
 
 
-async def _run_batch(csv_file, url, method, headers_raw, body, db_path):
-    import csv as csv_mod
-
+async def _run_batch(csv_file, url, method, headers_raw, body, env_name, save_history, db_path):
     path = Path(csv_file)
     if not path.exists():
         console.print(f"[red]CSV file not found: {csv_file}[/red]")
         raise typer.Exit(1)
 
-    parsed_headers = []
-    for h in headers_raw:
-        key, _, value = h.partition(":")
-        parsed_headers.append(RequestParam(key=key.strip(), value=value.strip()))
+    parsed_headers = _parse_headers(headers_raw)
 
     request = RequestDef(
         id="batch",
@@ -150,25 +197,42 @@ async def _run_batch(csv_file, url, method, headers_raw, body, db_path):
     )
 
     with open(path, encoding="utf-8") as f:
-        reader = csv_mod.DictReader(f)
+        reader = csv.DictReader(f)
         rows = list(reader)
 
     console.print(f"Running {len(rows)} requests...")
 
     async with App(db_path) as application:
+        env, base_ctx = await _resolve_ctx(application, env_name)
         resolver = DefaultVariableResolver()
+
         table = Table(title="Batch Results")
         table.add_column("Row", style="dim")
         table.add_column("Status", justify="center")
         table.add_column("Duration", justify="right")
         table.add_column("Error")
 
+        ok = 0
+        fail = 0
+
         for i, row in enumerate(rows, 1):
-            ctx = ExecutionContext(batch_row=dict(row))
+            ctx = ExecutionContext(
+                environment=base_ctx.environment,
+                variables=dict(base_ctx.variables),
+                batch_row=dict(row),
+            )
             ctx.variables = resolver.build_variable_map(ctx)
 
-            result = await application.request_executor.execute(request, ctx)
+            result, entry = await application.request_executor.execute_with_history(request, ctx)
+
+            if save_history:
+                await application.history.save(entry)
+
             color = "green" if result.status_code < 400 else "red"
+            if result.status_code < 400 and not result.error:
+                ok += 1
+            else:
+                fail += 1
             table.add_row(
                 str(i),
                 f"[{color}]{result.status_code}[/{color}]",
@@ -177,25 +241,40 @@ async def _run_batch(csv_file, url, method, headers_raw, body, db_path):
             )
 
         console.print(table)
+        console.print(f"\n[green]{ok} ok[/green] / [red]{fail} failed[/red]")
 
 
-@app.command()
-def history(
+# ──────────────────────────────────────────────────────────────────────
+# HISTORY
+# ──────────────────────────────────────────────────────────────────────
+
+history_app = typer.Typer(help="Request history commands")
+app.add_typer(history_app, name="history")
+
+
+@history_app.command("list")
+def history_list(
     limit: int = typer.Option(20, "-n", "--limit", help="Number of entries"),
-    db_path: str = typer.Option("data/sclplapi.db", help="Database path"),
+    request_id: str | None = typer.Option(None, "-r", "--request", help="Filter by request ID"),
+    db: str = DB_OPTION,
 ):
     """Show request history."""
-    _run(_show_history(limit, db_path))
+    _run(_show_history(limit, request_id, db))
 
 
-async def _show_history(limit, db_path):
+async def _show_history(limit, request_id, db_path):
     async with App(db_path) as application:
-        entries = await application.history.list_recent(limit)
+        if request_id:
+            entries = await application.history.list_by_request(request_id, limit)
+        else:
+            entries = await application.history.list_recent(limit)
+
         if not entries:
             console.print("[dim]No history entries[/dim]")
             return
 
         table = Table(title="Request History")
+        table.add_column("ID", style="dim")
         table.add_column("Time", style="dim")
         table.add_column("Method")
         table.add_column("URL")
@@ -205,6 +284,7 @@ async def _show_history(limit, db_path):
         for entry in entries:
             status_color = "green" if entry["status"] == "success" else "red"
             table.add_row(
+                entry["id"][:8],
                 entry["created_at"][:19],
                 entry["method"],
                 entry["url"][:60],
@@ -215,12 +295,70 @@ async def _show_history(limit, db_path):
         console.print(table)
 
 
-@app.command()
-def collections(
-    db_path: str = typer.Option("data/sclplapi.db", help="Database path"),
+@history_app.command("inspect")
+def history_inspect(
+    history_id: str = typer.Argument(help="History entry ID (or prefix)"),
+    db: str = DB_OPTION,
 ):
+    """Inspect a history entry in detail."""
+    _run(_inspect_history(history_id, db))
+
+
+async def _inspect_history(history_id, db_path):
+    async with App(db_path) as application:
+        entry = await application.history.get(history_id)
+        if not entry:
+            entries = await application.history.list_recent(1000)
+            entry = next((e for e in entries if e["id"].startswith(history_id)), None)
+        if not entry:
+            console.print(f"[red]History entry '{history_id}' not found[/red]")
+            raise typer.Exit(1)
+
+        console.print(f"[bold]Request:[/bold] {entry['method']} {entry['url']}")
+        console.print(f"[bold]Status:[/bold] {entry.get('status_code', 'N/A')} ({entry['status']})")
+        console.print(f"[bold]Duration:[/bold] {entry['duration_ms']}ms")
+        console.print(f"[bold]Time:[/bold] {entry['created_at']}")
+        if entry.get("error_message"):
+            console.print(f"[bold red]Error:[/bold red] {entry['error_message']}")
+        if entry.get("response_body"):
+            console.print("\n[bold]Response Body:[/bold]")
+            try:
+                parsed = json.loads(entry["response_body"])
+                console.print_json(json.dumps(parsed, indent=2))
+            except (json.JSONDecodeError, TypeError):
+                console.print(entry["response_body"][:2000])
+
+
+@history_app.command("clear")
+def history_clear(
+    confirm: bool = typer.Option(False, "-y", "--yes", help="Skip confirmation"),
+    db: str = DB_OPTION,
+):
+    """Clear all history entries."""
+    _run(_clear_history(confirm, db))
+
+
+async def _clear_history(confirm, db_path):
+    if not confirm:
+        console.print("[yellow]Use -y to confirm clearing all history[/yellow]")
+        raise typer.Exit(1)
+    async with App(db_path) as application:
+        count = await application.history.clear()
+        console.print(f"[green]Cleared {count} history entries[/green]")
+
+
+# ──────────────────────────────────────────────────────────────────────
+# COLLECTIONS
+# ──────────────────────────────────────────────────────────────────────
+
+collection_app = typer.Typer(help="Collection management commands")
+app.add_typer(collection_app, name="collection")
+
+
+@collection_app.command("list")
+def collection_list(db: str = DB_OPTION):
     """List all collections."""
-    _run(_list_collections(db_path))
+    _run(_list_collections(db))
 
 
 async def _list_collections(db_path):
@@ -238,76 +376,343 @@ async def _list_collections(db_path):
         console.print(table)
 
 
-@app.command("env")
-def env_cmd(
-    action: str = typer.Argument(help="Action: list, create, set-var, activate"),
-    name: str | None = typer.Argument(None, help="Environment name or key"),
-    value: str | None = typer.Argument(None, help="Variable value"),
-    db_path: str = typer.Option("data/sclplapi.db", help="Database path"),
+@collection_app.command("create")
+def collection_create(
+    name: str = typer.Argument(help="Collection name"),
+    desc: str = typer.Option("", "-d", "--desc", help="Description"),
+    db: str = DB_OPTION,
 ):
-    """Manage environments: list, create, set-var, activate."""
-    _run(_manage_env(action, name, value, db_path))
+    """Create a new collection."""
+    _run(_create_collection(name, desc, db))
 
 
-async def _manage_env(action, name, value, db_path):
+async def _create_collection(name, desc, db_path):
     async with App(db_path) as application:
-        if action == "list":
-            envs = await application.environments.list_all()
-            if not envs:
-                console.print("[dim]No environments[/dim]")
-                return
-            table = Table(title="Environments")
-            table.add_column("ID", style="dim")
-            table.add_column("Name")
-            table.add_column("Active", justify="center")
-            table.add_column("Variables", justify="right")
-            for e in envs:
-                active = "[green]yes[/green]" if e["is_active"] else "no"
-                table.add_row(e["id"][:8], e["name"], active, str(len(e.get("variables", []))))
-            console.print(table)
+        col = await application.collections.create(name, desc)
+        console.print(f"[green]Created collection '{name}' ({col['id'][:8]})[/green]")
 
-        elif action == "create":
-            if not name:
-                console.print("[red]Environment name required[/red]")
-                raise typer.Exit(1)
-            env = await application.environments.create(name)
-            console.print(f"[green]Created environment '{name}' ({env['id'][:8]})[/green]")
 
-        elif action == "set-var":
-            if not name or not value:
-                console.print("[red]Usage: env set-var <env_name> KEY=VALUE[/red]")
-                raise typer.Exit(1)
-            envs = await application.environments.list_all()
-            env = next((e for e in envs if e["name"] == name), None)
-            if not env:
-                console.print(f"[red]Environment '{name}' not found[/red]")
-                raise typer.Exit(1)
-            key, _, val = value.partition("=")
-            await application.environments.set_variable(env["id"], key.strip(), val.strip())
-            console.print(f"[green]Set {key.strip()} in '{name}'[/green]")
+@collection_app.command("delete")
+def collection_delete(
+    collection_id: str = typer.Argument(help="Collection ID (or prefix)"),
+    db: str = DB_OPTION,
+):
+    """Delete a collection."""
+    _run(_delete_collection(collection_id, db))
 
-        elif action == "activate":
-            if not name:
-                console.print("[red]Environment name required[/red]")
-                raise typer.Exit(1)
-            envs = await application.environments.list_all()
-            env = next((e for e in envs if e["name"] == name), None)
-            if not env:
-                console.print(f"[red]Environment '{name}' not found[/red]")
-                raise typer.Exit(1)
-            await application.environments.set_active(env["id"])
-            console.print(f"[green]Activated environment '{name}'[/green]")
 
+async def _delete_collection(collection_id, db_path):
+    async with App(db_path) as application:
+        cols = await application.collections.list_all()
+        col = next((c for c in cols if c["id"].startswith(collection_id)), None)
+        if not col:
+            console.print(f"[red]Collection '{collection_id}' not found[/red]")
+            raise typer.Exit(1)
+        await application.collections.delete(col["id"])
+        console.print(f"[green]Deleted collection '{col['name']}'[/green]")
+
+
+@collection_app.command("add-request")
+def collection_add_request(
+    collection_id: str = typer.Argument(help="Collection ID (or prefix)"),
+    name: str = typer.Argument(help="Request name"),
+    url: str = typer.Argument(help="Request URL"),
+    method: str = typer.Option("GET", "-m", "--method", help="HTTP method"),
+    header: list[str] = typer.Option([], "-H", "--header", help="Headers"),
+    body: str | None = typer.Option(None, "-b", "--body", help="Request body"),
+    auth_type: str | None = typer.Option(None, help="Auth type"),
+    auth_token: str | None = typer.Option(None, help="Auth token"),
+    db: str = DB_OPTION,
+):
+    """Add a saved request to a collection."""
+    _run(_add_request(collection_id, name, url, method, header, body, auth_type, auth_token, db))
+
+
+async def _add_request(collection_id, name, url, method, headers_raw, body, auth_type, auth_token, db_path):
+    async with App(db_path) as application:
+        cols = await application.collections.list_all()
+        col = next((c for c in cols if c["id"].startswith(collection_id)), None)
+        if not col:
+            console.print(f"[red]Collection '{collection_id}' not found[/red]")
+            raise typer.Exit(1)
+
+        auth_config = {}
+        if auth_type == "bearer" and auth_token:
+            auth_config = {"token": auth_token}
+
+        headers = [{"key": h.split(":")[0].strip(), "value": h.split(":")[1].strip()} for h in headers_raw]
+
+        req = await application.requests.create({
+            "name": name,
+            "method": method.upper(),
+            "url": url,
+            "headers": headers,
+            "body": body,
+            "auth_type": auth_type,
+            "auth_config": auth_config,
+            "collection_id": col["id"],
+        })
+        console.print(f"[green]Added request '{name}' ({req['id'][:8]}) to '{col['name']}'[/green]")
+
+
+@collection_app.command("requests")
+def collection_requests(
+    collection_id: str = typer.Argument(help="Collection ID (or prefix)"),
+    db: str = DB_OPTION,
+):
+    """List requests in a collection."""
+    _run(_list_requests(collection_id, db))
+
+
+async def _list_requests(collection_id, db_path):
+    async with App(db_path) as application:
+        cols = await application.collections.list_all()
+        col = next((c for c in cols if c["id"].startswith(collection_id)), None)
+        if not col:
+            console.print(f"[red]Collection '{collection_id}' not found[/red]")
+            raise typer.Exit(1)
+
+        reqs = await application.requests.list_all(col["id"])
+        if not reqs:
+            console.print(f"[dim]No requests in '{col['name']}'[/dim]")
+            return
+
+        table = Table(title=f"Requests in {col['name']}")
+        table.add_column("ID", style="dim")
+        table.add_column("Name")
+        table.add_column("Method")
+        table.add_column("URL")
+        for r in reqs:
+            table.add_row(r["id"][:8], r["name"], r["method"], r["url"][:60])
+        console.print(table)
+
+
+@collection_app.command("run")
+def collection_run(
+    request_id: str = typer.Argument(help="Request ID (or prefix)"),
+    env_name: str | None = typer.Option(None, "-e", "--env", help="Environment name"),
+    db: str = DB_OPTION,
+):
+    """Execute a saved request by ID."""
+    _run(_run_saved_request(request_id, env_name, db))
+
+
+async def _run_saved_request(request_id, env_name, db_path):
+    async with App(db_path) as application:
+        reqs = await application.requests.list_all()
+        req_data = next((r for r in reqs if r["id"].startswith(request_id)), None)
+        if not req_data:
+            console.print(f"[red]Request '{request_id}' not found[/red]")
+            raise typer.Exit(1)
+
+        env, ctx = await _resolve_ctx(application, env_name)
+        ctx.request = RequestDef(
+            id=req_data["id"],
+            name=req_data["name"],
+            method=HttpMethod(req_data["method"]),
+            url=req_data["url"],
+            headers=[RequestParam(key=h["key"], value=h["value"]) for h in json.loads(req_data.get("headers", "[]"))],
+            body=req_data.get("body"),
+            body_type=req_data.get("body_type"),
+            auth_type=req_data.get("auth_type"),
+            auth_config=json.loads(req_data.get("auth_config", "{}")),
+        )
+
+        hook_runner = FunctionHookRunner()
+        ctx = await hook_runner.run_pre_request(ctx)
+
+        result, entry = await application.request_executor.execute_with_history(ctx.request, ctx)
+        await application.history.save(entry)
+
+        ctx.metadata["response"] = result
+        await hook_runner.run_post_response(ctx)
+
+        _print_response(result.status_code, result.headers, result.body, result.duration_ms, result.error)
+
+
+# ──────────────────────────────────────────────────────────────────────
+# ENVIRONMENTS
+# ──────────────────────────────────────────────────────────────────────
+
+env_app = typer.Typer(help="Environment management commands")
+app.add_typer(env_app, name="env")
+
+
+@env_app.command("list")
+def env_list(db: str = DB_OPTION):
+    """List all environments."""
+    _run(_env_list(db))
+
+
+async def _env_list(db_path):
+    async with App(db_path) as application:
+        envs = await application.environments.list_all()
+        if not envs:
+            console.print("[dim]No environments[/dim]")
+            return
+        table = Table(title="Environments")
+        table.add_column("ID", style="dim")
+        table.add_column("Name")
+        table.add_column("Active", justify="center")
+        table.add_column("Variables", justify="right")
+        for e in envs:
+            active = "[green]yes[/green]" if e["is_active"] else "no"
+            var_count = len(e.get("variables", []))
+            table.add_row(e["id"][:8], e["name"], active, str(var_count))
+        console.print(table)
+
+
+@env_app.command("create")
+def env_create(
+    name: str = typer.Argument(help="Environment name"),
+    db: str = DB_OPTION,
+):
+    """Create a new environment."""
+    _run(_env_create(name, db))
+
+
+async def _env_create(name, db_path):
+    async with App(db_path) as application:
+        env = await application.environments.create(name)
+        console.print(f"[green]Created environment '{name}' ({env['id'][:8]})[/green]")
+
+
+@env_app.command("delete")
+def env_delete(
+    name: str = typer.Argument(help="Environment name"),
+    db: str = DB_OPTION,
+):
+    """Delete an environment."""
+    _run(_env_delete(name, db))
+
+
+async def _env_delete(name, db_path):
+    async with App(db_path) as application:
+        envs = await application.environments.list_all()
+        env = next((e for e in envs if e["name"] == name), None)
+        if not env:
+            console.print(f"[red]Environment '{name}' not found[/red]")
+            raise typer.Exit(1)
+        await application.environments.delete(env["id"])
+        console.print(f"[green]Deleted environment '{name}'[/green]")
+
+
+@env_app.command("activate")
+def env_activate(
+    name: str = typer.Argument(help="Environment name"),
+    db: str = DB_OPTION,
+):
+    """Activate an environment."""
+    _run(_env_activate(name, db))
+
+
+async def _env_activate(name, db_path):
+    async with App(db_path) as application:
+        envs = await application.environments.list_all()
+        env = next((e for e in envs if e["name"] == name), None)
+        if not env:
+            console.print(f"[red]Environment '{name}' not found[/red]")
+            raise typer.Exit(1)
+        await application.environments.set_active(env["id"])
+        console.print(f"[green]Activated environment '{name}'[/green]")
+
+
+@env_app.command("set-var")
+def env_set_var(
+    name: str = typer.Argument(help="Environment name"),
+    key_value: str = typer.Argument(help="Variable as KEY=VALUE"),
+    secret: bool = typer.Option(False, "-s", "--secret", help="Mark as secret"),
+    db: str = DB_OPTION,
+):
+    """Set a variable in an environment."""
+    _run(_env_set_var(name, key_value, secret, db))
+
+
+async def _env_set_var(name, key_value, secret, db_path):
+    key, _, value = key_value.partition("=")
+    if not key or not value:
+        console.print("[red]Format: KEY=VALUE[/red]")
+        raise typer.Exit(1)
+    async with App(db_path) as application:
+        envs = await application.environments.list_all()
+        env = next((e for e in envs if e["name"] == name), None)
+        if not env:
+            console.print(f"[red]Environment '{name}' not found[/red]")
+            raise typer.Exit(1)
+        await application.environments.set_variable(env["id"], key.strip(), value.strip(), is_secret=secret)
+        console.print(f"[green]Set {key.strip()} in '{name}'[/green]")
+
+
+@env_app.command("delete-var")
+def env_delete_var(
+    name: str = typer.Argument(help="Environment name"),
+    key: str = typer.Argument(help="Variable key"),
+    db: str = DB_OPTION,
+):
+    """Delete a variable from an environment."""
+    _run(_env_delete_var(name, key, db))
+
+
+async def _env_delete_var(name, key, db_path):
+    async with App(db_path) as application:
+        envs = await application.environments.list_all()
+        env = next((e for e in envs if e["name"] == name), None)
+        if not env:
+            console.print(f"[red]Environment '{name}' not found[/red]")
+            raise typer.Exit(1)
+        deleted = await application.environments.delete_variable(env["id"], key)
+        if deleted:
+            console.print(f"[green]Deleted variable '{key}' from '{name}'[/green]")
+        else:
+            console.print(f"[yellow]Variable '{key}' not found in '{name}'[/yellow]")
+
+
+@env_app.command("vars")
+def env_vars(
+    name: str = typer.Argument(help="Environment name"),
+    db: str = DB_OPTION,
+):
+    """List variables in an environment."""
+    _run(_env_vars(name, db))
+
+
+async def _env_vars(name, db_path):
+    async with App(db_path) as application:
+        envs = await application.environments.list_all()
+        env = next((e for e in envs if e["name"] == name), None)
+        if not env:
+            console.print(f"[red]Environment '{name}' not found[/red]")
+            raise typer.Exit(1)
+
+        variables = env.get("variables", [])
+        if not variables:
+            console.print(f"[dim]No variables in '{name}'[/dim]")
+            return
+
+        table = Table(title=f"Variables in {name}")
+        table.add_column("Key")
+        table.add_column("Value")
+        table.add_column("Secret", justify="center")
+        for v in variables:
+            val = "****" if v.get("is_secret") else v["value"]
+            secret = "[yellow]yes[/yellow]" if v.get("is_secret") else "no"
+            table.add_row(v["key"], val, secret)
+        console.print(table)
+
+
+# ──────────────────────────────────────────────────────────────────────
+# EXPORT
+# ──────────────────────────────────────────────────────────────────────
 
 @app.command()
 def export(
     format: str = typer.Option("json", "-f", "--format", help="Export format: json, csv"),
     output: str = typer.Option("export.json", "-o", "--output", help="Output file path"),
     limit: int = typer.Option(100, "-n", "--limit", help="Max entries to export"),
-    db_path: str = typer.Option("data/sclplapi.db", help="Database path"),
+    db: str = DB_OPTION,
 ):
     """Export request history to JSON or CSV."""
-    _run(_run_export(format, output, limit, db_path))
+    _run(_run_export(format, output, limit, db))
 
 
 async def _run_export(format, output, limit, db_path):
@@ -328,16 +733,22 @@ async def _run_export(format, output, limit, db_path):
         console.print(f"[green]Exported {result.record_count} records to {output}[/green]")
 
 
+# ──────────────────────────────────────────────────────────────────────
+# WORKFLOW
+# ──────────────────────────────────────────────────────────────────────
+
 @app.command()
 def workflow(
     file: str = typer.Argument(help="Workflow JSON file path"),
-    db_path: str = typer.Option("data/sclplapi.db", help="Database path"),
+    env_name: str | None = typer.Option(None, "-e", "--env", help="Environment name"),
+    save_history: bool = typer.Option(True, help="Save step history"),
+    db: str = DB_OPTION,
 ):
     """Execute a workflow from a JSON definition file."""
-    _run(_run_workflow(file, db_path))
+    _run(_run_workflow(file, env_name, save_history, db))
 
 
-async def _run_workflow(file, db_path):
+async def _run_workflow(file, env_name, save_history, db_path):
     path = Path(file)
     if not path.exists():
         console.print(f"[red]Workflow file not found: {file}[/red]")
@@ -361,6 +772,7 @@ async def _run_workflow(file, db_path):
             retry=RetryConfig(
                 max_retries=s.get("retry", {}).get("max_retries", 0),
                 delay_ms=s.get("retry", {}).get("delay_ms", 1000),
+                strategy=RetryStrategy(s.get("retry", {}).get("strategy", "fixed")),
             ),
         ))
 
@@ -380,31 +792,33 @@ async def _run_workflow(file, db_path):
             event_bus=application.event_bus,
         )
 
-        requests: dict = {}
+        requests_map: dict = {}
         for s in steps:
             if s.request_id:
                 req_data = await application.requests.get(s.request_id)
                 if req_data:
-                    requests[s.request_id] = RequestDef(
+                    headers = []
+                    for h in json.loads(req_data.get("headers", "[]")):
+                        headers.append(RequestParam(key=h["key"], value=h["value"]))
+                    requests_map[s.request_id] = RequestDef(
                         id=req_data["id"],
                         name=req_data["name"],
                         method=HttpMethod(req_data["method"]),
                         url=req_data["url"],
+                        headers=headers,
+                        body=req_data.get("body"),
+                        auth_type=req_data.get("auth_type"),
+                        auth_config=json.loads(req_data.get("auth_config", "{}")),
                     )
 
-        env = await application.environments.get_active()
-        variables: dict[str, str] = {}
-        if env:
-            for v in env.get("variables", []):
-                variables[v["key"]] = v["value"]
+        env, ctx = await _resolve_ctx(application, env_name)
 
-        ctx = ExecutionContext(
-            environment=_dict_to_env(env) if env else None,
-            variables=variables,
-        )
+        console.print(f"Running workflow: [bold]{workflow_def.name}[/bold]")
+        result = await engine.execute(workflow_def, ctx, requests_map)
 
-        console.print(f"Running workflow: {workflow_def.name}")
-        result = await engine.execute(workflow_def, ctx, requests)
+        if save_history:
+            for entry in result.history_entries:
+                await application.history.save(entry)
 
         table = Table(title=f"Workflow: {result.workflow_name}")
         table.add_column("Step")
@@ -422,9 +836,12 @@ async def _run_workflow(file, db_path):
         console.print(f"\n[{color}]{'PASSED' if result.success else 'FAILED'}[/{color}] {result.total_duration_ms}ms")
 
 
+# ──────────────────────────────────────────────────────────────────────
+# FUNCTIONS
+# ──────────────────────────────────────────────────────────────────────
+
 @app.command()
 def functions(
-    db_path: str = typer.Option("data/sclplapi.db", help="Functions directory"),
     dir: str = typer.Option("functions", "-d", "--dir", help="Functions directory"),
 ):
     """List discovered Python functions."""

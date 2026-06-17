@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import time
 import uuid
 from dataclasses import dataclass, field
 from typing import Any
@@ -11,7 +12,7 @@ from app.core.engine.hooks import FunctionHookRunner
 from app.core.engine.variable_resolver import DefaultVariableResolver
 from app.core.models.context import ExecutionContext
 from app.core.models.history import HistoryEntry, RunStatus
-from app.core.models.request import RequestDef
+from app.core.models.request import HttpMethod, RequestDef
 from app.core.models.workflow import WorkflowDef, WorkflowStep, StepType
 from app.services.request_executor import HttpRequestExecutor
 
@@ -34,6 +35,7 @@ class WorkflowResult:
     workflow_name: str
     success: bool
     step_results: list[StepResult] = field(default_factory=list)
+    history_entries: list[HistoryEntry] = field(default_factory=list)
     total_duration_ms: int = 0
     error: str | None = None
 
@@ -57,11 +59,10 @@ class WorkflowEngine:
         ctx: ExecutionContext,
         requests: dict[str, RequestDef] | None = None,
     ) -> WorkflowResult:
-        import time
-
         requests = requests or {}
         start = time.monotonic()
         step_results: list[StepResult] = []
+        history_entries: list[HistoryEntry] = []
 
         ctx.workflow_variables = dict(workflow.variables)
 
@@ -79,8 +80,10 @@ class WorkflowEngine:
                 ))
                 continue
 
-            step_result = await self._execute_step(step, ctx, requests)
+            step_result, entry = await self._execute_step(step, ctx, requests)
             step_results.append(step_result)
+            if entry:
+                history_entries.append(entry)
 
             if step.output_variable and step_result.success:
                 ctx.workflow_variables[step.output_variable] = str(step_result.output)
@@ -104,6 +107,7 @@ class WorkflowEngine:
             workflow_name=workflow.name,
             success=all_success,
             step_results=step_results,
+            history_entries=history_entries,
             total_duration_ms=total_ms,
         )
 
@@ -119,9 +123,7 @@ class WorkflowEngine:
         step: WorkflowStep,
         ctx: ExecutionContext,
         requests: dict[str, RequestDef],
-    ) -> StepResult:
-        import time
-
+    ) -> tuple[StepResult, HistoryEntry | None]:
         start = time.monotonic()
 
         try:
@@ -134,18 +136,18 @@ class WorkflowEngine:
                 delay_s = step.config.get("delay_ms", 1000) / 1000
                 await asyncio.sleep(delay_s)
                 elapsed = int((time.monotonic() - start) * 1000)
-                return StepResult(step_id=step.id, step_name=step.name, success=True, duration_ms=elapsed)
+                return StepResult(step_id=step.id, step_name=step.name, success=True, duration_ms=elapsed), None
             else:
                 return StepResult(
                     step_id=step.id, step_name=step.name, success=False,
                     error=f"Unsupported step type: {step.step_type}"
-                )
+                ), None
         except Exception as exc:
             elapsed = int((time.monotonic() - start) * 1000)
             return StepResult(
                 step_id=step.id, step_name=step.name, success=False,
                 error=str(exc), duration_ms=elapsed
-            )
+            ), None
 
     async def _execute_request_step(
         self,
@@ -153,27 +155,49 @@ class WorkflowEngine:
         ctx: ExecutionContext,
         requests: dict[str, RequestDef],
         start: float,
-    ) -> StepResult:
+    ) -> tuple[StepResult, HistoryEntry | None]:
+        request = None
+
         request_id = step.request_id or step.config.get("request_id")
-        request = requests.get(request_id) if request_id else None
+        if request_id:
+            request = requests.get(request_id)
+
+        if not request:
+            inline = step.config.get("inline_request")
+            if inline:
+                url = self._resolver.resolve(inline.get("url", ""), ctx)
+                body = inline.get("body")
+                if body:
+                    body = self._resolver.resolve(body, ctx)
+                request = RequestDef(
+                    id=f"inline-{step.id}",
+                    name=step.name,
+                    method=HttpMethod(inline.get("method", "GET").upper()),
+                    url=url,
+                    body=body,
+                )
+
         if not request:
             return StepResult(
                 step_id=step.id, step_name=step.name, success=False,
                 error=f"Request not found: {request_id}"
-            )
+            ), None
 
-        ctx = await self._hooks.run_pre_request(ctx)
-        result, history = await self._executor.execute_with_history(request, ctx)
-
-        response_ctx = ExecutionContext(
+        step_ctx = ExecutionContext(
             request=request,
             environment=ctx.environment,
             variables=dict(ctx.variables),
             step_outputs=dict(ctx.step_outputs),
             workflow_variables=dict(ctx.workflow_variables),
+            batch_row=dict(ctx.batch_row),
+            metadata=dict(ctx.metadata),
         )
-        response_ctx.metadata["response"] = result
-        await self._hooks.run_post_response(response_ctx)
+
+        step_ctx = await self._hooks.run_pre_request(step_ctx)
+        result, entry = await self._executor.execute_with_history(request, step_ctx)
+
+        step_ctx.metadata["response"] = result
+        await self._hooks.run_post_response(step_ctx)
 
         elapsed = int((time.monotonic() - start) * 1000)
 
@@ -181,20 +205,20 @@ class WorkflowEngine:
             return StepResult(
                 step_id=step.id, step_name=step.name, success=False,
                 error=result.error, duration_ms=elapsed
-            )
+            ), entry
 
         return StepResult(
             step_id=step.id, step_name=step.name, success=True,
             output={"status_code": result.status_code, "body": result.body[:1000]},
             duration_ms=elapsed,
-        )
+        ), entry
 
     async def _execute_function_step(
         self,
         step: WorkflowStep,
         ctx: ExecutionContext,
         start: float,
-    ) -> StepResult:
+    ) -> tuple[StepResult, None]:
         from app.core.engine.function_runner import FilesystemFunctionRunner
 
         runner = FilesystemFunctionRunner()
@@ -205,7 +229,7 @@ class WorkflowEngine:
         return StepResult(
             step_id=step.id, step_name=step.name, success=result.success,
             output=result.return_value, error=result.error, duration_ms=elapsed,
-        )
+        ), None
 
     async def _retry_step(
         self,
@@ -222,7 +246,7 @@ class WorkflowEngine:
                 delay_s *= (2 ** attempt)
             await asyncio.sleep(delay_s)
 
-            last_result = await self._execute_step(step, ctx, requests)
+            last_result, _ = await self._execute_step(step, ctx, requests)
             if last_result.success:
                 return last_result
 

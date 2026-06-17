@@ -1,0 +1,35 @@
+{
+  "id": "sample-workflow",
+  "name": "Sample API Workflow",
+  "description": "Demonstrates sequential steps with variable propagation",
+  "variables": {
+    "base_url": "https://httpbin.org"
+  },
+  "steps": [
+    {
+      "id": "step1",
+      "name": "GET request",
+      "type": "request",
+      "config": {
+        "inline_request": {
+          "method": "GET",
+          "url": "{{base_url}}/get"
+        }
+      },
+      "output_variable": "get_result"
+    },
+    {
+      "id": "step2",
+      "name": "POST request",
+      "type": "request",
+      "depends_on": ["step1"],
+      "config": {
+        "inline_request": {
+          "method": "POST",
+          "url": "{{base_url}}/post",
+          "body": "{\"from_step1\": \"{{get_result}}\"}"
+        }
+      }
+    }
+  ]
+}

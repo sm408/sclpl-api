@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import ast
+import asyncio
 import importlib.util
 import logging
 import time
@@ -51,6 +52,9 @@ class FilesystemFunctionRunner(FunctionRunner):
                 )
 
             result = module.run(ctx)
+            if asyncio.iscoroutine(result):
+                result = await result
+
             elapsed = int((time.monotonic() - start) * 1000)
             return FunctionResult(
                 name=name, success=True, return_value=result, duration_ms=elapsed

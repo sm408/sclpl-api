@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import logging
-import time
 
 from app.core.contracts.function_runner import FunctionRunner, FunctionResult
 from app.core.engine.function_runner import FilesystemFunctionRunner
@@ -24,7 +23,7 @@ class FunctionHookRunner:
             result = await self._runner.run(name, ctx)
             if result.success and result.return_value is not None:
                 ctx = result.return_value
-            elif not result.error:
+            elif result.error:
                 logger.warning("Pre-request function %s failed: %s", name, result.error)
 
         return ctx
@@ -39,7 +38,7 @@ class FunctionHookRunner:
             result = await self._runner.run(name, ctx)
             if result.success and result.return_value is not None:
                 ctx = result.return_value
-            elif not result.error:
+            elif result.error:
                 logger.warning("Post-response function %s failed: %s", name, result.error)
 
         return ctx
