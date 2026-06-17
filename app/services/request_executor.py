@@ -32,13 +32,16 @@ class HttpRequestExecutor(RequestExecutor):
         start = time.monotonic()
         try:
             async with httpx.AsyncClient(timeout=30.0) as client:
-                response = await client.request(
-                    method=request.method.value,
-                    url=url,
-                    headers=headers,
-                    params=params,
-                    content=body,
-                )
+                kwargs: dict = {
+                    "method": request.method.value,
+                    "url": url,
+                    "headers": headers,
+                }
+                if params:
+                    kwargs["params"] = params
+                if body:
+                    kwargs["content"] = body
+                response = await client.request(**kwargs)
                 elapsed = int((time.monotonic() - start) * 1000)
                 return ResponseResult(
                     status_code=response.status_code,

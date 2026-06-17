@@ -85,9 +85,17 @@ class WorkflowEngine:
             if entry:
                 history_entries.append(entry)
 
-            if step.output_variable and step_result.success:
-                ctx.workflow_variables[step.output_variable] = str(step_result.output)
+            if step_result.success:
                 ctx.step_outputs[step.id] = step_result.output
+
+                if isinstance(step_result.output, ExecutionContext):
+                    fn_ctx = step_result.output
+                    ctx.workflow_variables.update(fn_ctx.workflow_variables)
+                    ctx.step_outputs.update(fn_ctx.step_outputs)
+                    ctx.metadata.update(fn_ctx.metadata)
+
+                if step.output_variable:
+                    ctx.workflow_variables[step.output_variable] = str(step_result.output)
 
             if not step_result.success and step.retry.max_retries > 0:
                 step_result = await self._retry_step(step, ctx, requests)
@@ -158,6 +166,8 @@ class WorkflowEngine:
     ) -> tuple[StepResult, HistoryEntry | None]:
         request = None
 
+        merged_vars = {**ctx.variables, **ctx.workflow_variables, **ctx.batch_row}
+
         request_id = step.request_id or step.config.get("request_id")
         if request_id:
             request = requests.get(request_id)
@@ -165,10 +175,14 @@ class WorkflowEngine:
         if not request:
             inline = step.config.get("inline_request")
             if inline:
-                url = self._resolver.resolve(inline.get("url", ""), ctx)
+                resolve_ctx = ExecutionContext(
+                    environment=ctx.environment,
+                    variables=merged_vars,
+                )
+                url = self._resolver.resolve(inline.get("url", ""), resolve_ctx)
                 body = inline.get("body")
                 if body:
-                    body = self._resolver.resolve(body, ctx)
+                    body = self._resolver.resolve(body, resolve_ctx)
                 request = RequestDef(
                     id=f"inline-{step.id}",
                     name=step.name,
@@ -186,7 +200,7 @@ class WorkflowEngine:
         step_ctx = ExecutionContext(
             request=request,
             environment=ctx.environment,
-            variables=dict(ctx.variables),
+            variables=merged_vars,
             step_outputs=dict(ctx.step_outputs),
             workflow_variables=dict(ctx.workflow_variables),
             batch_row=dict(ctx.batch_row),
@@ -209,7 +223,7 @@ class WorkflowEngine:
 
         return StepResult(
             step_id=step.id, step_name=step.name, success=True,
-            output={"status_code": result.status_code, "body": result.body[:1000]},
+            output={"status_code": result.status_code, "body": result.body},
             duration_ms=elapsed,
         ), entry
 
