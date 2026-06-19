@@ -31,10 +31,24 @@ It sits between four roles:
 ```bash
 # Install
 git clone https://github.com/sm408/sclpl-api.git && cd sclpl-api
+
+# Core only (TUI + CLI)
 pip install -e .
+
+# With Web GUI
+pip install -e ".[web]"
+
+# With Excel export
+pip install -e ".[excel]"
+
+# Everything
+pip install -e ".[all]"
 
 # Run the interactive TUI
 python -m app tui
+
+# Or start the Web GUI (requires [web] extra)
+sclplapi web
 
 # Or run an example pipeline directly
 python -m app.core.engine.sclpll_cli run examples/financial_pipeline/script.sclpll
@@ -42,7 +56,21 @@ python -m app.core.engine.sclpll_cli run examples/financial_pipeline/script.sclp
 
 That's it. Three commands to a running workflow.
 
+### Dependencies
+
+| Component | Packages |
+|-----------|----------|
+| Core | `httpx`, `typer`, `rich`, `pydantic` |
+| Web GUI *(planned)* | `fastapi`, `uvicorn`, `jinja2` |
+
 ## What's New
+
+- **v0.2.0** — Web GUI *(planned)*
+  - Browser-based request editor with method selector
+  - Collections management and workflow execution
+  - Flow builder with visual node canvas
+  - History viewer with color-coded methods and statuses
+  - Settings panel with theme support
 
 - **v0.1.0** — Initial release
   - SCLPLL scripting language with compiler/decompiler
@@ -53,6 +81,8 @@ That's it. Three commands to a running workflow.
   - 113 passing tests
 
 ## See It in Action
+
+### Terminal UI (Implemented)
 
 **Run a workflow from the TUI:**
 
@@ -75,6 +105,30 @@ That's it. Three commands to a running workflow.
 │  [E]  Environments   [V]  Validate                │
 │  [Q]  Quit                                        │
 └───────────────────────────────────────────────────┘
+```
+
+### Web GUI (Planned)
+
+**Browser-based interface with sidebar navigation:**
+
+```
+┌──────────────────────────────────────────────────────────────────────┐
+│  SCLPLAPI                                    ┌─────────────────────┐ │
+├──────────────┬───────────────────────────────┤  Request Editor     │ │
+│              │                               │                     │ │
+│  Home        │  GET  [https://api.example.com│  Params  Headers    │ │
+│  Request     │                               │  Body               │ │
+│  Editor      │  ─────────────────────────────│                     │ │
+│  Collections │  Response                     │  [Send]             │ │
+│  Workflows   │  Status: 200  Time: 142ms     │                     │ │
+│  Flow        │  Size: 1.2KB                  │                     │ │
+│  Builder     │                               │                     │ │
+│  Functions   │  { "users": [...] }           │                     │ │
+│  History     │                               │                     │ │
+│  Settings    │                               │                     │ │
+│              │                               │                     │ │
+└──────────────┴───────────────────────────────┴─────────────────────┘ │
+└──────────────────────────────────────────────────────────────────────┘
 ```
 
 **Write a workflow in SCLPLL:**
@@ -164,6 +218,7 @@ app/
     cli.py         Typer CLI (13+ commands)
     tui.py         Rich-based Terminal UI
     logo.py        ASCII art branding
+    web.py         FastAPI Web GUI (planned)
 functions/         Python extension functions
 examples/          Working pipeline examples
 tests/             113 tests

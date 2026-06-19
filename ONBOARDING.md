@@ -18,6 +18,15 @@ python -m app tui
 
 You should see the SCLPLAPI splash screen. Press **Q** to quit.
 
+### Choose Your Interface
+
+| Interface | Command | Status |
+|-----------|---------|--------|
+| Terminal UI | `python -m app tui` | Implemented |
+| Web GUI | `python -m app web` | Planned |
+
+Both share the same database and functions directory.
+
 ---
 
 ## Minute 1: Your First Workflow
@@ -216,6 +225,9 @@ def run(ctx):
 ```bash
 # TUI (interactive)
 python -m app tui
+
+# Web GUI (planned)
+python -m app web
 
 # Run a workflow
 python -m app.core.engine.sclpll_cli run script.sclpll

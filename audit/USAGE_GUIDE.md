@@ -13,6 +13,9 @@ cd sclpl-api
 
 # Install dependencies
 pip install -e .
+
+# For Web GUI support (planned)
+pip install -e ".[web]"
 ```
 
 ---
@@ -47,6 +50,45 @@ You'll see the ASCII art logo and main menu:
 ```
 
 Press **R** to run a workflow, **F** to browse functions, **Q** to quit.
+
+### 2. Launch the Web GUI (Planned)
+
+```bash
+python -m app web
+```
+
+Opens a browser at `http://localhost:8000` with:
+
+```
+┌──────────────┬─────────────────────────────────────────────┐
+│              │                                             │
+│  Home        │  Welcome dashboard with stats cards         │
+│  Request     │  Method selector, URL, params, headers,     │
+│  Editor      │  body editor with Send button               │
+│  Collections │  Organize requests into folders              │
+│  Workflows   │  Run and monitor .sclpll workflows          │
+│  Flow        │  Visual canvas for workflow graphs           │
+│  Builder     │                                             │
+│  Functions   │  Browse and search Python functions          │
+│  History     │  Color-coded request log                     │
+│  Settings    │  Base URL, theme, timeout                    │
+│              │                                             │
+└──────────────┴─────────────────────────────────────────────┘
+```
+
+### Switching Between TUI and GUI
+
+Both interfaces share the same SQLite database and `functions/` directory. Launch whichever you prefer:
+
+```bash
+# Terminal UI
+python -m app tui
+
+# Web GUI (planned)
+python -m app web
+```
+
+Your collections, history, and environments are available in both.
 
 ---
 
@@ -214,6 +256,9 @@ When a step returns nested JSON like `{"user": {"name": "John", "address": {"cit
 # Launch TUI
 python -m app tui
 
+# Launch Web GUI (planned)
+python -m app web
+
 # Run a workflow
 python -m app.core.engine.sclpll_cli run script.sclpll
 
@@ -237,56 +282,51 @@ python tools/performance_analyzer.py output/execution_stats.json
 
 ---
 
-## Writing Functions
+## Web GUI Features (Planned)
 
-Create a Python file in `functions/`:
+### Home Dashboard
+- Welcome message with quick-start links
+- Stats cards: total requests, collections, workflows, functions
+- Click any card to navigate to that section
 
-```python
-"""
-@name: My Custom Function
-@type: transformer
-@version: 1
-"""
+### Request Editor
+- **Method selector**: GET, POST, PUT, DELETE, PATCH
+- **URL input**: with environment variable resolution
+- **Tabs**: Params, Headers, Body
+- **Send button**: executes request and shows response
+- **Response panel**: status code, time, size, formatted JSON body
 
-import json
+### Collections
+- Create, rename, delete collections
+- Add requests to collections
+- Click collection to expand and see requests
 
+### Workflows
+- List all `.sclpll` workflows
+- Run button with live progress
+- Step timing and status indicators
 
-def run(ctx):
-    # Access step outputs
-    users_raw = ctx.step_outputs.get("fetch_users", {})
-    users = json.loads(users_raw.get("body", "[]"))
+### Flow Builder
+- Visual canvas for workflow graphs
+- Color-coded nodes (HTTP = blue, Function = green)
+- Click node to see details
+- Drag to reposition
 
-    # Process data
-    result = {"count": len(users), "names": [u["name"] for u in users]}
+### Functions
+- Browse all discovered Python functions
+- Click to view source code
+- Search/filter by name or type
 
-    # Store result for downstream steps
-    ctx.workflow_variables["my_result"] = json.dumps(result)
-    return ctx
-```
+### History
+- Table of past requests
+- Color-coded methods (GET = green, POST = blue, PUT = orange, DELETE = red)
+- Color-coded statuses (2xx = green, 4xx = yellow, 5xx = red)
+- Filter by method
 
-**Key rules:**
-- Docstring must have `@name`, `@type`, `@version`
-- Must have `run(ctx)` function
-- Access step outputs via `ctx.step_outputs`
-- Store results in `ctx.workflow_variables`
-- Return `ctx`
-
----
-
-## Examples
-
-| Example | What It Demonstrates |
-|---------|---------------------|
-| `examples/weather_pipeline/` | Sequential chain, variable chaining |
-| `examples/job_tracker_pipeline/` | Parallel fetch, merge, analyze |
-| `examples/financial_pipeline/` | Parallel crypto API, market analysis |
-| `examples/multi_provider_aggregator/` | Parallel processing, aggregation |
-| `examples/advanced_logic/` | Loops, conditions, semaphores, dot notation |
-
-Run any example:
-```bash
-python -m app.core.engine.sclpll_cli run examples/financial_pipeline/script.sclpll
-```
+### Settings
+- Base URL configuration
+- Theme selector (light/dark)
+- Request timeout
 
 ---
 
@@ -308,3 +348,17 @@ python -m app.core.engine.sclpll_cli run examples/financial_pipeline/script.sclp
 **Unicode errors on Windows**
 - Use: `$env:PYTHONIOENCODING="utf-8"; python -X utf8 script.py`
 - Or run in Windows Terminal (supports Unicode)
+
+**Web GUI won't start (planned)**
+- Ensure `fastapi` and `uvicorn` are installed: `pip install fastapi uvicorn`
+- Check port 8000 is not in use: `netstat -ano | findstr :8000`
+- Try a different port: `python -m app web --port 8080`
+
+**Web GUI shows blank page (planned)**
+- Clear browser cache
+- Check browser console for JavaScript errors
+- Verify the server is running: `curl http://localhost:8000/api/health`
+
+**Browser doesn't open automatically (planned)**
+- Manually navigate to `http://localhost:8000`
+- Or set the `BROWSER` environment variable

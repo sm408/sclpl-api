@@ -9,6 +9,7 @@
 </head>
 <body>
     <div id="app">
+        <div class="sidebar-overlay" id="sidebar-overlay"></div>
         <aside id="sidebar">
             <div class="sidebar-header">
                 <div class="logo">
@@ -57,16 +58,22 @@
 
         <main id="main-content">
             <header id="top-bar">
+                <button class="btn-mobile-menu" id="btn-mobile-menu" title="Menu">
+                    <i class="fas fa-bars"></i>
+                </button>
                 <div class="search-box">
                     <i class="fas fa-search"></i>
-                    <input type="text" id="global-search" placeholder="Search collections, requests, workflows...">
+                    <input type="text" id="global-search" placeholder="Search collections, requests, workflows... (Ctrl+K)">
                 </div>
                 <div class="top-bar-actions">
-                    <button class="btn btn-icon" title="New Request" id="btn-new-request">
+                    <button class="btn btn-icon" title="New Request (Ctrl+N)" id="btn-new-request">
                         <i class="fas fa-plus"></i>
                     </button>
                     <button class="btn btn-icon" title="Import" id="btn-import">
                         <i class="fas fa-file-import"></i>
+                    </button>
+                    <button class="btn-theme-toggle" title="Toggle Theme" id="btn-theme-toggle">
+                        <i class="fas fa-moon"></i>
                     </button>
                     <button class="btn btn-icon" title="Settings" id="btn-settings">
                         <i class="fas fa-gear"></i>

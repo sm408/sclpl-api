@@ -14,10 +14,12 @@ const App = {
             body: '',
             auth: { type: 'none' }
         },
-        currentResponse: null
+        currentResponse: null,
+        theme: localStorage.getItem('sclplapi-theme') || 'light'
     },
 
     init() {
+        this.applyTheme(this.state.theme);
         Sidebar.init();
         Router.init();
         RequestEditor.init();
@@ -43,12 +45,92 @@ const App = {
             Router.navigate('settings');
         });
 
+        // Theme toggle
+        document.getElementById('btn-theme-toggle').addEventListener('click', () => {
+            const newTheme = this.state.theme === 'dark' ? 'light' : 'dark';
+            this.applyTheme(newTheme);
+            App.toast(`Switched to ${newTheme} theme`, 'info');
+        });
+
+        // Mobile menu
+        const mobileBtn = document.getElementById('btn-mobile-menu');
+        const sidebar = document.getElementById('sidebar');
+        const overlay = document.getElementById('sidebar-overlay');
+        if (mobileBtn) {
+            mobileBtn.addEventListener('click', () => {
+                sidebar.classList.toggle('open');
+                overlay.classList.toggle('active');
+            });
+        }
+        if (overlay) {
+            overlay.addEventListener('click', () => {
+                sidebar.classList.remove('open');
+                overlay.classList.remove('active');
+            });
+        }
+
+        // Close mobile sidebar on nav
+        document.querySelectorAll('.nav-item').forEach(item => {
+            item.addEventListener('click', () => {
+                sidebar.classList.remove('open');
+                overlay.classList.remove('active');
+            });
+        });
+
         document.querySelectorAll('.dash-card').forEach(card => {
             card.addEventListener('click', () => {
                 const nav = card.dataset.nav;
                 if (nav) Router.navigate(nav);
             });
         });
+
+        // Keyboard shortcuts
+        document.addEventListener('keydown', (e) => {
+            // Ctrl+K: focus search
+            if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+                e.preventDefault();
+                document.getElementById('global-search').focus();
+            }
+            // Ctrl+N: new request
+            if ((e.ctrlKey || e.metaKey) && e.key === 'n') {
+                e.preventDefault();
+                Router.navigate('editor');
+                setTimeout(() => document.getElementById('req-url')?.focus(), 100);
+            }
+            // Ctrl+Enter: send request (when in editor)
+            if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+                if (App.state.currentRoute === 'editor') {
+                    e.preventDefault();
+                    document.getElementById('btn-send')?.click();
+                }
+            }
+            // Escape: close modals / blur
+            if (e.key === 'Escape') {
+                document.activeElement?.blur();
+                document.querySelectorAll('.modal-overlay').forEach(m => m.remove());
+            }
+        });
+
+        // Settings theme sync
+        const settingTheme = document.getElementById('setting-theme');
+        if (settingTheme) {
+            settingTheme.value = this.state.theme;
+            settingTheme.addEventListener('change', (e) => {
+                this.applyTheme(e.target.value);
+            });
+        }
+    },
+
+    applyTheme(theme) {
+        this.state.theme = theme;
+        localStorage.setItem('sclplapi-theme', theme);
+        document.documentElement.setAttribute('data-theme', theme);
+        const icon = document.querySelector('#btn-theme-toggle i');
+        if (icon) {
+            icon.className = theme === 'dark' ? 'fas fa-sun' : 'fas fa-moon';
+        }
+        const settingTheme = document.getElementById('setting-theme');
+        if (settingTheme) settingTheme.value = theme;
     },
 
     async loadStats() {
@@ -92,14 +174,19 @@ const App = {
         const container = document.getElementById('toast-container');
         const toast = document.createElement('div');
         toast.className = `toast ${type}`;
-        toast.textContent = message;
+        const icons = { success: 'fa-check-circle', error: 'fa-exclamation-circle', info: 'fa-info-circle', warning: 'fa-exclamation-triangle' };
+        toast.innerHTML = `
+            <i class="fas ${icons[type] || icons.info} toast-icon"></i>
+            <span>${message}</span>
+            <button class="toast-close" onclick="this.parentElement.remove()"><i class="fas fa-times"></i></button>
+        `;
         container.appendChild(toast);
         setTimeout(() => {
             toast.style.opacity = '0';
             toast.style.transform = 'translateX(20px)';
             toast.style.transition = '0.3s ease';
             setTimeout(() => toast.remove(), 300);
-        }, 3000);
+        }, 4000);
     },
 
     formatJson(obj) {
@@ -109,6 +196,17 @@ const App = {
         } catch {
             return obj;
         }
+    },
+
+    highlightJson(obj) {
+        const str = typeof obj === 'string' ? obj : JSON.stringify(obj, null, 2);
+        if (!str) return '';
+        return str.replace(/("(?:\\.|[^"\\])*")\s*:/g, '<span class="json-key">$1</span><span class="json-colon">:</span>')
+            .replace(/:\s*("(?:\\.|[^"\\])*")/g, ': <span class="json-string">$1</span>')
+            .replace(/:\s*(\d+\.?\d*)/g, ': <span class="json-number">$1</span>')
+            .replace(/:\s*(true|false)/g, ': <span class="json-boolean">$1</span>')
+            .replace(/:\s*(null)/g, ': <span class="json-null">$1</span>')
+            .replace(/([{}\[\]])/g, '<span class="json-bracket">$1</span>');
     },
 
     formatBytes(bytes) {

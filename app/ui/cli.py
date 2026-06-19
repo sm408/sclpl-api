@@ -3,7 +3,6 @@ from __future__ import annotations
 import asyncio
 import csv
 import json
-import sys
 from pathlib import Path
 
 import typer
@@ -15,7 +14,7 @@ from app.core.engine.variable_resolver import DefaultVariableResolver
 from app.core.models.context import ExecutionContext
 from app.core.models.environment import Environment, Variable
 from app.core.models.plugin import PluginStatus
-from app.core.models.request import HttpMethod, RequestParam
+from app.core.models.request import HttpMethod, RequestDef, RequestParam
 from app.core.models.workflow import RetryConfig, RetryStrategy, StepType, WorkflowDef, WorkflowStep
 from app.ui.app import App
 
@@ -1061,14 +1060,17 @@ def web(
     db: str = DB_OPTION,
 ):
     """Start the web UI server."""
-    import webbrowser
-
-    import uvicorn
-
-    from app.web.server import create_app
+    try:
+        import uvicorn
+        from app.web.server import create_app
+    except ImportError:
+        console.print("[red]Web UI dependencies not installed.[/red]")
+        console.print("Install with: pip install sclplapi[web]")
+        raise typer.Exit(1)
 
     application = create_app(db)
     if open_browser:
+        import webbrowser
         webbrowser.open(f"http://{host}:{port}")
     uvicorn.run(application, host=host, port=port)
 

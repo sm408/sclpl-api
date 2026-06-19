@@ -17,7 +17,7 @@ const RequestEditor = {
                     <option value="PATCH">PATCH</option>
                     <option value="DELETE">DELETE</option>
                 </select>
-                <input type="text" class="input url-input" id="req-url" placeholder="Enter request URL...">
+                <input type="text" class="input url-input" id="req-url" placeholder="Enter request URL... (Ctrl+Enter to send)">
                 <button class="btn btn-primary send-btn" id="btn-send">
                     <i class="fas fa-paper-plane"></i> Send
                 </button>
@@ -78,7 +78,6 @@ const RequestEditor = {
     },
 
     bindEvents() {
-        // Tabs
         this.container.querySelectorAll('.tab').forEach(tab => {
             tab.addEventListener('click', () => {
                 this.container.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
@@ -88,22 +87,19 @@ const RequestEditor = {
             });
         });
 
-        // Add rows
         document.getElementById('btn-add-param').addEventListener('click', () => this.addRow('params-table'));
         document.getElementById('btn-add-header').addEventListener('click', () => this.addRow('headers-table'));
-
-        // Send
         document.getElementById('btn-send').addEventListener('click', () => this.send());
 
-        // Method color
         document.getElementById('req-method').addEventListener('change', (e) => {
             e.target.className = `input method-select method-${e.target.value}`;
         });
 
-        // Auth type
         document.getElementById('auth-type').addEventListener('change', (e) => {
             this.renderAuthFields(e.target.value);
         });
+
+        document.getElementById('btn-save-req').addEventListener('click', () => this.saveToCollection());
     },
 
     addRow(tableId) {
@@ -161,17 +157,14 @@ const RequestEditor = {
             return;
         }
 
-        // Build params
         const params = this.getKvPairs('params-table');
         if (Object.keys(params).length) {
             const qs = new URLSearchParams(params).toString();
             url += (url.includes('?') ? '&' : '?') + qs;
         }
 
-        // Build headers
         const headers = this.getKvPairs('headers-table');
 
-        // Auth
         const authType = document.getElementById('auth-type').value;
         if (authType === 'bearer') {
             const token = document.getElementById('auth-token')?.value;
@@ -186,7 +179,6 @@ const RequestEditor = {
             if (name && val) headers[name] = val;
         }
 
-        // Body
         const bodyType = document.getElementById('body-type').value;
         let body = null;
         if (method !== 'GET' && method !== 'DELETE') {
@@ -214,20 +206,24 @@ const RequestEditor = {
             let responseBody;
             try { responseBody = JSON.parse(responseText); } catch { responseBody = responseText; }
 
+            const resHeaders = Object.fromEntries(res.headers.entries());
+
             this.renderResponse({
                 status: res.status,
                 statusText: res.statusText,
                 duration,
                 size,
-                headers: Object.fromEntries(res.headers.entries()),
-                body: responseBody
+                headers: resHeaders,
+                body: responseBody,
+                raw: responseText
             });
 
-            // Save to history
             History.addEntry({
                 method, url, status: res.status, duration, size,
                 timestamp: new Date().toISOString()
             });
+
+            App.toast(`${res.status} ${res.statusText} - ${App.formatDuration(duration)}`, res.ok ? 'success' : 'warning');
         } catch (err) {
             const duration = Math.round(performance.now() - startTime);
             this.renderResponse({
@@ -236,8 +232,10 @@ const RequestEditor = {
                 duration,
                 size: 0,
                 headers: {},
-                body: { error: err.message }
+                body: { error: err.message },
+                raw: err.message
             });
+            App.toast(`Request failed: ${err.message}`, 'error');
         } finally {
             btn.innerHTML = '<i class="fas fa-paper-plane"></i> Send';
             btn.disabled = false;
@@ -247,6 +245,12 @@ const RequestEditor = {
     renderResponse(res) {
         const container = document.getElementById('response-container');
         const statusClass = res.status ? App.getStatusClass(res.status) : 'status-5xx';
+        const isJson = typeof res.body === 'object';
+
+        const headersHtml = Object.entries(res.headers || {}).map(([k, v]) =>
+            `<tr><td>${this.escapeHtml(k)}</td><td>${this.escapeHtml(v)}</td></tr>`
+        ).join('');
+
         container.innerHTML = `
             <div class="response-panel">
                 <div class="response-header">
@@ -255,9 +259,126 @@ const RequestEditor = {
                         <span><i class="fas fa-clock"></i> ${App.formatDuration(res.duration)}</span>
                         <span><i class="fas fa-weight-hanging"></i> ${App.formatBytes(res.size)}</span>
                     </div>
+                    <button class="btn btn-sm btn-copy-response" title="Copy response body">
+                        <i class="fas fa-copy"></i> Copy
+                    </button>
                 </div>
-                <div class="response-body">${App.formatJson(res.body)}</div>
+                <div class="response-tabs" id="response-tabs">
+                    <button class="response-tab active" data-rtab="pretty">Pretty</button>
+                    <button class="response-tab" data-rtab="raw">Raw</button>
+                    <button class="response-tab" data-rtab="headers">Headers <span style="opacity:0.6">(${Object.keys(res.headers || {}).length})</span></button>
+                </div>
+                <div id="rtab-pretty" class="response-tab-content active">
+                    <div class="response-body-wrapper">
+                        <div class="response-body">${isJson ? App.highlightJson(res.body) : this.escapeHtml(String(res.body))}</div>
+                    </div>
+                </div>
+                <div id="rtab-raw" class="response-tab-content">
+                    <div class="response-body-wrapper">
+                        <div class="response-body">${this.escapeHtml(res.raw || (isJson ? JSON.stringify(res.body) : String(res.body)))}</div>
+                    </div>
+                </div>
+                <div id="rtab-headers" class="response-tab-content">
+                    <table class="response-headers-table">
+                        ${headersHtml || '<tr><td colspan="2" style="color:var(--text-muted);text-align:center;padding:24px">No headers</td></tr>'}
+                    </table>
+                </div>
             </div>
         `;
+
+        // Response tab switching
+        container.querySelectorAll('.response-tab').forEach(tab => {
+            tab.addEventListener('click', () => {
+                container.querySelectorAll('.response-tab').forEach(t => t.classList.remove('active'));
+                container.querySelectorAll('.response-tab-content').forEach(c => c.classList.remove('active'));
+                tab.classList.add('active');
+                container.querySelector(`#rtab-${tab.dataset.rtab}`).classList.add('active');
+            });
+        });
+
+        // Copy button
+        container.querySelector('.btn-copy-response').addEventListener('click', () => {
+            const textToCopy = isJson ? JSON.stringify(res.body, null, 2) : String(res.body || res.raw);
+            navigator.clipboard.writeText(textToCopy).then(() => {
+                App.toast('Response copied to clipboard', 'success');
+            }).catch(() => {
+                App.toast('Failed to copy', 'error');
+            });
+        });
+    },
+
+    async saveToCollection() {
+        const method = document.getElementById('req-method').value;
+        const url = document.getElementById('req-url').value.trim();
+        if (!url) {
+            App.toast('Enter a URL first', 'error');
+            return;
+        }
+
+        const request = {
+            method,
+            url,
+            headers: this.getKvPairs('headers-table'),
+            body: document.getElementById('req-body').value
+        };
+
+        try {
+            const collections = await App.api('/api/collections').catch(() => []);
+            const cols = Array.isArray(collections) ? collections : [];
+
+            if (!cols.length) {
+                App.toast('Create a collection first', 'info');
+                return;
+            }
+
+            const modal = document.createElement('div');
+            modal.className = 'modal-overlay';
+            modal.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:1000;display:flex;align-items:center;justify-content:center';
+            modal.innerHTML = `
+                <div style="background:var(--bg-card);border-radius:var(--radius-lg);width:400px;max-width:90%;padding:24px;box-shadow:var(--shadow-lg)">
+                    <h3 style="font-size:16px;margin-bottom:16px">Save to Collection</h3>
+                    <div style="margin-bottom:12px">
+                        <label style="font-size:13px;color:var(--text-secondary);display:block;margin-bottom:4px">Request Name</label>
+                        <input type="text" class="input" id="save-req-name" value="${method} ${url}" style="width:100%">
+                    </div>
+                    <div style="margin-bottom:16px">
+                        <label style="font-size:13px;color:var(--text-secondary);display:block;margin-bottom:4px">Collection</label>
+                        <select class="input" id="save-req-collection" style="width:100%">
+                            ${cols.map(c => `<option value="${c.id || c.name}">${this.escapeHtml(c.name || 'Unnamed')}</option>`).join('')}
+                        </select>
+                    </div>
+                    <div style="display:flex;gap:8px;justify-content:flex-end">
+                        <button class="btn" id="save-req-cancel">Cancel</button>
+                        <button class="btn btn-primary" id="save-req-confirm">Save</button>
+                    </div>
+                </div>
+            `;
+            document.body.appendChild(modal);
+            modal.querySelector('#save-req-cancel').addEventListener('click', () => modal.remove());
+            modal.addEventListener('click', (e) => { if (e.target === modal) modal.remove(); });
+
+            modal.querySelector('#save-req-confirm').addEventListener('click', async () => {
+                const name = modal.querySelector('#save-req-name').value;
+                const colId = modal.querySelector('#save-req-collection').value;
+                try {
+                    await App.api(`/api/collections/${encodeURIComponent(colId)}/requests`, {
+                        method: 'POST',
+                        body: { name, ...request }
+                    });
+                    App.toast('Request saved to collection', 'success');
+                    modal.remove();
+                } catch {
+                    App.toast('Failed to save request', 'error');
+                }
+            });
+        } catch {
+            App.toast('Failed to load collections', 'error');
+        }
+    },
+
+    escapeHtml(str) {
+        const d = document.createElement('div');
+        d.textContent = str || '';
+        return d.innerHTML;
     }
 };

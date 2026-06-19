@@ -111,6 +111,18 @@ The project fundamentally revolves around:
 - live workflow execution: `STABLE`
 - function browser: `STABLE`
 
+### Web GUI
+
+- FastAPI backend: `STABLE`
+- SPA frontend: `STABLE`
+- request editor: `STABLE`
+- collections view: `STABLE`
+- workflow runner: `STABLE`
+- flow builder: `STABLE`
+- function browser: `STABLE`
+- history viewer: `STABLE`
+- settings panel: `STABLE`
+
 ### Tools Library
 
 - workflow validator: `STABLE`
