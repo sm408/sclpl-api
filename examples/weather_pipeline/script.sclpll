@@ -1,0 +1,28 @@
+# Weather at 5AM Pipeline
+# Fetches weather, extracts 5AM data, exports to JSON & CSV
+
+@workflow weather-pipeline "Weather at 5AM Pipeline"
+    Get today's weather -> extract 5AM data -> export to JSON & CSV
+
+@base_url https://wttr.in
+@var city = NewYork
+
+# Step 1: Fetch today's weather (independent, runs first)
+@step get_weather_today -> weather_raw
+    request GET {{base_url}}/{{city}}?format=j1
+
+# Step 2: Extract the date from the weather response
+@step extract_date <- get_weather_today
+    func Extract Date
+
+# Step 3: Fetch hourly weather using the extracted date
+@step get_weather_hourly <- extract_date -> hourly_raw
+    request GET {{base_url}}/{{city}}?format=j1
+
+# Step 4: Extract 5AM weather reading
+@step extract_weather <- get_weather_hourly
+    func Extract 5AM Weather
+
+# Step 5: Export filtered data
+@step export_data <- extract_weather
+    func Export Weather Data

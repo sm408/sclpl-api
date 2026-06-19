@@ -1,0 +1,123 @@
+{
+  "id": "job-tracker-pipeline",
+  "name": "Job Application Tracker Pipeline",
+  "description": "Multi-step async pipeline that fetches data from multiple endpoints in parallel, merges results, and generates a comprehensive report.",
+  "steps": [
+    {
+      "id": "fetch_users",
+      "name": "fetch_users",
+      "type": "request",
+      "config": {
+        "inline_request": {
+          "method": "GET",
+          "url": "{{base_url}}/users",
+          "headers": {
+            "Accept": "application/json"
+          }
+        }
+      },
+      "output_variable": "users_data"
+    },
+    {
+      "id": "fetch_posts",
+      "name": "fetch_posts",
+      "type": "request",
+      "config": {
+        "inline_request": {
+          "method": "GET",
+          "url": "{{base_url}}/posts",
+          "headers": {
+            "Accept": "application/json"
+          }
+        }
+      },
+      "output_variable": "posts_data"
+    },
+    {
+      "id": "fetch_comments",
+      "name": "fetch_comments",
+      "type": "request",
+      "config": {
+        "inline_request": {
+          "method": "GET",
+          "url": "{{base_url}}/comments",
+          "headers": {
+            "Accept": "application/json"
+          }
+        }
+      },
+      "output_variable": "comments_data"
+    },
+    {
+      "id": "fetch_todos",
+      "name": "fetch_todos",
+      "type": "request",
+      "config": {
+        "inline_request": {
+          "method": "GET",
+          "url": "{{base_url}}/todos",
+          "headers": {
+            "Accept": "application/json"
+          }
+        }
+      },
+      "output_variable": "todos_data"
+    },
+    {
+      "id": "merge_user_posts",
+      "name": "merge_user_posts",
+      "type": "function",
+      "config": {
+        "function_name": "Merge User Posts"
+      },
+      "depends_on": [
+        "fetch_users",
+        "fetch_posts"
+      ],
+      "output_variable": "user_posts_merged"
+    },
+    {
+      "id": "post_analytics",
+      "name": "post_analytics",
+      "type": "function",
+      "config": {
+        "function_name": "Post Analytics"
+      },
+      "depends_on": [
+        "fetch_posts",
+        "fetch_comments"
+      ],
+      "output_variable": "analytics_result"
+    },
+    {
+      "id": "user_todo_summary",
+      "name": "user_todo_summary",
+      "type": "function",
+      "config": {
+        "function_name": "User Todo Summary"
+      },
+      "depends_on": [
+        "fetch_users",
+        "fetch_todos"
+      ],
+      "output_variable": "todo_summary"
+    },
+    {
+      "id": "generate_report",
+      "name": "generate_report",
+      "type": "function",
+      "config": {
+        "function_name": "Generate Report"
+      },
+      "depends_on": [
+        "merge_user_posts",
+        "post_analytics",
+        "user_todo_summary"
+      ],
+      "output_variable": "final_report"
+    }
+  ],
+  "variables": {
+    "base_url": "https://jsonplaceholder.typicode.com"
+  }
+}

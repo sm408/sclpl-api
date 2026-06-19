@@ -2,6 +2,14 @@
 
 This directory contains supporting documentation and ADRs for SCLPLAPI.
 
+## Quick Links
+
+- [SCLPLL Language Reference](SCLPLL_LANGUAGE.md) — scripting language for workflows
+- [User Guide](perspectives/user/README.md) — for end users
+- [Developer Guide](perspectives/developer/README.md) — for contributors
+- [Sales & Marketing](perspectives/sales-marketing/README.md) — value proposition
+- [Enthusiast Showcase](perspectives/enthusiast-showcase/README.md) — advanced patterns
+
 ## architecture/
 
 Architectural concept docs and models:
@@ -44,6 +52,15 @@ Roadmap, strategy, and development guidance:
 - `future_roadmap.md` — longer-term vision
 - `CHANGELOG.md` — project change log
 - `CONTRIBUTING.md` — contributor guidance
+
+## perspectives/
+
+Documentation from different viewpoints:
+
+- [User Guide](perspectives/user/README.md) — quick start, SCLPLL syntax, patterns, troubleshooting
+- [Developer Guide](perspectives/developer/README.md) — architecture, extending, testing, conventions
+- [Sales & Marketing](perspectives/sales-marketing/README.md) — value prop, differentiators, use cases
+- [Enthusiast Showcase](perspectives/enthusiast-showcase/README.md) — advanced patterns, real-world examples
 
 ## decisions/
 

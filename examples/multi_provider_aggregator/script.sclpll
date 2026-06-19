@@ -1,0 +1,42 @@
+# Multi-Provider Price Aggregator
+# Fetches data from multiple providers in parallel, processes each,
+# and generates a comparison report.
+
+@workflow multi-provider-aggregator "Multi-Provider Price Aggregator"
+    Fetches product data from multiple providers in parallel,
+    processes nested results, and generates a comparison report.
+
+@base_url https://jsonplaceholder.typicode.com
+
+# ============================================================
+# PHASE 1: Independent fetches (all run in parallel)
+# ============================================================
+
+@step fetch_users -> users_data
+    request GET {{base_url}}/users
+
+@step fetch_posts -> posts_data
+    request GET {{base_url}}/posts
+
+@step fetch_todos -> todos_data
+    request GET {{base_url}}/todos
+
+# ============================================================
+# PHASE 2: Process and aggregate (parallel, depends on phase 1)
+# ============================================================
+
+@step process_users <- fetch_users -> processed_users
+    func Process Provider Data
+
+@step process_posts <- fetch_posts -> processed_posts
+    func Process Content Data
+
+@step process_todos <- fetch_todos -> processed_todos
+    func Process Task Data
+
+# ============================================================
+# PHASE 3: Generate comparison (depends on all phase 2)
+# ============================================================
+
+@step generate_comparison <- process_users, process_posts, process_todos -> comparison_report
+    func Generate Comparison Report

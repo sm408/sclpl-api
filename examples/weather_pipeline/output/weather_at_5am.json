@@ -1,9 +1,9 @@
 {
-  "date": "2026-06-17",
+  "date": "2026-06-19",
   "city": "NewYork",
   "weatherAt5AM_tempC": "27",
-  "weatherAt5AM_desc": "Smoky haze",
-  "weatherAt5AM_humidity": "76",
-  "weatherAt5AM_windKmph": "7",
+  "weatherAt5AM_desc": "Clear ",
+  "weatherAt5AM_humidity": "78",
+  "weatherAt5AM_windKmph": "8",
   "nearest_reading": "03:00"
 }

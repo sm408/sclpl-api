@@ -1,95 +1,142 @@
 # SCLPLAPI
 
-SCLPLAPI is a local-first, Python-first API workflow studio.
-
-The project starts from the earlier PyPostman concept and is renamed here to a distinct, implementation-ready identity: `SCLPLAPI`.
+SCLPLAPI is a programmable, local-first API workflow studio with Python-native extensibility.
 
 ## What it is
 
-SCLPLAPI is intended to sit between:
+SCLPLAPI sits between:
 
 - an API client
 - a workflow runner
 - a lightweight transformation engine
 - an export/reporting workbench
 
-It is not just a request sender. The long-term center of gravity is:
+Core capabilities:
 
-- request execution
-- variable and environment resolution
-- workflow orchestration
-- Python-native extensibility
-- export pipelines
+- **Request execution** — HTTP calls with variable resolution
+- **Workflow orchestration** — sequential and parallel execution
+- **SCLPLL scripting** — human-readable workflow definitions
+- **Function system** — Python-native extensibility
+- **Export pipelines** — JSON and CSV output
 
-## Current repository state
+## Quick Start
 
-This repository is documentation-first. It contains the architecture, requirements, rules, and MiMo scaffolding needed to build SCLPLAPI. It does not yet contain the full application implementation.
+```bash
+# Install dependencies
+pip install -e .
 
-## Source-of-truth documents
+# Run an example
+python -m app.core.engine.sclpll_cli run examples/financial_pipeline/script.sclpll
 
-Start here:
-
-- `AGENTS.md`
-- `FEATURES.md`
-- `ARCHITECTURE.md`
-- `WORKFLOW_ENGINE.md`
-- `FUNCTION_SYSTEM.md`
-- `PLUGIN_SDK.md`
-- `EXPORT_ENGINE.md`
-- `DATABASE_AND_MIGRATIONS.md`
-- `UI_UX_GUIDE.md`
-- `CODING_STANDARDS.md`
-- `TESTING_STRATEGY.md`
-
-## Repository structure
-
-```text
-AGENTS.md                      agent and contributor instructions
-FEATURES.md                    capability matrix and status
-ARCHITECTURE.md                layered execution architecture
-WORKFLOW_ENGINE.md             workflow runtime design
-FUNCTION_SYSTEM.md             Python extensibility layer
-PLUGIN_SDK.md                  plugin contracts and lifecycle
-EXPORT_ENGINE.md               export pipeline subsystem
-DATABASE_AND_MIGRATIONS.md     SQLite-first persistence doctrine
-UI_UX_GUIDE.md                 UI responsibilities and constraints
-CODING_STANDARDS.md            formatting, typing, async rules
-TESTING_STRATEGY.md            test priorities and philosophy
-mimocode.json                  MiMo project config
-
-requirements/                  implementation requirement sets
-rules/                         additional MiMo instruction files
-docs/
-  architecture/                architectural concept docs
-  subsystems/                  subsystem-specific guides
-  planning/                    roadmap, non-goals, dev strategy
-  decisions/                   architecture decision records
-  adr/                         detailed ADR files
-.mimocode/
-  skills/                      11 project-local MiMo skills
-  agents/                      5 specialized subagents
-  tools/                       3 project-aware custom tools
+# Run tests
+pytest tests/ -v
 ```
 
-## Intended future application skeleton
+## SCLPLL Scripting Language
+
+Define workflows in human-readable `.sclpll` files:
+
+```sclpll
+@workflow my-pipeline "My Pipeline"
+    Fetches data and generates a report.
+
+@base_url https://api.example.com
+
+@step fetch_users -> users_data
+    request GET {{base_url}}/users
+
+@step fetch_posts -> posts_data
+    request GET {{base_url}}/posts
+
+@step analyze <- fetch_users, fetch_posts -> report
+    func Analyze Data
+```
+
+Compile and run:
+
+```bash
+# Compile to workflow.json + run.py
+python -m app.core.engine.sclpll_cli compile script.sclpll
+
+# Run directly
+python -m app.core.engine.sclpll_cli run script.sclpll
+```
+
+## Examples
+
+| Example | Steps | API | Description |
+|---------|-------|-----|-------------|
+| [Weather Pipeline](examples/weather_pipeline/) | 5 | wttr.in | Fetch weather, extract 5AM data, export |
+| [Job Tracker](examples/job_tracker_pipeline/) | 8 | JSONPlaceholder | Parallel fetch, merge, analyze, report |
+| [Financial Pipeline](examples/financial_pipeline/) | 7 | CoinGecko | Crypto prices, market analysis |
+| [Multi-Provider Aggregator](examples/multi_provider_aggregator/) | 7 | JSONPlaceholder | Parallel processing, aggregation |
+
+## Architecture
 
 ```text
 app/
   core/
+    contracts/     ABC interfaces
+    engine/        workflow engines, SCLPLL compiler
+    models/        data models (request, workflow, context)
   services/
+    request_executor.py    HTTP execution
+    export_service.py      JSON/CSV export
+    history_service.py     request history
   storage/
+    db.py          SQLite persistence
   ui/
-functions/
-data/
-docs/
-requirements/
+    app.py         composition root
+    cli.py         Typer CLI (13+ commands)
+functions/         Python extension functions
+examples/          working pipeline examples
+tests/             113 tests
+docs/              comprehensive documentation
 ```
 
-## Build doctrine
+## Documentation
 
-- local-first
-- human-hackable
-- Python-first
-- strict core, flexible feature layer
-- runtime before visual builder
-- workflows before "smart" automation
+### By Perspective
+
+- [User Guide](docs/perspectives/user/README.md) — quick start, patterns, troubleshooting
+- [Developer Guide](docs/perspectives/developer/README.md) — architecture, extending, testing
+- [Sales & Marketing](docs/perspectives/sales-marketing/README.md) — value proposition, use cases
+- [Enthusiast Showcase](docs/perspectives/enthusiast-showcase/README.md) — advanced patterns
+
+### Reference
+
+- [SCLPLL Language](docs/SCLPLL_LANGUAGE.md) — scripting language reference
+- [Architecture](ARCHITECTURE.md) — layered design
+- [Workflow Engine](WORKFLOW_ENGINE.md) — runtime design
+- [Function System](FUNCTION_SYSTEM.md) — extensibility layer
+- [Features](FEATURES.md) — capability matrix
+
+## Testing
+
+```bash
+# Run all tests
+pytest tests/ -v
+
+# Run specific test file
+pytest tests/test_sclpll_compiler.py -v
+```
+
+**113 tests** covering:
+- SCLPLL compiler (24 tests)
+- Workflow engine (15 tests)
+- Parallel workflow engine (12 tests)
+- Function runner (10 tests)
+- Auth system (15 tests)
+- Event bus (4 tests)
+- Variable resolver (6 tests)
+- Models (3 tests)
+- Database (5 tests)
+- Export (3 tests)
+
+## Build Doctrine
+
+- **Local-first** — no mandatory cloud dependency
+- **Human-hackable** — filesystem-visible configuration
+- **Python-first** — prefer Python runtime over JS
+- **Strict core** — disciplined engine and contracts
+- **Runtime first** — execution before visual builders

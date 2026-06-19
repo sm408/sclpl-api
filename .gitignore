@@ -1,5 +1,6 @@
 # Legacy material — kept locally but not tracked
 legacy/
+agents_1/
 
 # Python
 __pycache__/
@@ -42,3 +43,4 @@ examples/*/output/
 .env.*
 *.pem
 *.key
+

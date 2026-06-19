@@ -1,0 +1,96 @@
+{
+  "id": "multi-provider-aggregator",
+  "name": "Multi-Provider Price Aggregator",
+  "description": "Fetches product data from multiple providers in parallel, processes nested results, and generates a comparison report.",
+  "variables": {
+    "base_url": "https://jsonplaceholder.typicode.com"
+  },
+  "steps": [
+    {
+      "id": "fetch_users",
+      "name": "fetch_users",
+      "type": "request",
+      "config": {
+        "inline_request": {
+          "method": "GET",
+          "url": "{{base_url}}/users"
+        }
+      },
+      "output_variable": "users_data"
+    },
+    {
+      "id": "fetch_posts",
+      "name": "fetch_posts",
+      "type": "request",
+      "config": {
+        "inline_request": {
+          "method": "GET",
+          "url": "{{base_url}}/posts"
+        }
+      },
+      "output_variable": "posts_data"
+    },
+    {
+      "id": "fetch_todos",
+      "name": "fetch_todos",
+      "type": "request",
+      "config": {
+        "inline_request": {
+          "method": "GET",
+          "url": "{{base_url}}/todos"
+        }
+      },
+      "output_variable": "todos_data"
+    },
+    {
+      "id": "process_users",
+      "name": "process_users",
+      "type": "function",
+      "config": {
+        "function_name": "Process Provider Data"
+      },
+      "depends_on": [
+        "fetch_users"
+      ],
+      "output_variable": "processed_users"
+    },
+    {
+      "id": "process_posts",
+      "name": "process_posts",
+      "type": "function",
+      "config": {
+        "function_name": "Process Content Data"
+      },
+      "depends_on": [
+        "fetch_posts"
+      ],
+      "output_variable": "processed_posts"
+    },
+    {
+      "id": "process_todos",
+      "name": "process_todos",
+      "type": "function",
+      "config": {
+        "function_name": "Process Task Data"
+      },
+      "depends_on": [
+        "fetch_todos"
+      ],
+      "output_variable": "processed_todos"
+    },
+    {
+      "id": "generate_comparison",
+      "name": "generate_comparison",
+      "type": "function",
+      "config": {
+        "function_name": "Generate Comparison Report"
+      },
+      "depends_on": [
+        "process_users",
+        "process_posts",
+        "process_todos"
+      ],
+      "output_variable": "comparison_report"
+    }
+  ]
+}

@@ -1,0 +1,101 @@
+{
+  "id": "financial-market-analysis",
+  "name": "Financial Market Analysis Pipeline",
+  "description": "Fetches cryptocurrency prices and market data in parallel, merges results, and generates a comprehensive market analysis report.",
+  "steps": [
+    {
+      "id": "fetch_bitcoin",
+      "name": "fetch_bitcoin",
+      "type": "request",
+      "config": {
+        "inline_request": {
+          "method": "GET",
+          "url": "{{base_url}}/simple/price?ids=bitcoin&vs_currencies=usd&include_24hr_change=true&include_market_cap=true",
+          "headers": {}
+        }
+      },
+      "output_variable": "bitcoin_data"
+    },
+    {
+      "id": "fetch_ethereum",
+      "name": "fetch_ethereum",
+      "type": "request",
+      "config": {
+        "inline_request": {
+          "method": "GET",
+          "url": "{{base_url}}/simple/price?ids=ethereum&vs_currencies=usd&include_24hr_change=true&include_market_cap=true",
+          "headers": {}
+        }
+      },
+      "output_variable": "ethereum_data"
+    },
+    {
+      "id": "fetch_top_coins",
+      "name": "fetch_top_coins",
+      "type": "request",
+      "config": {
+        "inline_request": {
+          "method": "GET",
+          "url": "{{base_url}}/coins/markets?vs_currency=usd&order=market_cap_desc&per_page=10&page=1",
+          "headers": {}
+        }
+      },
+      "output_variable": "top_coins_data"
+    },
+    {
+      "id": "fetch_global_market",
+      "name": "fetch_global_market",
+      "type": "request",
+      "config": {
+        "inline_request": {
+          "method": "GET",
+          "url": "{{base_url}}/global",
+          "headers": {}
+        }
+      },
+      "output_variable": "global_data"
+    },
+    {
+      "id": "merge_prices",
+      "name": "merge_prices",
+      "type": "function",
+      "config": {
+        "function_name": "Merge Crypto Prices"
+      },
+      "depends_on": [
+        "fetch_bitcoin",
+        "fetch_ethereum"
+      ],
+      "output_variable": "merged_prices"
+    },
+    {
+      "id": "analyze_market",
+      "name": "analyze_market",
+      "type": "function",
+      "config": {
+        "function_name": "Analyze Market"
+      },
+      "depends_on": [
+        "fetch_top_coins",
+        "fetch_global_market"
+      ],
+      "output_variable": "market_analysis"
+    },
+    {
+      "id": "generate_report",
+      "name": "generate_report",
+      "type": "function",
+      "config": {
+        "function_name": "Generate Financial Report"
+      },
+      "depends_on": [
+        "merge_prices",
+        "analyze_market"
+      ],
+      "output_variable": "final_report"
+    }
+  ],
+  "variables": {
+    "base_url": "https://api.coingecko.com/api/v3"
+  }
+}
