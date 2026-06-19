@@ -50,17 +50,21 @@ def tmp_db(tmp_path: Path) -> str:
 
 @pytest.fixture
 def run_cli():
-    """Fixture that returns a helper to run SCLPLAPI CLI commands."""
+    """Fixture that returns a helper to run SCLPLAPI CLI commands.
+
+    Uses app.ui.cli directly to avoid the interactive launcher.
+    """
 
     def _run(args: list[str], timeout: int = 30, cwd: Path | None = None) -> subprocess.CompletedProcess:
-        cmd = [sys.executable, "-m", "app"] + args
+        cmd = [sys.executable, "-m", "app.ui.cli"] + args
+        env = {**os.environ, "PYTHONPATH": str(PROJECT_ROOT), "PYTHONUNBUFFERED": "1"}
         return subprocess.run(
             cmd,
             cwd=str(cwd or PROJECT_ROOT),
             capture_output=True,
             text=True,
             timeout=timeout,
-            env={**os.environ, "PYTHONPATH": str(PROJECT_ROOT)},
+            env=env,
         )
 
     return _run
