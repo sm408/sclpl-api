@@ -1,0 +1,60 @@
+# Advanced Logic Example
+# Demonstrates: dot notation, @when, @foreach, @repeat, @semaphore
+
+@workflow advanced-logic "Advanced Logic Demo"
+    Shows conditional execution, dot notation for nested JSON,
+    loop facilities, and rate limiting in SCLPLL.
+
+@base_url https://jsonplaceholder.typicode.com
+
+@var api_version = v1
+
+# ============================================================
+# PHASE 1: Fetch data with rate limiting
+# ============================================================
+
+@step fetch_users -> users_data
+    @semaphore 2
+    request GET {{base_url}}/users
+
+@step fetch_user_detail -> user_detail
+    @semaphore 1
+    request GET {{base_url}}/users/1
+
+# ============================================================
+# PHASE 2: Conditional execution with dot notation
+# ============================================================
+
+# Only process if we got a valid user (status 200)
+@step process_active_user <- fetch_user_detail
+    @when {{fetch_user_detail.status_code}} == 200
+    func Process Single User
+
+# Fallback if the fetch failed
+@step handle_failure <- fetch_user_detail
+    @when {{fetch_user_detail.status_code}} != 200
+    func Handle Fetch Failure
+
+# ============================================================
+# PHASE 3: Loop over fetched users
+# ============================================================
+
+@step process_each_user <- fetch_users
+    @foreach {{fetch_users.body}} as current_user
+    func Process Single User
+
+# ============================================================
+# PHASE 4: Batch fetch with repeat and rate limiting
+# ============================================================
+
+@step batch_fetch_items -> item_results
+    @repeat 3
+    @semaphore 2
+    request GET {{base_url}}/posts/{{_index}}
+
+# ============================================================
+# PHASE 5: Final report (depends on all processing)
+# ============================================================
+
+@step generate_report <- process_each_user, batch_fetch_items -> final_report
+    func Generate Report

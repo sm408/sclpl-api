@@ -39,6 +39,10 @@ class WorkflowStep:
     retry: RetryConfig = field(default_factory=RetryConfig)
     condition: str | None = None
     output_variable: str | None = None
+    semaphore: int | None = None
+    foreach_collection: str | None = None
+    foreach_variable: str | None = None
+    repeat_count: int | None = None
 
 
 @dataclass

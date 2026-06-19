@@ -25,6 +25,10 @@ class SCLPLLCompiler:
     _WORKFLOW_RE = re.compile(r'^@workflow\s+(\S+)\s*(?:"([^"]*)")?')
     _BASE_URL_RE = re.compile(r"^@base_url\s+(\S+)$")
     _VAR_RE = re.compile(r"^@var\s+(\S+)\s*=\s*(.+)$")
+    _WHEN_RE = re.compile(r"^@when\s+(.+?)\s*(==|!=|>=|<=|>|<)\s*(.+)$")
+    _FOREACH_RE = re.compile(r"^@foreach\s+(\{\{.+\}\})\s+as\s+(\w+)$")
+    _REPEAT_RE = re.compile(r"^@repeat\s+(\d+)$")
+    _SEMAPHORE_RE = re.compile(r"^@semaphore\s+(\d+)$")
 
     def parse(self, source: str) -> dict[str, Any]:
         lines = source.splitlines()
@@ -164,6 +168,30 @@ class SCLPLLCompiler:
             inline["body"] = body_match.group(1).strip()
             return
 
+        when_match = self._WHEN_RE.match(content)
+        if when_match:
+            left = when_match.group(1).strip()
+            op = when_match.group(2)
+            right = when_match.group(3).strip()
+            step["condition"] = f"{left} {op} {right}"
+            return
+
+        foreach_match = self._FOREACH_RE.match(content)
+        if foreach_match:
+            step["foreach_collection"] = foreach_match.group(1)
+            step["foreach_variable"] = foreach_match.group(2)
+            return
+
+        repeat_match = self._REPEAT_RE.match(content)
+        if repeat_match:
+            step["repeat_count"] = int(repeat_match.group(1))
+            return
+
+        semaphore_match = self._SEMAPHORE_RE.match(content)
+        if semaphore_match:
+            step["semaphore"] = int(semaphore_match.group(1))
+            return
+
         raise SCLPLLParseError(f"Unknown step body syntax: {content}", line_num, raw_line)
 
     def compile_to_json(self, source: str) -> str:
@@ -184,7 +212,7 @@ class SCLPLLCompiler:
             def load_workflow(path):
                 with open(path) as f:
                     data = json.load(f)
-                steps = [WorkflowStep(id=s["id"], name=s.get("name", s["id"]), step_type=StepType(s["type"]), config=s.get("config", {}), depends_on=s.get("depends_on", []), output_variable=s.get("output_variable")) for s in data["steps"]]
+                steps = [WorkflowStep(id=s["id"], name=s.get("name", s["id"]), step_type=StepType(s["type"]), config=s.get("config", {}), depends_on=s.get("depends_on", []), output_variable=s.get("output_variable"), condition=s.get("condition"), semaphore=s.get("semaphore"), foreach_collection=s.get("foreach_collection"), foreach_variable=s.get("foreach_variable"), repeat_count=s.get("repeat_count")) for s in data["steps"]]
                 return WorkflowDef(id=data["id"], name=data["name"], description=data.get("description", ""), steps=steps, variables=data.get("variables", {}))
 
             async def main():
@@ -243,6 +271,23 @@ class SCLPLLCompiler:
 
             config = step.get("config", {})
             step_type = step.get("type", "request")
+
+            condition = step.get("condition")
+            if condition:
+                parts.append(f"    @when {condition}")
+
+            foreach_col = step.get("foreach_collection")
+            foreach_var = step.get("foreach_variable")
+            if foreach_col and foreach_var:
+                parts.append(f"    @foreach {foreach_col} as {foreach_var}")
+
+            repeat = step.get("repeat_count")
+            if repeat is not None:
+                parts.append(f"    @repeat {repeat}")
+
+            sem = step.get("semaphore")
+            if sem is not None:
+                parts.append(f"    @semaphore {sem}")
 
             if step_type == "function":
                 fn_name = config.get("function_name", "")

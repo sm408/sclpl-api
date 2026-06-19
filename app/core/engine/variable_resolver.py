@@ -7,16 +7,54 @@ from app.core.contracts.variable_resolver import VariableResolver
 from app.core.models.context import ExecutionContext, ResolvedVariable
 from app.core.models.environment import VariableScope
 
-_VARIABLE_PATTERN = re.compile(r"\{\{(\w+)\}\}")
+_VARIABLE_PATTERN = re.compile(r"\{\{([\w.]+)\}\}")
 
 
 class DefaultVariableResolver(VariableResolver):
     def resolve(self, text: str, ctx: ExecutionContext) -> str:
         def _replace(match: re.Match[str]) -> str:
             key = match.group(1)
-            return ctx.variables.get(key, match.group(0))
+            return self._resolve_key(key, ctx)
 
         return _VARIABLE_PATTERN.sub(_replace, text)
+
+    def _resolve_key(self, key: str, ctx: ExecutionContext) -> str:
+        if "." not in key:
+            return ctx.variables.get(key, ctx.step_outputs.get(key, "{{" + key + "}}"))
+
+        parts = key.split(".")
+        root = parts[0]
+        raw = ctx.variables.get(root)
+        if raw is None:
+            raw = ctx.step_outputs.get(root)
+        if raw is None:
+            return "{{" + key + "}}"
+
+        value: Any = raw
+        if isinstance(value, str):
+            import json as _json
+            try:
+                value = _json.loads(value)
+            except (ValueError, TypeError):
+                return "{{" + key + "}}"
+
+        for part in parts[1:]:
+            if isinstance(value, dict):
+                if part not in value:
+                    return "{{" + key + "}}"
+                value = value[part]
+            elif isinstance(value, list):
+                try:
+                    idx = int(part)
+                except (ValueError, TypeError):
+                    return "{{" + key + "}}"
+                if idx < 0 or idx >= len(value):
+                    return "{{" + key + "}}"
+                value = value[idx]
+            else:
+                return "{{" + key + "}}"
+
+        return str(value) if value is not None else "{{" + key + "}}"
 
     def resolve_all(self, ctx: ExecutionContext) -> list[ResolvedVariable]:
         resolved: list[ResolvedVariable] = []

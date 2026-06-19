@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import operator
 import time
 import uuid
 from collections import defaultdict
@@ -77,6 +78,7 @@ class ParallelWorkflowEngine:
         self._hooks = hook_runner or FunctionHookRunner()
         self._resolver = variable_resolver or DefaultVariableResolver()
         self._event_bus = event_bus or SimpleEventBus()
+        self._semaphores: dict[int, asyncio.Semaphore] = {}
 
     async def execute(
         self,
@@ -196,7 +198,7 @@ class ParallelWorkflowEngine:
         ctx: ExecutionContext,
         requests: dict[str, RequestDef],
     ) -> StepResult:
-        """Execute a step with error handling and timing."""
+        """Execute a step with error handling, timing, semaphore, foreach/repeat."""
         start = time.monotonic()
 
         try:
@@ -208,7 +210,19 @@ class ParallelWorkflowEngine:
                     started_at=start, completed_at=time.monotonic(),
                 )
 
-            result, entry = await self._execute_step(step, ctx, requests)
+            if step.foreach_collection:
+                return await self._execute_foreach(step, ctx, requests, start)
+
+            if step.repeat_count is not None and step.repeat_count > 0:
+                return await self._execute_repeat(step, ctx, requests, start)
+
+            sem = self._get_semaphore(step)
+            if sem:
+                async with sem:
+                    result, entry = await self._execute_step(step, ctx, requests)
+            else:
+                result, entry = await self._execute_step(step, ctx, requests)
+
             result.started_at = start
             result.completed_at = time.monotonic()
             return result
@@ -352,6 +366,132 @@ class ParallelWorkflowEngine:
             return True
         try:
             resolved = self._resolver.resolve(step.condition, ctx)
+            ops = {"==": operator.eq, "!=": operator.ne, ">=": operator.ge,
+                   "<=": operator.le, ">": operator.gt, "<": operator.lt}
+            for op_str, op_func in ops.items():
+                if op_str in resolved:
+                    left, right = resolved.split(op_str, 1)
+                    left, right = left.strip(), right.strip()
+                    try:
+                        left_n, right_n = float(left), float(right)
+                        return op_func(left_n, right_n)
+                    except (ValueError, TypeError):
+                        if op_str in ("==", "!="):
+                            return op_func(left, right)
+                        return True
             return bool(eval(resolved, {"__builtins__": {}}, {"ctx": ctx, "vars": ctx.workflow_variables}))
         except Exception:
             return True
+
+    def _get_semaphore(self, step: WorkflowStep) -> asyncio.Semaphore | None:
+        if step.semaphore is None or step.semaphore < 1:
+            return None
+        if step.semaphore not in self._semaphores:
+            self._semaphores[step.semaphore] = asyncio.Semaphore(step.semaphore)
+        return self._semaphores[step.semaphore]
+
+    async def _execute_foreach(
+        self,
+        step: WorkflowStep,
+        ctx: ExecutionContext,
+        requests: dict[str, RequestDef],
+        start: float,
+    ) -> StepResult:
+        collection_expr = step.foreach_collection or ""
+        resolved_collection = self._resolver.resolve(collection_expr, ctx)
+        import json as _json
+        try:
+            items = _json.loads(resolved_collection)
+        except (ValueError, TypeError):
+            items = [resolved_collection]
+
+        if not isinstance(items, list):
+            items = [items]
+
+        var_name = step.foreach_variable or "item"
+        outputs: list[Any] = []
+        errors: list[str] = []
+        sem = self._get_semaphore(step)
+
+        for idx, item in enumerate(items):
+            loop_ctx = ExecutionContext(
+                environment=ctx.environment,
+                variables=dict(ctx.variables),
+                step_outputs=dict(ctx.step_outputs),
+                workflow_variables=dict(ctx.workflow_variables),
+                batch_row=dict(ctx.batch_row),
+                metadata=dict(ctx.metadata),
+            )
+            loop_ctx.workflow_variables[var_name] = _json.dumps(item) if isinstance(item, (dict, list)) else str(item)
+            loop_ctx.workflow_variables["_index"] = str(idx)
+
+            if sem:
+                async with sem:
+                    result, _ = await self._execute_step(step, loop_ctx, requests)
+            else:
+                result, _ = await self._execute_step(step, loop_ctx, requests)
+
+            if result.success:
+                outputs.append(result.output)
+            else:
+                errors.append(f"[{idx}] {result.error}")
+
+        elapsed = int((time.monotonic() - start) * 1000)
+        if errors:
+            return StepResult(
+                step_id=step.id, step_name=step.name, success=False,
+                error="; ".join(errors), duration_ms=elapsed,
+                started_at=start, completed_at=time.monotonic(),
+            )
+        return StepResult(
+            step_id=step.id, step_name=step.name, success=True,
+            output=outputs, duration_ms=elapsed,
+            started_at=start, completed_at=time.monotonic(),
+        )
+
+    async def _execute_repeat(
+        self,
+        step: WorkflowStep,
+        ctx: ExecutionContext,
+        requests: dict[str, RequestDef],
+        start: float,
+    ) -> StepResult:
+        count = step.repeat_count or 1
+        outputs: list[Any] = []
+        errors: list[str] = []
+        sem = self._get_semaphore(step)
+
+        for idx in range(count):
+            loop_ctx = ExecutionContext(
+                environment=ctx.environment,
+                variables=dict(ctx.variables),
+                step_outputs=dict(ctx.step_outputs),
+                workflow_variables=dict(ctx.workflow_variables),
+                batch_row=dict(ctx.batch_row),
+                metadata=dict(ctx.metadata),
+            )
+            loop_ctx.workflow_variables["_index"] = str(idx)
+
+            if sem:
+                async with sem:
+                    result, _ = await self._execute_step(step, loop_ctx, requests)
+            else:
+                result, _ = await self._execute_step(step, loop_ctx, requests)
+
+            if result.success:
+                outputs.append(result.output)
+            else:
+                errors.append(f"[{idx}] {result.error}")
+
+        elapsed = int((time.monotonic() - start) * 1000)
+        if errors:
+            return StepResult(
+                step_id=step.id, step_name=step.name, success=False,
+                error="; ".join(errors), duration_ms=elapsed,
+                started_at=start, completed_at=time.monotonic(),
+            )
+        return StepResult(
+            step_id=step.id, step_name=step.name, success=True,
+            output=outputs, duration_ms=elapsed,
+            started_at=start, completed_at=time.monotonic(),
+        )

@@ -1,0 +1,98 @@
+{
+  "id": "advanced-logic",
+  "name": "Advanced Logic Demo",
+  "description": "Shows conditional execution, dot notation for nested JSON, loop facilities, and rate limiting in SCLPLL.",
+  "steps": [
+    {
+      "id": "fetch_users",
+      "name": "fetch_users",
+      "type": "request",
+      "config": {
+        "inline_request": {
+          "method": "GET",
+          "url": "{{base_url}}/users",
+          "headers": {}
+        }
+      },
+      "depends_on": [],
+      "output_variable": "users_data",
+      "semaphore": 2
+    },
+    {
+      "id": "fetch_user_detail",
+      "name": "fetch_user_detail",
+      "type": "request",
+      "config": {
+        "inline_request": {
+          "method": "GET",
+          "url": "{{base_url}}/users/1",
+          "headers": {}
+        }
+      },
+      "depends_on": [],
+      "output_variable": "user_detail",
+      "semaphore": 1
+    },
+    {
+      "id": "process_active_user",
+      "name": "process_active_user",
+      "type": "function",
+      "config": {
+        "function_name": "Process Single User"
+      },
+      "depends_on": ["fetch_user_detail"],
+      "condition": "{{fetch_user_detail.status_code}} == 200"
+    },
+    {
+      "id": "handle_failure",
+      "name": "handle_failure",
+      "type": "function",
+      "config": {
+        "function_name": "Handle Fetch Failure"
+      },
+      "depends_on": ["fetch_user_detail"],
+      "condition": "{{fetch_user_detail.status_code}} != 200"
+    },
+    {
+      "id": "process_each_user",
+      "name": "process_each_user",
+      "type": "function",
+      "config": {
+        "function_name": "Process Single User"
+      },
+      "depends_on": ["fetch_users"],
+      "foreach_collection": "{{fetch_users.body}}",
+      "foreach_variable": "current_user"
+    },
+    {
+      "id": "batch_fetch_items",
+      "name": "batch_fetch_items",
+      "type": "request",
+      "config": {
+        "inline_request": {
+          "method": "GET",
+          "url": "{{base_url}}/posts/{{_index}}",
+          "headers": {}
+        }
+      },
+      "depends_on": [],
+      "output_variable": "item_results",
+      "repeat_count": 3,
+      "semaphore": 2
+    },
+    {
+      "id": "generate_report",
+      "name": "generate_report",
+      "type": "function",
+      "config": {
+        "function_name": "Generate Report"
+      },
+      "depends_on": ["process_each_user", "batch_fetch_items"],
+      "output_variable": "final_report"
+    }
+  ],
+  "variables": {
+    "base_url": "https://jsonplaceholder.typicode.com",
+    "api_version": "v1"
+  }
+}

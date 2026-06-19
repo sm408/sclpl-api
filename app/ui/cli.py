@@ -867,5 +867,19 @@ def functions(
             f.get("version", "?"),
             f.get("path", "?"),
         )
-
     console.print(table)
+
+
+# ──────────────────────────────────────────────────────────────────────
+# TUI
+# ──────────────────────────────────────────────────────────────────────
+
+@app.command()
+def tui(
+    db: str = DB_OPTION,
+):
+    """Launch the interactive Terminal User Interface."""
+    from app.ui.tui import launch_tui
+
+    launch_tui(db)
+
