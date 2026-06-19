@@ -1,0 +1,27 @@
+{
+  "id": "sample-plugin-workflow",
+  "name": "Sample Plugin Workflow",
+  "description": "A demo workflow that uses plugin functions",
+  "steps": [
+    {
+      "id": "step1",
+      "name": "Say Hello",
+      "type": "function",
+      "function_name": "hello_world",
+      "config": {},
+      "output_variable": "greeting"
+    },
+    {
+      "id": "step2",
+      "name": "Transform Result",
+      "type": "function",
+      "function_name": "transform_data",
+      "config": {},
+      "depends_on": ["step1"],
+      "output_variable": "transformed"
+    }
+  ],
+  "variables": {
+    "name": "PluginUser"
+  }
+}

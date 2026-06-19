@@ -26,12 +26,15 @@ async def test_initialize_creates_tables(db):
     assert "workflows" in table_names
     assert "export_presets" in table_names
     assert "schema_version" in table_names
+    assert "plugins" in table_names
+    assert "plugin_variables" in table_names
+    assert "workflow_versions" in table_names
 
 
 @pytest.mark.asyncio
 async def test_schema_version(db):
-    row = await db.fetch_one("SELECT version FROM schema_version")
-    assert row["version"] == 1
+    row = await db.fetch_one("SELECT MAX(version) as version FROM schema_version")
+    assert row["version"] == 4
 
 
 @pytest.mark.asyncio

@@ -9,7 +9,7 @@ logger = logging.getLogger(__name__)
 
 DEFAULT_DB_PATH = Path("data") / "sclplapi.db"
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 4
 
 SCHEMA_SQL = """
 CREATE TABLE IF NOT EXISTS schema_version (
@@ -98,6 +98,13 @@ CREATE TABLE IF NOT EXISTS export_presets (
 """
 
 
+def get_all_migrations():
+    from app.storage.migrations.m001_add_plugin_tables import AddPluginTables
+    from app.storage.migrations.m002_add_workflow_versioning import AddWorkflowVersioning
+    from app.storage.migrations.m003_add_export_presets import AddExportPresets
+    return [AddPluginTables(), AddWorkflowVersioning(), AddExportPresets()]
+
+
 class Database:
     def __init__(self, db_path: Path | str | None = None) -> None:
         self._path = Path(db_path) if db_path else DEFAULT_DB_PATH
@@ -119,12 +126,26 @@ class Database:
         if not self._db:
             await self.connect()
         await self._db.executescript(SCHEMA_SQL)
-        await self._db.execute(
-            "INSERT OR IGNORE INTO schema_version (version) VALUES (?)",
-            (SCHEMA_VERSION,),
-        )
         await self._db.commit()
+        await self._run_migrations()
+        current = await self.fetch_one(
+            "SELECT version FROM schema_version ORDER BY version DESC LIMIT 1"
+        )
+        if not current:
+            await self._db.execute(
+                "INSERT INTO schema_version (version) VALUES (?)",
+                (SCHEMA_VERSION,),
+            )
+            await self._db.commit()
         logger.info("Database initialized at %s (version %d)", self._path, SCHEMA_VERSION)
+
+    async def _run_migrations(self) -> None:
+        from app.storage.migrations.runner import MigrationRunner
+        migrations = get_all_migrations()
+        runner = MigrationRunner(self, migrations)
+        applied = await runner.run_pending()
+        if applied:
+            logger.info("Applied migrations: %s", applied)
 
     @property
     def connection(self) -> aiosqlite.Connection:

@@ -14,7 +14,8 @@ from app.core.engine.hooks import FunctionHookRunner
 from app.core.engine.variable_resolver import DefaultVariableResolver
 from app.core.models.context import ExecutionContext
 from app.core.models.environment import Environment, Variable
-from app.core.models.request import HttpMethod, RequestDef, RequestParam
+from app.core.models.plugin import PluginStatus
+from app.core.models.request import HttpMethod, RequestParam
 from app.core.models.workflow import RetryConfig, RetryStrategy, StepType, WorkflowDef, WorkflowStep
 from app.ui.app import App
 
@@ -843,12 +844,29 @@ async def _run_workflow(file, env_name, save_history, db_path):
 @app.command()
 def functions(
     dir: str = typer.Option("functions", "-d", "--dir", help="Functions directory"),
+    include_plugins: bool = typer.Option(True, help="Include plugin functions"),
+    plugins_dir: str = typer.Option("plugins", help="Plugins directory"),
 ):
     """List discovered Python functions."""
     from app.core.engine.function_runner import FilesystemFunctionRunner
+    from app.core.engine.plugin_registry import FilesystemPluginRegistry
 
     runner = FilesystemFunctionRunner(dir)
     funcs = runner.discover()
+
+    if include_plugins:
+        registry = FilesystemPluginRegistry(plugins_dir)
+        registry.discover()
+        for info in registry.list_plugins():
+            if info.status != PluginStatus.ERROR:
+                try:
+                    registry.load(info.manifest.name)
+                except Exception:
+                    pass
+        plugin_funcs = registry.get_all_functions()
+        for f in plugin_funcs:
+            f["_source"] = f"plugin:{f.get('plugin', '?')}"
+        funcs.extend(plugin_funcs)
 
     if not funcs:
         console.print("[dim]No functions discovered[/dim]")
@@ -858,16 +876,163 @@ def functions(
     table.add_column("Name")
     table.add_column("Type")
     table.add_column("Version")
+    table.add_column("Source")
     table.add_column("Path", style="dim")
 
     for f in funcs:
+        source = f.get("_source", "local")
         table.add_row(
             f.get("name", "?"),
             f.get("type", "?"),
             f.get("version", "?"),
+            source,
             f.get("path", "?"),
         )
     console.print(table)
+
+
+# ──────────────────────────────────────────────────────────────────────
+# PLUGINS
+# ──────────────────────────────────────────────────────────────────────
+
+plugin_app = typer.Typer(help="Plugin management commands")
+app.add_typer(plugin_app, name="plugins")
+
+
+@plugin_app.command("list")
+def plugins_list(
+    plugins_dir: str = typer.Option("plugins", "-d", "--dir", help="Plugins directory"),
+):
+    """List all discovered plugins."""
+    from app.core.engine.plugin_registry import FilesystemPluginRegistry
+
+    registry = FilesystemPluginRegistry(plugins_dir)
+    plugins = registry.discover()
+
+    if not plugins:
+        console.print("[dim]No plugins discovered[/dim]")
+        return
+
+    table = Table(title="Plugins")
+    table.add_column("Name")
+    table.add_column("Version")
+    table.add_column("Status")
+    table.add_column("Description")
+    table.add_column("Functions", justify="right")
+    table.add_column("Workflows", justify="right")
+
+    for info in plugins:
+        status_color = {
+            PluginStatus.ACTIVE: "green",
+            PluginStatus.LOADED: "yellow",
+            PluginStatus.DISCOVERED: "dim",
+            PluginStatus.ERROR: "red",
+        }.get(info.status, "dim")
+
+        table.add_row(
+            info.manifest.name,
+            info.manifest.version,
+            f"[{status_color}]{info.status}[/{status_color}]",
+            info.manifest.description[:40],
+            str(len(info.manifest.functions)),
+            str(len(info.manifest.workflows)),
+        )
+
+    console.print(table)
+
+
+@plugin_app.command("info")
+def plugins_info(
+    name: str = typer.Argument(help="Plugin name"),
+    plugins_dir: str = typer.Option("plugins", "-d", "--dir", help="Plugins directory"),
+):
+    """Show detailed information about a plugin."""
+    from app.core.engine.plugin_registry import FilesystemPluginRegistry
+
+    registry = FilesystemPluginRegistry(plugins_dir)
+    registry.discover()
+
+    try:
+        info = registry.load(name)
+    except Exception as exc:
+        console.print(f"[red]Failed to load plugin '{name}': {exc}[/red]")
+        raise typer.Exit(1)
+
+    console.print(f"[bold]{info.manifest.name}[/bold] v{info.manifest.version}")
+    if info.manifest.description:
+        console.print(f"  {info.manifest.description}")
+    if info.manifest.author:
+        console.print(f"  Author: {info.manifest.author}")
+    console.print(f"  Status: [{ 'green' if info.status == PluginStatus.ACTIVE else 'dim'}]{info.status}[/]")
+    console.print(f"  Path: {info.manifest.path}")
+
+    if info.manifest.variables:
+        console.print("\n[bold]Variables:[/bold]")
+        for k, v in info.manifest.variables.items():
+            console.print(f"  {k} = {v}")
+
+    if info.manifest.hooks:
+        console.print("\n[bold]Hooks:[/bold]")
+        for hook_type, hook_path in info.manifest.hooks.items():
+            console.print(f"  {hook_type}: {hook_path}")
+
+    if info.manifest.dependencies:
+        console.print(f"\n[bold]Dependencies:[/bold] {', '.join(info.manifest.dependencies)}")
+
+    if info.functions:
+        console.print("\n[bold]Functions:[/bold]")
+        func_table = Table(show_header=True)
+        func_table.add_column("Name")
+        func_table.add_column("Type")
+        func_table.add_column("Description")
+        for f in info.functions:
+            func_table.add_row(f.get("name", "?"), f.get("type", "?"), f.get("description", ""))
+        console.print(func_table)
+
+    if info.workflows:
+        console.print("\n[bold]Workflows:[/bold]")
+        for wf in info.workflows:
+            console.print(f"  {wf.get('name', '?')} ({wf.get('id', '?')})")
+
+    if info.error:
+        console.print(f"\n[red]Error: {info.error}[/red]")
+
+
+@plugin_app.command("create")
+def plugins_create(
+    name: str = typer.Argument(help="Plugin name (kebab-case)"),
+    plugins_dir: str = typer.Option("plugins", "-d", "--dir", help="Plugins directory"),
+):
+    """Scaffold a new plugin directory."""
+    from app.core.engine.plugin_registry import FilesystemPluginRegistry
+
+    registry = FilesystemPluginRegistry(plugins_dir)
+
+    if (registry._base / name).exists():
+        console.print(f"[red]Plugin '{name}' already exists[/red]")
+        raise typer.Exit(1)
+
+    plugin_dir = registry.scaffold_plugin(name)
+    console.print(f"[green]Created plugin '{name}' at {plugin_dir}[/green]")
+    console.print("\nFiles created:")
+    for p in sorted(plugin_dir.rglob("*")):
+        if p.is_file():
+            console.print(f"  {p.relative_to(plugin_dir)}")
+
+
+@plugin_app.command("reload")
+def plugins_reload(
+    plugins_dir: str = typer.Option("plugins", "-d", "--dir", help="Plugins directory"),
+):
+    """Re-scan and reload all plugins."""
+    from app.core.engine.plugin_registry import FilesystemPluginRegistry
+
+    registry = FilesystemPluginRegistry(plugins_dir)
+    plugins = registry.reload()
+
+    loaded = sum(1 for p in plugins if p.status == PluginStatus.ACTIVE)
+    errors = sum(1 for p in plugins if p.status == PluginStatus.ERROR)
+    console.print(f"[green]Reloaded {len(plugins)} plugins ({loaded} active, {errors} errors)[/green]")
 
 
 # ──────────────────────────────────────────────────────────────────────
@@ -882,4 +1047,108 @@ def tui(
     from app.ui.tui import launch_tui
 
     launch_tui(db)
+
+
+# ──────────────────────────────────────────────────────────────────────
+# FULL EXPORT / IMPORT
+# ──────────────────────────────────────────────────────────────────────
+
+@app.command()
+def export_all(
+    output_dir: str = typer.Argument(help="Output directory for full export"),
+    db: str = DB_OPTION,
+):
+    """Export all SCLPLAPI data (workflows, functions, history, etc.)."""
+    _run(_run_export_all(output_dir, db))
+
+
+async def _run_export_all(output_dir, db_path):
+    from app.services.full_export_service import FullExportService
+
+    async with App(db_path) as application:
+        exporter = FullExportService(application.db)
+        base = await exporter.export_all(output_dir)
+        console.print(f"[green]Full export complete: {base}[/green]")
+
+
+@app.command()
+def import_all(
+    export_dir: str = typer.Argument(help="Export directory to import from"),
+    db: str = DB_OPTION,
+):
+    """Import all SCLPLAPI data from an export directory."""
+    _run(_run_import_all(export_dir, db))
+
+
+async def _run_import_all(export_dir, db_path):
+    from app.services.full_import_service import FullImportService
+
+    async with App(db_path) as application:
+        importer = FullImportService(application.db)
+        result = await importer.import_all(export_dir)
+        for section, count in result.items():
+            console.print(f"  {section}: {count}")
+        console.print("[green]Full import complete[/green]")
+
+
+export_app = typer.Typer(help="Selective export commands")
+app.add_typer(export_app, name="export-selective")
+
+
+@export_app.command("workflows")
+def export_workflows(
+    output_dir: str = typer.Argument(help="Output directory"),
+    db: str = DB_OPTION,
+):
+    """Export all workflows."""
+    _run(_run_selective_export("workflows", output_dir, db))
+
+
+@export_app.command("functions")
+def export_functions(
+    output_dir: str = typer.Argument(help="Output directory"),
+    db: str = DB_OPTION,
+):
+    """Export all function files."""
+    _run(_run_selective_export("functions", output_dir, db))
+
+
+@export_app.command("history")
+def export_history(
+    output_dir: str = typer.Argument(help="Output directory"),
+    db: str = DB_OPTION,
+):
+    """Export execution history."""
+    _run(_run_selective_export("history", output_dir, db))
+
+
+@export_app.command("environments")
+def export_environments(
+    output_dir: str = typer.Argument(help="Output directory"),
+    db: str = DB_OPTION,
+):
+    """Export environments and variables."""
+    _run(_run_selective_export("environments", output_dir, db))
+
+
+@export_app.command("collections")
+def export_collections(
+    output_dir: str = typer.Argument(help="Output directory"),
+    db: str = DB_OPTION,
+):
+    """Export collections and requests."""
+    _run(_run_selective_export("collections", output_dir, db))
+
+
+async def _run_selective_export(section, output_dir, db_path):
+    from app.services.full_export_service import FullExportService
+
+    async with App(db_path) as application:
+        exporter = FullExportService(application.db)
+        method = getattr(exporter, f"export_{section}", None)
+        if not method:
+            console.print(f"[red]Unknown section: {section}[/red]")
+            raise typer.Exit(1)
+        count = await method(Path(output_dir) / section)
+        console.print(f"[green]Exported {section}: {count} items[/green]")
 

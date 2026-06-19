@@ -21,12 +21,27 @@ from rich.console import Console, Group
 from rich.live import Live
 from rich.panel import Panel
 from rich.progress import BarColumn, Progress, SpinnerColumn, TextColumn, TimeElapsedColumn
-from rich.prompt import Prompt
+from rich.prompt import Confirm, Prompt
 from rich.rule import Rule
 from rich.table import Table
 from rich.text import Text
 
 from app.ui.logo import LOGO, VERSION
+
+# ─── Keyboard shortcuts ──────────────────────────────────────────────────────
+
+SHORTCUTS_HELP = (
+    "[dim]Shortcuts: "
+    "[bold]R[/bold]=Run  "
+    "[bold]L[/bold]=Load  "
+    "[bold]F[/bold]=Functions  "
+    "[bold]H[/bold]=History  "
+    "[bold]E[/bold]=Envs  "
+    "[bold]V[/bold]=Validate  "
+    "[bold]Q[/bold]=Quit  "
+    "[bold]?[/bold]=Help"
+    "[/dim]"
+)
 
 # ─── Status icons ────────────────────────────────────────────────────────────
 
@@ -73,6 +88,8 @@ class TUI:
         self.console = Console()
         self.db_path = db_path
         self._running = True
+        self._recent_workflows: list[Path] = []
+        self._current_env: str = "none"
 
     # ── Entry point ──────────────────────────────────────────────────────
 
@@ -94,11 +111,59 @@ class TUI:
             Align.center(f"[dim]{VERSION}[/dim]"),
         )
         self.console.print()
+        self.console.print(Align.center(SHORTCUTS_HELP))
+        self.console.print()
+
+    # ── Status bar ───────────────────────────────────────────────────────
+
+    def _print_status_bar(self) -> None:
+        env_display = self._current_env if self._current_env != "none" else "[dim]none[/dim]"
+        recent_count = len(self._recent_workflows)
+        recent_display = f"[dim]{recent_count} recent[/dim]" if recent_count else "[dim]no recent[/dim]"
+        self.console.print(
+            Panel(
+                f"  Env: {env_display}  |  {recent_display}  |  {SHORTCUTS_HELP}",
+                style="dim",
+                box=box.SIMPLE,
+                padding=(0, 1),
+            )
+        )
+
+    # ── Help screen ──────────────────────────────────────────────────────
+
+    def _show_help(self) -> None:
+        self.console.print()
+        help_table = Table(
+            title="Keyboard Shortcuts & Help",
+            box=box.ROUNDED,
+            border_style="cyan",
+            header_style="bold cyan",
+            show_lines=True,
+        )
+        help_table.add_column("Key", width=6, justify="center")
+        help_table.add_column("Action", min_width=20)
+        help_table.add_column("Description", min_width=40)
+
+        help_table.add_row("R", "Run Workflow", "Execute a .sclpll or .json workflow file")
+        help_table.add_row("L", "Load Script", "Load, view, validate, or run a script")
+        help_table.add_row("F", "Browse Functions", "Discover and inspect Python functions")
+        help_table.add_row("H", "View History", "Browse past request history")
+        help_table.add_row("E", "Manage Environments", "Create, activate, and configure envs")
+        help_table.add_row("V", "Validate Script", "Check a .sclpll file for syntax errors")
+        help_table.add_row("?", "Help", "Show this help screen")
+        help_table.add_row("Q", "Quit", "Exit SCLPLAPI")
+
+        self.console.print(help_table)
+        self.console.print()
+        self.console.print("[dim]Tip: Steps without dependencies run in parallel automatically.[/dim]")
+        self.console.print("[dim]Tip: Use {{variable}} syntax to reference step outputs in URLs and headers.[/dim]")
+        self.console.print()
 
     # ── Main menu ────────────────────────────────────────────────────────
 
     def _main_menu(self) -> None:
         while self._running:
+            self._print_status_bar()
             self.console.print()
             self.console.print(Panel(
                 self._build_menu_content(),
@@ -111,7 +176,7 @@ class TUI:
 
             choice = Prompt.ask(
                 "[bold cyan]Select[/bold cyan]",
-                choices=["r", "l", "f", "h", "e", "v", "q"],
+                choices=["r", "l", "f", "h", "e", "v", "w", "?", "q"],
                 default="q",
                 show_choices=False,
             ).lower()
@@ -130,6 +195,10 @@ class TUI:
                 self._environment_manager()
             elif choice == "v":
                 self._script_validator()
+            elif choice == "w":
+                self._recent_workflows_menu()
+            elif choice == "?":
+                self._show_help()
             elif choice == "q":
                 self._running = False
 
@@ -143,6 +212,8 @@ class TUI:
             "[bold cyan][[H]][/bold cyan]  View History",
             "[bold cyan][[E]][/bold cyan]  Manage Environments",
             "[bold cyan][[V]][/bold cyan]  Validate Script",
+            "[bold cyan][[W]][/bold cyan]  Recent Workflows",
+            "[bold cyan][[?]][/bold cyan]  Help",
             "[bold red][[Q]][/bold red]  Quit",
         ]
         return Columns(items, equal=True, expand=True)
@@ -183,6 +254,7 @@ class TUI:
 
         selected = sclpll_files[idx - 1]
         self.console.print(f"\n[bold]Loading:[/bold] {selected}")
+        self._track_recent(selected)
         self._execute_workflow_file(selected)
 
     def _discover_sclpll_files(self) -> list[Path]:
@@ -192,11 +264,54 @@ class TUI:
                 files.extend(sorted(d.rglob("*.sclpll")))
         return files[:20]
 
+    # ── Recent workflows ─────────────────────────────────────────────────
+
+    def _track_recent(self, path: Path) -> None:
+        """Track a workflow file in the recent list (most recent first)."""
+        resolved = path.resolve()
+        self._recent_workflows = [p for p in self._recent_workflows if p.resolve() != resolved]
+        self._recent_workflows.insert(0, path)
+        self._recent_workflows = self._recent_workflows[:10]
+
+    def _recent_workflows_menu(self) -> None:
+        self.console.print(Rule("[bold cyan]Recent Workflows[/bold cyan]", style="cyan"))
+        self.console.print()
+
+        if not self._recent_workflows:
+            self.console.print("[dim]No recent workflows. Run a workflow first with [R].[/dim]")
+            return
+
+        for i, f in enumerate(self._recent_workflows, 1):
+            exists = f.exists()
+            status = "" if exists else " [red](missing)[/red]"
+            self.console.print(f"  [cyan][[{i}]][/cyan] {f}{status}")
+        self.console.print("  [dim][[0]] Cancel[/dim]")
+        self.console.print()
+
+        idx_str = Prompt.ask("[cyan]Select workflow to run[/cyan]", default="0")
+        try:
+            idx = int(idx_str)
+        except ValueError:
+            return
+        if idx == 0 or idx > len(self._recent_workflows):
+            return
+
+        selected = self._recent_workflows[idx - 1]
+        if not selected.exists():
+            self.console.print(f"[red]File no longer exists: {selected}[/red]")
+            return
+
+        self._track_recent(selected)
+        self._execute_workflow_file(selected)
+
     def _execute_workflow_file(self, path: Path) -> None:
         try:
             source = path.read_text(encoding="utf-8")
         except OSError as e:
-            self.console.print(f"[red]Cannot read file: {e}[/red]")
+            self.console.print(
+                f"[red]Cannot read file:[/red] {e}\n"
+                f"[dim]Tip: Check that the file exists and you have read permissions.[/dim]"
+            )
             return
 
         # Parse the workflow
@@ -207,16 +322,25 @@ class TUI:
             try:
                 workflow_dict = compiler.parse(source)
             except SCLPLLParseError as e:
-                self.console.print(f"[red]Parse error: {e}[/red]")
+                self.console.print(
+                    f"[red]Syntax error in {path.name}:[/red]\n{e}\n"
+                    f"[dim]Tip: Check indentation, missing quotes, or typos in directives.[/dim]"
+                )
                 return
         elif path.suffix == ".json":
             try:
                 workflow_dict = json.loads(source)
             except json.JSONDecodeError as e:
-                self.console.print(f"[red]Invalid JSON: {e}[/red]")
+                self.console.print(
+                    f"[red]Invalid JSON in {path.name}:[/red]\n{e}\n"
+                    f"[dim]Tip: Validate your JSON at jsonlint.com or check for trailing commas.[/dim]"
+                )
                 return
         else:
-            self.console.print(f"[red]Unsupported file type: {path.suffix}[/red]")
+            self.console.print(
+                f"[red]Unsupported file type:[/red] {path.suffix}\n"
+                f"[dim]Tip: SCLPLAPI supports .sclpll and .json workflow files.[/dim]"
+            )
             return
 
         # Build step states
@@ -506,13 +630,19 @@ class TUI:
         path = Path(path_str)
 
         if not path.exists():
-            self.console.print(f"[red]File not found: {path}[/red]")
+            self.console.print(
+                f"[red]File not found:[/red] {path}\n"
+                "[dim]Tip: Check the path and try again. Use tab-completion if available.[/dim]"
+            )
             return
 
         try:
             source = path.read_text(encoding="utf-8")
         except OSError as e:
-            self.console.print(f"[red]Cannot read file: {e}[/red]")
+            self.console.print(
+                f"[red]Cannot read file:[/red] {e}\n"
+                "[dim]Tip: Check that you have read permissions for this file.[/dim]"
+            )
             return
 
         self.console.print()
@@ -550,6 +680,10 @@ class TUI:
         if not funcs:
             self.console.print("[yellow]No functions discovered[/yellow]")
             self.console.print(f"[dim]Searched in: {Path(func_dir).resolve()}[/dim]")
+            self.console.print(
+                "[dim]Tip: Create a Python file in the functions/ directory with a docstring "
+                "containing @name, @type, and @version metadata, and a run(ctx) function.[/dim]"
+            )
             return
 
         table = Table(
@@ -601,13 +735,21 @@ class TUI:
     def _show_function_detail(self, func_meta: dict[str, str]) -> None:
         path = Path(func_meta.get("path", ""))
         if not path.exists():
-            self.console.print("[red]Function file not found[/red]")
+            self.console.print(
+                "[red]Function file not found[/red]\n"
+                f"[dim]Expected at: {path}[/dim]\n"
+                "[dim]Tip: The function may have been moved or deleted since discovery.[/dim]"
+            )
             return
 
         try:
             source = path.read_text(encoding="utf-8")
         except OSError:
-            self.console.print("[red]Cannot read function file[/red]")
+            self.console.print(
+                "[red]Cannot read function file[/red]\n"
+                f"[dim]Path: {path}[/dim]\n"
+                "[dim]Tip: Check file permissions.[/dim]"
+            )
             return
 
         self.console.print()
@@ -895,7 +1037,15 @@ class TUI:
             return
 
         env = envs[idx]
+        if env["is_active"]:
+            self.console.print(f"[dim]'{env['name']}' is already active.[/dim]")
+            return
+
+        if not Confirm.ask(f"[cyan]Activate '{env['name']}'?[/cyan]", default=True):
+            return
+
         await application.environments.set_active(env["id"])
+        self._current_env = env["name"]
         self.console.print(f"[green]Activated environment '{env['name']}'[/green]")
 
     # ── Script validator ─────────────────────────────────────────────────
@@ -910,13 +1060,19 @@ class TUI:
 
         path = Path(path_str)
         if not path.exists():
-            self.console.print(f"[red]File not found: {path}[/red]")
+            self.console.print(
+                f"[red]File not found:[/red] {path}\n"
+                "[dim]Tip: Provide the full path or navigate to the directory first.[/dim]"
+            )
             return
 
         try:
             source = path.read_text(encoding="utf-8")
         except OSError as e:
-            self.console.print(f"[red]Cannot read file: {e}[/red]")
+            self.console.print(
+                f"[red]Cannot read file:[/red] {e}\n"
+                "[dim]Tip: Check file permissions.[/dim]"
+            )
             return
 
         self._validate_sclpll_source(source, str(path))
@@ -931,7 +1087,12 @@ class TUI:
         except SCLPLLParseError as e:
             self.console.print()
             self.console.print(Panel(
-                f"[red]{e}[/red]",
+                f"[red]{e}[/red]\n\n"
+                "[dim]Common fixes:\n"
+                "  - Check indentation (step body must be indented)\n"
+                "  - Ensure @workflow directive is present\n"
+                "  - Verify quoted strings have closing quotes\n"
+                "  - Check step syntax: @step id <- deps -> output[/dim]",
                 title="[bold red]Validation Failed[/bold red]",
                 border_style="red",
                 box=box.ROUNDED,
@@ -1013,7 +1174,7 @@ class TUI:
     def _goodbye(self) -> None:
         self.console.print()
         self.console.print(Align.center("[bold cyan]Goodbye from SCLPLAPI[/bold cyan]"))
-        self.console.print(Align.center("[dim]Happy automating![/dim]"))
+        self.console.print(Align.center("[dim]Happy automating!  docs: https://github.com/sm408/sclpl-api[/dim]"))
         self.console.print()
 
 
