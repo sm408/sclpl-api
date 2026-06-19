@@ -375,7 +375,14 @@ def create_app(db_path: str | None = None) -> FastAPI:
     # ── Static files & catch-all ──────────────────────────────────────
 
     if STATIC_DIR.exists():
-        app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
+        # Mount CSS and JS at root so relative paths in HTML work
+        css_dir = STATIC_DIR / "css"
+        js_dir = STATIC_DIR / "js"
+
+        if css_dir.exists():
+            app.mount("/css", StaticFiles(directory=str(css_dir)), name="css")
+        if js_dir.exists():
+            app.mount("/js", StaticFiles(directory=str(js_dir)), name="js")
 
         @app.get("/")
         async def serve_index():
