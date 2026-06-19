@@ -122,7 +122,7 @@ class SCLPLLCompileRequest(BaseModel):
 
 class SCLPLLCompileResponse(BaseModel):
     workflow: dict[str, Any]
-    json: str
+    compiled_json: str
 
 
 class SCLPLLValidateRequest(BaseModel):

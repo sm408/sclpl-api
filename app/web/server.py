@@ -285,7 +285,7 @@ def create_app(db_path: str | None = None) -> FastAPI:
         cols = await application.collections.list_all()
         result = []
         for c in cols:
-            reqs = await application.requests.list_by_collection(c["id"])
+            reqs = await application.requests.list_all(collection_id=c["id"])
             result.append(CollectionResponse(
                 id=c["id"],
                 name=c["name"],
@@ -410,7 +410,7 @@ def create_app(db_path: str | None = None) -> FastAPI:
         try:
             workflow = compiler.parse(req.source)
             compiled_json = compiler.compile_to_json(req.source)
-            return SCLPLLCompileResponse(workflow=workflow, json=compiled_json)
+            return SCLPLLCompileResponse(workflow=workflow, compiled_json=compiled_json)
         except SCLPLLParseError as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
 
