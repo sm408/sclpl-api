@@ -194,36 +194,35 @@ const RequestEditor = {
 
         const startTime = performance.now();
         try {
-            const res = await fetch(url, {
-                method,
-                headers,
-                body: method !== 'GET' ? body : undefined
+            // Use backend proxy to avoid CORS and get history
+            const proxyRes = await App.api('/api/requests/send', {
+                method: 'POST',
+                body: {
+                    url,
+                    method,
+                    headers,
+                    body: method !== 'GET' ? body : undefined
+                }
             });
-            const duration = Math.round(performance.now() - startTime);
-            const responseText = await res.text();
+            const duration = proxyRes.duration_ms || Math.round(performance.now() - startTime);
+            const responseText = proxyRes.body || '';
             const size = new Blob([responseText]).size;
 
             let responseBody;
             try { responseBody = JSON.parse(responseText); } catch { responseBody = responseText; }
 
-            const resHeaders = Object.fromEntries(res.headers.entries());
-
             this.renderResponse({
-                status: res.status,
-                statusText: res.statusText,
+                status: proxyRes.status_code,
+                statusText: proxyRes.error ? 'Error' : 'OK',
                 duration,
                 size,
-                headers: resHeaders,
+                headers: proxyRes.headers || {},
                 body: responseBody,
-                raw: responseText
+                raw: responseText,
+                error: proxyRes.error
             });
 
-            History.addEntry({
-                method, url, status: res.status, duration, size,
-                timestamp: new Date().toISOString()
-            });
-
-            App.toast(`${res.status} ${res.statusText} - ${App.formatDuration(duration)}`, res.ok ? 'success' : 'warning');
+            App.toast(`${proxyRes.status_code} - ${App.formatDuration(duration)}`, proxyRes.error ? 'warning' : 'success');
         } catch (err) {
             const duration = Math.round(performance.now() - startTime);
             this.renderResponse({
@@ -363,12 +362,17 @@ const RequestEditor = {
                 try {
                     await App.api(`/api/collections/${encodeURIComponent(colId)}/requests`, {
                         method: 'POST',
-                        body: { name, ...request }
+                        body: {
+                            url: request.url,
+                            method: request.method,
+                            headers: request.headers || {},
+                            body: request.body || null
+                        }
                     });
                     App.toast('Request saved to collection', 'success');
                     modal.remove();
-                } catch {
-                    App.toast('Failed to save request', 'error');
+                } catch (e) {
+                    App.toast('Failed to save request: ' + e.message, 'error');
                 }
             });
         } catch {

@@ -105,23 +105,24 @@ const WorkflowRunner = {
         const bar = document.getElementById(`wf-bar-${this.safeId(wfId)}`);
 
         try {
-            const result = await App.api(`/api/workflows/${encodeURIComponent(wfId)}/run`, {
+            const result = await App.api('/api/workflows/run', {
                 method: 'POST',
-                body: {}
+                body: { workflow_id: wfId }
             });
 
-            const totalTime = Math.round(performance.now() - startTime);
+            const totalTime = result.total_duration_ms || Math.round(performance.now() - startTime);
             if (bar) bar.style.width = '100%';
 
-            if (result.steps) {
-                this.renderSteps(stepsEl, result.steps);
+            const steps = result.step_results || [];
+            if (steps.length) {
+                this.renderSteps(stepsEl, steps);
             }
 
             // Execution summary
-            const successCount = (result.steps || []).filter(s => s.status === 'success').length;
-            const errorCount = (result.steps || []).filter(s => s.status === 'error').length;
-            const totalSteps = (result.steps || []).length;
-            const parallelGroups = result.parallel_groups || result.parallelGroups || [];
+            const successCount = steps.filter(s => s.success).length;
+            const errorCount = steps.filter(s => !s.success).length;
+            const totalSteps = steps.length;
+            const parallelGroups = result.parallel_groups || [];
 
             summaryEl.innerHTML = `
                 <div class="execution-summary">
@@ -191,18 +192,17 @@ const WorkflowRunner = {
     renderSteps(container, steps) {
         container.innerHTML = steps.map((step, i) => {
             let icon;
-            if (step.status === 'success') icon = '<i class="fas fa-check"></i>';
-            else if (step.status === 'error') icon = '<i class="fas fa-times"></i>';
-            else if (step.status === 'running') icon = '<i class="fas fa-spinner fa-spin"></i>';
+            if (step.success === true) icon = '<i class="fas fa-check"></i>';
+            else if (step.success === false) icon = '<i class="fas fa-times"></i>';
             else icon = (i + 1);
 
             return `
             <div class="workflow-step">
-                <div class="step-icon ${step.status || ''}">
+                <div class="step-icon ${step.success ? 'success' : 'error'}">
                     ${icon}
                 </div>
-                <span>${this.escapeHtml(step.name || `Step ${i + 1}`)}</span>
-                <span class="step-duration">${step.duration ? App.formatDuration(step.duration) : ''}</span>
+                <span>${this.escapeHtml(step.step_name || `Step ${i + 1}`)}</span>
+                <span class="step-duration">${step.duration_ms ? App.formatDuration(step.duration_ms) : ''}</span>
             </div>
         `}).join('');
     },

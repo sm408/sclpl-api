@@ -240,6 +240,23 @@ def create_app(db_path: str | None = None) -> FastAPI:
             ))
         return result
 
+    @app.get("/api/functions/{fn_name}/source")
+    async def get_function_source(fn_name: str):
+        from app.core.engine.function_runner import FilesystemFunctionRunner
+
+        runner = FilesystemFunctionRunner(FUNCTIONS_DIR)
+        funcs = runner.discover()
+        func = next((f for f in funcs if f.get("name") == fn_name), None)
+        if not func:
+            raise HTTPException(status_code=404, detail=f"Function '{fn_name}' not found")
+
+        path = Path(func.get("path", ""))
+        if not path.exists():
+            raise HTTPException(status_code=404, detail=f"Function file not found: {path}")
+
+        source = path.read_text(encoding="utf-8")
+        return {"name": fn_name, "source": source, "path": str(path)}
+
     # ── History ───────────────────────────────────────────────────────
 
     @app.get("/api/history", response_model=list[HistoryEntryResponse])
@@ -266,12 +283,50 @@ def create_app(db_path: str | None = None) -> FastAPI:
     @app.get("/api/collections", response_model=list[CollectionResponse])
     async def list_collections() -> list[CollectionResponse]:
         cols = await application.collections.list_all()
-        return [CollectionResponse(**c) for c in cols]
+        result = []
+        for c in cols:
+            reqs = await application.requests.list_by_collection(c["id"])
+            result.append(CollectionResponse(
+                id=c["id"],
+                name=c["name"],
+                description=c.get("description", ""),
+                created_at=c.get("created_at"),
+                requests=reqs,
+            ))
+        return result
 
     @app.post("/api/collections", response_model=CollectionResponse, status_code=201)
     async def create_collection(req: CollectionCreateRequest) -> CollectionResponse:
         col = await application.collections.create(req.name, req.description)
-        return CollectionResponse(**col)
+        return CollectionResponse(
+            id=col["id"],
+            name=col["name"],
+            description=col.get("description", ""),
+            created_at=col.get("created_at"),
+            requests=[],
+        )
+
+    @app.delete("/api/collections/{col_id}")
+    async def delete_collection(col_id: str):
+        await application.collections.delete(col_id)
+        return {"deleted": True}
+
+    @app.post("/api/collections/{col_id}/requests")
+    async def add_request_to_collection(col_id: str, req: SendRequestRequest):
+        req_data = await application.requests.create({
+            "collection_id": col_id,
+            "name": f"{req.method} {req.url}",
+            "method": req.method,
+            "url": req.url,
+            "headers": [{"key": k, "value": v} for k, v in req.headers.items()],
+            "body": req.body,
+        })
+        return req_data
+
+    @app.get("/api/collections/{col_id}/requests")
+    async def list_collection_requests(col_id: str):
+        reqs = await application.requests.list_all(collection_id=col_id)
+        return reqs
 
     # ── Environments ──────────────────────────────────────────────────
 

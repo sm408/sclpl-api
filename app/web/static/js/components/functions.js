@@ -53,6 +53,9 @@ const Functions = {
             return;
         }
 
+        // Store functions for later lookup
+        this._functions = functions;
+
         list.innerHTML = `
             <table class="data-table">
                 <thead>
@@ -65,14 +68,14 @@ const Functions = {
                     </tr>
                 </thead>
                 <tbody>
-                    ${functions.map(fn => `
+                    ${functions.map((fn, i) => `
                         <tr>
                             <td style="font-family:var(--font-mono);font-weight:600">${this.escape(fn.name || fn.id || '')}</td>
                             <td><span class="method-badge method-POST" style="font-size:10px">${this.escape(fn.type || 'transform')}</span></td>
                             <td style="font-size:12px;color:var(--text-secondary)">${this.escape(fn.version || '1.0')}</td>
                             <td style="font-size:13px;color:var(--text-secondary)">${this.escape(fn.description || '')}</td>
                             <td>
-                                <button class="btn btn-sm btn-view-fn" data-fn='${JSON.stringify(fn)}'>
+                                <button class="btn btn-sm btn-view-fn" data-fn-idx="${i}">
                                     <i class="fas fa-eye"></i> View
                                 </button>
                             </td>
@@ -84,8 +87,9 @@ const Functions = {
 
         list.querySelectorAll('.btn-view-fn').forEach(btn => {
             btn.addEventListener('click', () => {
-                const fn = JSON.parse(btn.dataset.fn);
-                this.viewFunction(fn);
+                const idx = parseInt(btn.dataset.fnIdx);
+                const fn = this._functions[idx];
+                if (fn) this.viewFunction(fn);
             });
         });
     },

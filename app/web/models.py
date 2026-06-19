@@ -97,6 +97,7 @@ class CollectionResponse(BaseModel):
     name: str
     description: str = ""
     created_at: str | None = None
+    requests: list[dict[str, Any]] = Field(default_factory=list)
 
 
 class EnvironmentResponse(BaseModel):
