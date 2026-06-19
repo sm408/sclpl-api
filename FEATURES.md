@@ -79,9 +79,9 @@ The project fundamentally revolves around:
 
 ### Plugins
 
-- plugin discovery: `PLANNED`
-- manifests and lifecycle hooks: `PLANNED`
-- internal extension points: `PLANNED`
+- plugin discovery: `STABLE`
+- manifests and lifecycle hooks: `STABLE`
+- internal extension points: `STABLE`
 
 ### Analytics
 
