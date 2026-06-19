@@ -5,6 +5,9 @@ agents_1/
 # Presentation materials (local only)
 presentation/
 
+# Portable launcher marker
+.installed
+
 # Python
 __pycache__/
 *.py[cod]
