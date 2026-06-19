@@ -1,0 +1,12 @@
+{
+  "name": "http-utilities",
+  "version": "1.0.0",
+  "description": "HTTP request utilities: retry, rate limiting, logging, and response validation",
+  "author": "SCLPLAPI",
+  "category": "http",
+  "functions": ["functions/*.py"],
+  "workflows": [],
+  "hooks": {},
+  "variables": {},
+  "dependencies": []
+}

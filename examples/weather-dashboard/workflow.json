@@ -1,0 +1,63 @@
+{
+  "id": "weather-dashboard",
+  "name": "Weather Dashboard",
+  "description": "Fetches current weather, forecast, and alerts in parallel, then combines them into a unified dashboard view.",
+  "steps": [
+    {
+      "id": "fetch_current_weather",
+      "name": "fetch_current_weather",
+      "type": "request",
+      "config": {
+        "inline_request": {
+          "method": "GET",
+          "url": "https://wttr.in/{{city}}?format=j1",
+          "headers": {}
+        }
+      },
+      "output_variable": "current_weather"
+    },
+    {
+      "id": "fetch_forecast",
+      "name": "fetch_forecast",
+      "type": "request",
+      "config": {
+        "inline_request": {
+          "method": "GET",
+          "url": "https://wttr.in/{{city}}?format=j1&num_of_days=3",
+          "headers": {}
+        }
+      },
+      "output_variable": "forecast_data"
+    },
+    {
+      "id": "fetch_alerts",
+      "name": "fetch_alerts",
+      "type": "request",
+      "config": {
+        "inline_request": {
+          "method": "GET",
+          "url": "https://wttr.in/{{city}}?format=j1",
+          "headers": {}
+        }
+      },
+      "output_variable": "alerts_data"
+    },
+    {
+      "id": "generate_dashboard",
+      "name": "generate_dashboard",
+      "type": "function",
+      "config": {
+        "function_name": "Generate Dashboard"
+      },
+      "depends_on": [
+        "fetch_current_weather",
+        "fetch_forecast",
+        "fetch_alerts"
+      ],
+      "output_variable": "dashboard"
+    }
+  ],
+  "variables": {
+    "city": "London"
+  }
+}

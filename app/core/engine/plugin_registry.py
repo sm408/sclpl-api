@@ -13,37 +13,72 @@ logger = logging.getLogger(__name__)
 
 
 class FilesystemPluginRegistry(PluginRegistry):
-    def __init__(self, base_dir: str | Path = "plugins") -> None:
-        self._base = Path(base_dir)
+    def __init__(self, base_dir: str | Path = "plugins", extra_dirs: list[str | Path] | None = None) -> None:
+        self._bases: list[Path] = [Path(base_dir)]
+        if extra_dirs:
+            self._bases.extend(Path(d) for d in extra_dirs)
+        self._base = self._bases[0]
         self._plugins: dict[str, PluginInfo] = {}
 
     def discover(self) -> list[PluginInfo]:
-        if not self._base.exists():
-            return []
-
+        self._plugins.clear()
         discovered: list[PluginInfo] = []
-        for plugin_dir in self._base.iterdir():
-            if not plugin_dir.is_dir():
-                continue
-            manifest_path = plugin_dir / "plugin.json"
-            if not manifest_path.exists():
-                continue
 
-            try:
-                info = self._load_manifest(plugin_dir)
-                self._plugins[info.manifest.name] = info
-                discovered.append(info)
-            except Exception as exc:
-                logger.warning("Failed to discover plugin in %s: %s", plugin_dir, exc)
-                info = PluginInfo(
-                    manifest=PluginManifest(name=plugin_dir.name, version="0.0.0", path=str(plugin_dir)),
-                    status=PluginStatus.ERROR,
-                    error=str(exc),
-                )
-                self._plugins[plugin_dir.name] = info
-                discovered.append(info)
+        for base in self._bases:
+            if not base.exists():
+                continue
+            for plugin_dir in base.iterdir():
+                if not plugin_dir.is_dir():
+                    continue
+                manifest_path = plugin_dir / "plugin.json"
+                if not manifest_path.exists():
+                    continue
+
+                if plugin_dir.name in self._plugins:
+                    continue
+
+                try:
+                    info = self._load_manifest(plugin_dir)
+                    self._plugins[info.manifest.name] = info
+                    discovered.append(info)
+                except Exception as exc:
+                    logger.warning("Failed to discover plugin in %s: %s", plugin_dir, exc)
+                    info = PluginInfo(
+                        manifest=PluginManifest(name=plugin_dir.name, version="0.0.0", path=str(plugin_dir)),
+                        status=PluginStatus.ERROR,
+                        error=str(exc),
+                    )
+                    self._plugins[plugin_dir.name] = info
+                    discovered.append(info)
 
         return discovered
+
+    def discover_functions(self, base_dir: str | Path = "functions") -> list[dict[str, str]]:
+        func_dir = Path(base_dir)
+        if not func_dir.exists():
+            return []
+
+        runner = FilesystemFunctionRunner(func_dir)
+        functions: list[dict[str, str]] = []
+        for subdir in sorted(func_dir.iterdir()):
+            if subdir.is_dir() and not subdir.name.startswith("_"):
+                category = subdir.name
+                for func in runner.discover(str(subdir)):
+                    func["category"] = category
+                    func["_source"] = f"functions/{category}"
+                    functions.append(func)
+            elif subdir.is_file() and subdir.suffix == ".py" and not subdir.name.startswith("_"):
+                meta = runner._parse_metadata(subdir)
+                if meta:
+                    meta["category"] = "uncategorized"
+                    meta["_source"] = "functions"
+                    functions.append(meta)
+        return functions
+
+    def get_plugins_by_category(self, category: str) -> list[PluginInfo]:
+        if not self._plugins:
+            self.discover()
+        return [p for p in self._plugins.values() if p.manifest.category == category]
 
     def load(self, name: str) -> PluginInfo:
         if name in self._plugins and self._plugins[name].status == PluginStatus.ACTIVE:
@@ -180,6 +215,7 @@ class FilesystemPluginRegistry(PluginRegistry):
             version=data.get("version", "0.0.0"),
             description=data.get("description", ""),
             author=data.get("author", ""),
+            category=data.get("category", ""),
             functions=data.get("functions", []),
             workflows=data.get("workflows", []),
             hooks=data.get("hooks", {}),

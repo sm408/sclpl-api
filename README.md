@@ -192,11 +192,39 @@ That's it. Three commands to a running workflow.
 | [Financial Pipeline](examples/financial_pipeline/) | 7 | CoinGecko | Crypto prices, market analysis |
 | [Multi-Provider Aggregator](examples/multi_provider_aggregator/) | 7 | JSONPlaceholder | Parallel processing, aggregation |
 | [Advanced Logic](examples/advanced_logic/) | — | — | Loops, conditions, semaphores, dot notation |
+| [E-Commerce API](examples/ecommerce-api/) | 6 | JSONPlaceholder | Products, orders, payments, inventory, receipts |
+| [Social Media Monitor](examples/social-media-monitor/) | 4 | JSONPlaceholder | Fetch posts, sentiment analysis, monitoring report |
+| [Weather Dashboard](examples/weather-dashboard/) | 4 | wttr.in | Current weather, forecast, alerts, dashboard |
 
 Run any example:
 
 ```bash
-python -m app.core.engine.sclpll_cli run examples/financial_pipeline/script.sclpll
+python -m app.core.engine.sclpll_cli run examples/financial_pipeline/financial-pipeline.sclpll
+```
+
+## Boilerplates
+
+Ready-to-use workflow templates. Copy a boilerplate and customize it for your use case.
+
+| Boilerplate | Description | Files |
+|-------------|-------------|-------|
+| [Minimal](boilerplates/minimal/) | Bare-bones workflow starter | 1 request step + 1 function step |
+| [API Test](boilerplates/api-test/) | API endpoint testing with validation | Parallel requests + response validation |
+| [Data Pipeline](boilerplates/data-pipeline/) | Extract, transform, load pipeline | 3 fetches + transform + load stages |
+
+### Using a Boilerplate
+
+```bash
+# Copy a boilerplate to your working directory
+cp -r boilerplates/minimal/ my-workflow/
+
+# Edit the workflow
+# - Update workflow name and description in minimal.sclpll
+# - Change the base_url and endpoints
+# - Modify functions/process.py with your logic
+
+# Run it
+python my-workflow/run.py
 ```
 
 ## Architecture

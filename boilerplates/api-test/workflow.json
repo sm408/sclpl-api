@@ -1,0 +1,60 @@
+{
+  "id": "api-test",
+  "name": "API Test Template",
+  "description": "Tests API endpoints with request/response validation.",
+  "steps": [
+    {
+      "id": "test_get_users",
+      "name": "test_get_users",
+      "type": "request",
+      "config": {
+        "inline_request": {
+          "method": "GET",
+          "url": "{{base_url}}/users",
+          "headers": {}
+        }
+      },
+      "output_variable": "users_response"
+    },
+    {
+      "id": "test_get_posts",
+      "name": "test_get_posts",
+      "type": "request",
+      "config": {
+        "inline_request": {
+          "method": "GET",
+          "url": "{{base_url}}/posts?_limit=5",
+          "headers": {}
+        }
+      },
+      "output_variable": "posts_response"
+    },
+    {
+      "id": "validate_users",
+      "name": "validate_users",
+      "type": "function",
+      "config": {
+        "function_name": "Validate Response"
+      },
+      "depends_on": [
+        "test_get_users"
+      ],
+      "output_variable": "users_validation"
+    },
+    {
+      "id": "validate_posts",
+      "name": "validate_posts",
+      "type": "function",
+      "config": {
+        "function_name": "Validate Response"
+      },
+      "depends_on": [
+        "test_get_posts"
+      ],
+      "output_variable": "posts_validation"
+    }
+  ],
+  "variables": {
+    "base_url": "https://jsonplaceholder.typicode.com"
+  }
+}

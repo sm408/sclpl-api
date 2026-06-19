@@ -18,6 +18,7 @@ class PluginManifest:
     version: str
     description: str = ""
     author: str = ""
+    category: str = ""
     functions: list[str] = field(default_factory=list)
     workflows: list[str] = field(default_factory=list)
     hooks: dict[str, str] = field(default_factory=dict)

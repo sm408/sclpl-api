@@ -17,7 +17,15 @@ EXAMPLES = [
     "financial_pipeline",
     "job_tracker_pipeline",
     "multi_provider_aggregator",
+    "advanced_logic",
 ]
+
+
+def _find_sclpll(examples_dir: Path, example: str) -> Path:
+    """Find the first .sclpll file in an example directory."""
+    matches = sorted((examples_dir / example).glob("*.sclpll"))
+    assert matches, f"No .sclpll file found in {example}"
+    return matches[0]
 
 
 class TestExampleWorkflows:
@@ -101,18 +109,18 @@ class TestExampleSCLPLL:
 
     @pytest.mark.parametrize("example", EXAMPLES)
     def test_sclpll_exists(self, examples_dir: Path, example: str) -> None:
-        sclpll_path = examples_dir / example / "script.sclpll"
-        assert sclpll_path.exists(), f"Missing script.sclpll in {example}"
+        sclpll_path = _find_sclpll(examples_dir, example)
+        assert sclpll_path.exists(), f"Missing .sclpll file in {example}"
 
     @pytest.mark.parametrize("example", EXAMPLES)
     def test_sclpll_compiles(self, run_sclpll_cli, examples_dir: Path, example: str, tmp_path: Path) -> None:
-        sclpll_path = examples_dir / example / "script.sclpll"
+        sclpll_path = _find_sclpll(examples_dir, example)
         result = run_sclpll_cli(["validate", str(sclpll_path)])
         assert result.returncode == 0, f"SCLPLL validation failed for {example}: {result.stderr}"
 
     @pytest.mark.parametrize("example", EXAMPLES)
     def test_sclpll_compile_to_json(self, run_sclpll_cli, examples_dir: Path, example: str, tmp_path: Path) -> None:
-        sclpll_path = examples_dir / example / "script.sclpll"
+        sclpll_path = _find_sclpll(examples_dir, example)
         result = run_sclpll_cli(["compile", str(sclpll_path), "--output-dir", str(tmp_path / example)])
         assert result.returncode == 0, f"SCLPLL compile failed for {example}: {result.stderr}"
         assert (tmp_path / example / "workflow.json").exists()
@@ -165,7 +173,7 @@ class TestToolsValidation:
 
     def test_formatter_produces_output(self, run_tool, examples_dir: Path) -> None:
         for example in EXAMPLES:
-            sclpll_path = examples_dir / example / "script.sclpll"
+            sclpll_path = _find_sclpll(examples_dir, example)
             result = run_tool("sclpll_formatter.py", [str(sclpll_path)])
             assert result.returncode == 0, f"Formatter crashed on {example}: {result.stderr}"
             assert "@workflow" in result.stdout, f"Formatter output missing @workflow for {example}"

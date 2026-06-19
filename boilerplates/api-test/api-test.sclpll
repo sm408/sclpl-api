@@ -1,0 +1,28 @@
+# API Test Template
+# A workflow for testing API endpoints with validation
+
+@workflow api-test "API Test Template"
+    Tests API endpoints with request/response validation.
+    Customize the URLs, methods, and validation logic.
+
+@base_url https://jsonplaceholder.typicode.com
+
+# ============================================================
+# PHASE 1: Parallel API tests
+# ============================================================
+
+@step test_get_users -> users_response
+    request GET {{base_url}}/users
+
+@step test_get_posts -> posts_response
+    request GET {{base_url}}/posts?_limit=5
+
+# ============================================================
+# PHASE 2: Validate responses
+# ============================================================
+
+@step validate_users <- test_get_users -> users_validation
+    func Validate Response
+
+@step validate_posts <- test_get_posts -> posts_validation
+    func Validate Response

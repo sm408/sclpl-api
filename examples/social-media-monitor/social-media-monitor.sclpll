@@ -1,0 +1,33 @@
+# Social Media Monitor
+# Monitors social media posts, analyzes sentiment, and generates a report
+
+@workflow social-media-monitor "Social Media Monitor"
+    Fetches posts and users from a mock social API,
+    performs keyword-based sentiment analysis,
+    and generates a monitoring report.
+
+@base_url https://jsonplaceholder.typicode.com
+
+# ============================================================
+# PHASE 1: Independent fetches (all run in parallel)
+# ============================================================
+
+@step fetch_tweets -> tweets_data
+    request GET {{base_url}}/posts?_limit=20
+
+@step fetch_users -> users_data
+    request GET {{base_url}}/users
+
+# ============================================================
+# PHASE 2: Sentiment analysis (depends on tweets and users)
+# ============================================================
+
+@step analyze_sentiment <- fetch_tweets, fetch_users -> sentiment_analysis
+    func Analyze Sentiment
+
+# ============================================================
+# PHASE 3: Report generation (depends on analysis)
+# ============================================================
+
+@step generate_report <- analyze_sentiment -> monitor_report
+    func Generate Monitor Report

@@ -1,0 +1,12 @@
+{
+  "name": "data-transformers",
+  "version": "1.0.0",
+  "description": "Data transformation utilities: JSON transforms, CSV conversion, XML parsing, and filtering",
+  "author": "SCLPLAPI",
+  "category": "data",
+  "functions": ["functions/*.py"],
+  "workflows": [],
+  "hooks": {},
+  "variables": {},
+  "dependencies": []
+}

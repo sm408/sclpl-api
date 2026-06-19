@@ -845,6 +845,7 @@ def functions(
     dir: str = typer.Option("functions", "-d", "--dir", help="Functions directory"),
     include_plugins: bool = typer.Option(True, help="Include plugin functions"),
     plugins_dir: str = typer.Option("plugins", help="Plugins directory"),
+    category: str | None = typer.Option(None, "-c", "--category", help="Filter by category"),
 ):
     """List discovered Python functions."""
     from app.core.engine.function_runner import FilesystemFunctionRunner
@@ -867,6 +868,10 @@ def functions(
             f["_source"] = f"plugin:{f.get('plugin', '?')}"
         funcs.extend(plugin_funcs)
 
+    if category:
+        funcs = [f for f in funcs if f.get("category", "").lower() == category.lower()
+                 or f.get("type", "").lower() == category.lower()]
+
     if not funcs:
         console.print("[dim]No functions discovered[/dim]")
         return
@@ -874,6 +879,7 @@ def functions(
     table = Table(title="Discovered Functions")
     table.add_column("Name")
     table.add_column("Type")
+    table.add_column("Category")
     table.add_column("Version")
     table.add_column("Source")
     table.add_column("Path", style="dim")
@@ -883,6 +889,7 @@ def functions(
         table.add_row(
             f.get("name", "?"),
             f.get("type", "?"),
+            f.get("category", "[dim]-[/dim]"),
             f.get("version", "?"),
             source,
             f.get("path", "?"),
@@ -901,12 +908,16 @@ app.add_typer(plugin_app, name="plugins")
 @plugin_app.command("list")
 def plugins_list(
     plugins_dir: str = typer.Option("plugins", "-d", "--dir", help="Plugins directory"),
+    category: str | None = typer.Option(None, "-c", "--category", help="Filter by category"),
 ):
-    """List all discovered plugins."""
+    """List all discovered plugins with categories."""
     from app.core.engine.plugin_registry import FilesystemPluginRegistry
 
     registry = FilesystemPluginRegistry(plugins_dir)
     plugins = registry.discover()
+
+    if category:
+        plugins = [p for p in plugins if p.manifest.category == category]
 
     if not plugins:
         console.print("[dim]No plugins discovered[/dim]")
@@ -915,6 +926,7 @@ def plugins_list(
     table = Table(title="Plugins")
     table.add_column("Name")
     table.add_column("Version")
+    table.add_column("Category")
     table.add_column("Status")
     table.add_column("Description")
     table.add_column("Functions", justify="right")
@@ -931,6 +943,7 @@ def plugins_list(
         table.add_row(
             info.manifest.name,
             info.manifest.version,
+            info.manifest.category or "[dim]-[/dim]",
             f"[{status_color}]{info.status}[/{status_color}]",
             info.manifest.description[:40],
             str(len(info.manifest.functions)),
@@ -962,6 +975,8 @@ def plugins_info(
         console.print(f"  {info.manifest.description}")
     if info.manifest.author:
         console.print(f"  Author: {info.manifest.author}")
+    if info.manifest.category:
+        console.print(f"  Category: {info.manifest.category}")
     console.print(f"  Status: [{ 'green' if info.status == PluginStatus.ACTIVE else 'dim'}]{info.status}[/]")
     console.print(f"  Path: {info.manifest.path}")
 
@@ -1049,6 +1064,78 @@ def tui(
 
 
 # ──────────────────────────────────────────────────────────────────────
+# UPDATE
+# ──────────────────────────────────────────────────────────────────────
+
+@app.command()
+def update(
+    check_only: bool = typer.Option(False, "--check", help="Only check for updates"),
+):
+    """Check for and apply updates from GitHub."""
+    from app.core.updater import apply_update, check_for_updates, show_update_info
+
+    info = check_for_updates()
+
+    if check_only:
+        show_update_info(info)
+        return
+
+    if not info.get("update_available"):
+        show_update_info(info)
+        return
+
+    show_update_info(info)
+    if typer.confirm("Apply update?") and apply_update():
+        console.print("[green]Please restart SCLPLAPI.[/green]")
+
+
+# ──────────────────────────────────────────────────────────────────────
+# CONFIG
+# ──────────────────────────────────────────────────────────────────────
+
+@app.command()
+def config(
+    show: bool = typer.Option(False, "--show", help="Show current settings"),
+    set_default_ui: str = typer.Option(None, "--set-default-ui", help="Set default UI (tui/gui)"),
+    reset: bool = typer.Option(False, "--reset", help="Reset to defaults"),
+):
+    """View and modify SCLPLAPI settings."""
+    from app.core.settings import SCLPLAPISettings
+
+    settings = SCLPLAPISettings.load()
+
+    if reset:
+        settings = SCLPLAPISettings()
+        settings.save()
+        console.print("[yellow]Settings reset to defaults.[/yellow]")
+        return
+
+    if set_default_ui:
+        if set_default_ui not in ("tui", "gui"):
+            console.print("[red]Invalid UI. Use 'tui' or 'gui'.[/red]")
+            raise typer.Exit(1)
+        settings.set_default_ui(set_default_ui)
+        console.print(f"[green]Default UI set to {set_default_ui.upper()}[/green]")
+        return
+
+    # Show settings
+    table = Table(show_header=True, header_style="bold cyan", box=box.ROUNDED)
+    table.add_column("Setting", style="white")
+    table.add_column("Value", style="cyan")
+
+    table.add_row("Default UI", settings.default_ui.upper())
+    table.add_row("First run complete", str(settings.first_run_complete))
+    table.add_row("Database path", settings.db_path)
+    table.add_row("Web host", settings.web_host)
+    table.add_row("Web port", str(settings.web_port))
+    table.add_row("Open browser", str(settings.web_open_browser))
+    table.add_row("Theme", settings.theme)
+    table.add_row("Settings file", str(settings.DEFAULT_SETTINGS_PATH))
+
+    console.print(table)
+
+
+# ──────────────────────────────────────────────────────────────────────
 # WEB
 # ──────────────────────────────────────────────────────────────────────
 
@@ -1062,6 +1149,7 @@ def web(
     """Start the web UI server."""
     try:
         import uvicorn
+
         from app.web.server import create_app
     except ImportError:
         console.print("[red]Web UI dependencies not installed.[/red]")
