@@ -1050,6 +1050,30 @@ def tui(
 
 
 # ──────────────────────────────────────────────────────────────────────
+# WEB
+# ──────────────────────────────────────────────────────────────────────
+
+@app.command()
+def web(
+    host: str = typer.Option("127.0.0.1", help="Bind host"),
+    port: int = typer.Option(8000, help="Bind port"),
+    open_browser: bool = typer.Option(True, help="Open browser on start"),
+    db: str = DB_OPTION,
+):
+    """Start the web UI server."""
+    import webbrowser
+
+    import uvicorn
+
+    from app.web.server import create_app
+
+    application = create_app(db)
+    if open_browser:
+        webbrowser.open(f"http://{host}:{port}")
+    uvicorn.run(application, host=host, port=port)
+
+
+# ──────────────────────────────────────────────────────────────────────
 # FULL EXPORT / IMPORT
 # ──────────────────────────────────────────────────────────────────────
 

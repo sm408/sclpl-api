@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SCLPLAPI</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+</head>
+<body>
+    <div id="app">
+        <aside id="sidebar">
+            <div class="sidebar-header">
+                <div class="logo">
+                    <i class="fas fa-bolt"></i>
+                    <span>SCLPLAPI</span>
+                </div>
+            </div>
+            <nav class="sidebar-nav">
+                <a href="#home" class="nav-item active" data-route="home">
+                    <i class="fas fa-house"></i>
+                    <span>Home</span>
+                </a>
+                <a href="#editor" class="nav-item" data-route="editor">
+                    <i class="fas fa-code"></i>
+                    <span>Request Editor</span>
+                </a>
+                <a href="#collections" class="nav-item" data-route="collections">
+                    <i class="fas fa-folder-tree"></i>
+                    <span>Collections</span>
+                </a>
+                <a href="#flows" class="nav-item" data-route="flows">
+                    <i class="fas fa-diagram-project"></i>
+                    <span>Workflows</span>
+                </a>
+                <a href="#flow-builder" class="nav-item" data-route="flow-builder">
+                    <i class="fas fa-bezier-curve"></i>
+                    <span>Flow Builder</span>
+                </a>
+                <a href="#functions" class="nav-item" data-route="functions">
+                    <i class="fas fa-code"></i>
+                    <span>Functions</span>
+                </a>
+                <a href="#history" class="nav-item" data-route="history">
+                    <i class="fas fa-clock-rotate-left"></i>
+                    <span>History</span>
+                </a>
+                <a href="#settings" class="nav-item" data-route="settings">
+                    <i class="fas fa-gear"></i>
+                    <span>Settings</span>
+                </a>
+            </nav>
+            <div class="sidebar-footer">
+                <div class="version">v0.1.0</div>
+            </div>
+        </aside>
+
+        <main id="main-content">
+            <header id="top-bar">
+                <div class="search-box">
+                    <i class="fas fa-search"></i>
+                    <input type="text" id="global-search" placeholder="Search collections, requests, workflows...">
+                </div>
+                <div class="top-bar-actions">
+                    <button class="btn btn-icon" title="New Request" id="btn-new-request">
+                        <i class="fas fa-plus"></i>
+                    </button>
+                    <button class="btn btn-icon" title="Import" id="btn-import">
+                        <i class="fas fa-file-import"></i>
+                    </button>
+                    <button class="btn btn-icon" title="Settings" id="btn-settings">
+                        <i class="fas fa-gear"></i>
+                    </button>
+                </div>
+            </header>
+
+            <section id="content-area">
+                <div id="view-home" class="view active">
+                    <div class="view-header">
+                        <h1>Welcome to SCLPLAPI</h1>
+                        <p class="subtitle">Your local-first API workflow studio</p>
+                    </div>
+                    <div class="dashboard-grid">
+                        <div class="dash-card" data-nav="editor">
+                            <div class="dash-card-icon"><i class="fas fa-code"></i></div>
+                            <h3>Request Editor</h3>
+                            <p>Build and send API requests</p>
+                        </div>
+                        <div class="dash-card" data-nav="collections">
+                            <div class="dash-card-icon"><i class="fas fa-folder-tree"></i></div>
+                            <h3>Collections</h3>
+                            <p>Organize your API requests</p>
+                        </div>
+                        <div class="dash-card" data-nav="flows">
+                            <div class="dash-card-icon"><i class="fas fa-diagram-project"></i></div>
+                            <h3>Workflows</h3>
+                            <p>Chain requests into pipelines</p>
+                        </div>
+                        <div class="dash-card" data-nav="functions">
+                            <div class="dash-card-icon"><i class="fas fa-code"></i></div>
+                            <h3>Functions</h3>
+                            <p>Python-powered transforms</p>
+                        </div>
+                    </div>
+                    <div class="home-stats">
+                        <div class="stat-item">
+                            <span class="stat-value" id="stat-collections">0</span>
+                            <span class="stat-label">Collections</span>
+                        </div>
+                        <div class="stat-item">
+                            <span class="stat-value" id="stat-requests">0</span>
+                            <span class="stat-label">Requests</span>
+                        </div>
+                        <div class="stat-item">
+                            <span class="stat-value" id="stat-workflows">0</span>
+                            <span class="stat-label">Workflows</span>
+                        </div>
+                        <div class="stat-item">
+                            <span class="stat-value" id="stat-functions">0</span>
+                            <span class="stat-label">Functions</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="view-editor" class="view"></div>
+                <div id="view-collections" class="view"></div>
+                <div id="view-flows" class="view"></div>
+                <div id="view-flow-builder" class="view"></div>
+                <div id="view-functions" class="view"></div>
+                <div id="view-history" class="view"></div>
+
+                <div id="view-settings" class="view">
+                    <div class="view-header">
+                        <h1>Settings</h1>
+                    </div>
+                    <div class="settings-section">
+                        <h3>General</h3>
+                        <div class="setting-row">
+                            <label>API Base URL</label>
+                            <input type="text" id="setting-base-url" value="http://localhost:8000" class="input">
+                        </div>
+                        <div class="setting-row">
+                            <label>Theme</label>
+                            <select id="setting-theme" class="input">
+                                <option value="dark">Dark</option>
+                                <option value="light" selected>Light</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="settings-section">
+                        <h3>Request Defaults</h3>
+                        <div class="setting-row">
+                            <label>Request Timeout (ms)</label>
+                            <input type="number" id="setting-timeout" value="30000" class="input">
+                        </div>
+                        <div class="setting-row">
+                            <label>Follow Redirects</label>
+                            <input type="checkbox" id="setting-redirects" checked>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <div id="toast-container"></div>
+
+    <script src="js/app.js"></script>
+    <script src="js/components/sidebar.js"></script>
+    <script src="js/components/request-editor.js"></script>
+    <script src="js/components/workflow-runner.js"></script>
+    <script src="js/components/collections.js"></script>
+    <script src="js/components/history.js"></script>
+    <script src="js/components/functions.js"></script>
+    <script src="js/components/flow-builder.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            App.init();
+        });
+    </script>
+</body>
+</html>
