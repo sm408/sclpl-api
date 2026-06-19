@@ -79,9 +79,9 @@ The project fundamentally revolves around:
 
 ### Plugins
 
-- plugin discovery: `STABLE`
-- manifests and lifecycle hooks: `STABLE`
-- internal extension points: `STABLE`
+- plugin discovery: `STABLE` (filesystem-based, `plugins/` directory)
+- manifests and lifecycle hooks: `STABLE` (plugin.json with functions, workflows, hooks)
+- runtime integration: `PARTIAL` (discovery works, but plugins not auto-loaded at startup)
 
 ### Analytics
 
@@ -92,7 +92,7 @@ The project fundamentally revolves around:
 ### Storage
 
 - SQLite-first persistence: `STABLE`
-- versioned schema migrations: `SCAFFOLDED`
+- versioned schema migrations: `STABLE` (3 migrations, runner with rollback)
 - backup/shareable data model: `PLANNED`
 
 ### SCLPLL Language
@@ -106,15 +106,15 @@ The project fundamentally revolves around:
 
 ### TUI
 
-- terminal user interface: `STABLE`
+- terminal user interface: `STABLE` (Rich-based, `python -m app tui`)
 - interactive menu: `STABLE`
 - live workflow execution: `STABLE`
 - function browser: `STABLE`
 
 ### Web GUI
 
-- FastAPI backend: `STABLE`
-- SPA frontend: `STABLE`
+- FastAPI backend: `STABLE` (`app/web/server.py`, 13 endpoints)
+- SPA frontend: `STABLE` (vanilla JS/CSS in `app/web/static/`)
 - request editor: `STABLE`
 - collections view: `STABLE`
 - workflow runner: `STABLE`
@@ -122,6 +122,7 @@ The project fundamentally revolves around:
 - function browser: `STABLE`
 - history viewer: `STABLE`
 - settings panel: `STABLE`
+- launch: `STABLE` (`python -m app web` or `python -m app --gui`)
 
 ### Tools Library
 

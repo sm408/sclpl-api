@@ -29,6 +29,33 @@ class App:
         self.environments = EnvironmentRepository(self.db)
         self.history = HistoryRepository(self.db)
 
+        self.plugin_registry = None
+        self._init_plugins()
+
+    def _init_plugins(self) -> None:
+        """Initialize plugin registry and discover plugins."""
+        try:
+            from app.core.engine.plugin_registry import FilesystemPluginRegistry
+            self.plugin_registry = FilesystemPluginRegistry()
+            discovered = self.plugin_registry.discover()
+            if discovered:
+                loaded = [p for p in discovered if p.status.value == "active"]
+                logger.info("Discovered %d plugins (%d loaded)", len(discovered), len(loaded))
+        except Exception as exc:
+            logger.warning("Plugin system initialization failed: %s", exc)
+
+    def get_plugin_functions(self) -> list[dict[str, str]]:
+        """Get all functions from loaded plugins."""
+        if not self.plugin_registry:
+            return []
+        return self.plugin_registry.get_all_functions()
+
+    def get_plugin_variables(self) -> dict[str, str]:
+        """Get all variables from loaded plugins."""
+        if not self.plugin_registry:
+            return {}
+        return self.plugin_registry.get_all_variables()
+
     async def start(self) -> None:
         await self.db.connect()
         await self.db.initialize()

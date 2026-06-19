@@ -331,11 +331,10 @@ def create_app(db_path: str | None = None) -> FastAPI:
 
     @app.get("/api/plugins", response_model=list[PluginInfoResponse])
     async def list_plugins() -> list[PluginInfoResponse]:
-        from app.core.engine.plugin_registry import FilesystemPluginRegistry
+        if not application.plugin_registry:
+            return []
 
-        registry = FilesystemPluginRegistry(PLUGINS_DIR)
-        plugins = registry.discover()
-
+        plugins = application.plugin_registry.list_plugins()
         return [
             PluginInfoResponse(
                 name=info.manifest.name,
