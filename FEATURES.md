@@ -37,44 +37,44 @@ The project fundamentally revolves around:
 
 ### Request Engine
 
-- HTTP request authoring: `PLANNED`
-- auth modes (Bearer, Basic, API key): `PLANNED`
-- response viewer: `PLANNED`
-- history tracking: `PLANNED`
+- HTTP request authoring: `STABLE`
+- auth modes (Bearer, Basic, API key): `STABLE`
+- response viewer: `STABLE`
+- history tracking: `STABLE`
 
 ### Collections and Workspaces
 
-- collection tree: `PLANNED`
-- saved requests: `PLANNED`
+- collection tree: `STABLE`
+- saved requests: `STABLE`
 - workspaces: `PLANNED`
 
 ### Environments and Variables
 
-- environment switching: `PLANNED`
-- scoped variable resolution: `PLANNED`
-- runtime variable propagation: `PLANNED`
+- environment switching: `STABLE`
+- scoped variable resolution: `STABLE`
+- runtime variable propagation: `STABLE`
 
 ### Function System
 
-- filesystem-discovered Python functions: `SCAFFOLDED`
-- pre-request hooks: `PLANNED`
-- post-response transformers: `PLANNED`
-- auth token generators: `PLANNED`
+- filesystem-discovered Python functions: `STABLE`
+- pre-request hooks: `STABLE`
+- post-response transformers: `STABLE`
+- auth token generators: `STABLE`
 
 ### Workflow Engine
 
-- sequential chains: `PLANNED`
-- foreach loops: `PLANNED`
-- conditional execution: `PLANNED`
-- retries: `PLANNED`
-- dependency graph execution: `PLANNED`
+- sequential chains: `STABLE`
+- foreach loops: `STABLE`
+- conditional execution: `STABLE`
+- retries: `STABLE`
+- dependency graph execution: `STABLE`
 - visual builder: `DEFERRED`
 
 ### Export Pipeline
 
-- JSON export: `PLANNED`
-- CSV export: `PLANNED`
-- Excel workbook generation: `PLANNED`
+- JSON export: `STABLE`
+- CSV export: `STABLE`
+- Excel workbook generation: `STABLE`
 - reusable transformation pipelines: `PLANNED`
 
 ### Plugins
@@ -91,9 +91,32 @@ The project fundamentally revolves around:
 
 ### Storage
 
-- SQLite-first persistence: `PLANNED`
-- versioned schema migrations: `PLANNED`
+- SQLite-first persistence: `STABLE`
+- versioned schema migrations: `SCAFFOLDED`
 - backup/shareable data model: `PLANNED`
+
+### SCLPLL Language
+
+- scripting language: `STABLE`
+- compiler/decompiler: `STABLE`
+- dot notation: `STABLE`
+- loops (@foreach, @repeat): `STABLE`
+- conditional execution (@when): `STABLE`
+- rate limiting (@semaphore): `STABLE`
+
+### TUI
+
+- terminal user interface: `STABLE`
+- interactive menu: `STABLE`
+- live workflow execution: `STABLE`
+- function browser: `STABLE`
+
+### Tools Library
+
+- workflow validator: `STABLE`
+- function linter: `STABLE`
+- sclpll formatter: `STABLE`
+- performance analyzer: `STABLE`
 
 ## MVP definition
 
@@ -123,4 +146,3 @@ The first usable milestone should include only:
 - mandatory telemetry
 - heavy multi-user platform design
 - AI-first opaque execution
-
