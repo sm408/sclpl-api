@@ -2,6 +2,9 @@
 legacy/
 agents_1/
 
+# Presentation materials (local only)
+presentation/
+
 # Python
 __pycache__/
 *.py[cod]
