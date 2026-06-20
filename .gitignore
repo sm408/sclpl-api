@@ -1,13 +1,3 @@
-# Legacy material — kept locally but not tracked
-legacy/
-agents_1/
-
-# Presentation materials (local only)
-presentation/
-
-# Portable launcher marker
-.installed
-
 # Python
 __pycache__/
 *.py[cod]
@@ -42,6 +32,7 @@ Thumbs.db
 # Generated data
 data/*.json
 data/*.csv
+data/exports/
 examples/*/output/
 
 # Secrets
@@ -50,3 +41,10 @@ examples/*/output/
 *.pem
 *.key
 
+# Settings (user-specific)
+settings.json
+
+# Installed markers
+.installed
+.installed-core
+.installed-gui

@@ -1096,7 +1096,7 @@ def update(
 @app.command()
 def config(
     show: bool = typer.Option(False, "--show", help="Show current settings"),
-    set_default_ui: str = typer.Option(None, "--set-default-ui", help="Set default UI (tui/gui)"),
+    set_default_ui: str = typer.Option(None, "--set-default-ui", help="Set default UI (tui)"),
     reset: bool = typer.Option(False, "--reset", help="Reset to defaults"),
 ):
     """View and modify SCLPLAPI settings."""
@@ -1111,8 +1111,8 @@ def config(
         return
 
     if set_default_ui:
-        if set_default_ui not in ("tui", "gui"):
-            console.print("[red]Invalid UI. Use 'tui' or 'gui'.[/red]")
+        if set_default_ui != "tui":
+            console.print("[red]Invalid UI. Only 'tui' is supported.[/red]")
             raise typer.Exit(1)
         settings.set_default_ui(set_default_ui)
         console.print(f"[green]Default UI set to {set_default_ui.upper()}[/green]")

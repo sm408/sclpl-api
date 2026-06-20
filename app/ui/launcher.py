@@ -1,288 +1,257 @@
-"""Unified launcher with setup wizard for SCLPLAPI."""
+"""Main entry point for SCLPLAPI.
 
-from __future__ import annotations
-
-import sys
-import time
-from pathlib import Path
-
-from rich.console import Console
-from rich.panel import Panel
-from rich.table import Table
-from rich.prompt import Prompt, Confirm
-from rich.progress import Progress, SpinnerColumn, TextColumn
-from rich import box
-
-from app.core.settings import SCLPLAPISettings
-
-console = Console()
-
-LOGO = r"""
-[bold cyan]  ____  ____  ____  ____  ____  _      ____  ____  ____
- / ___)( __ \( ___)( ___)(  _ \( \    / ___)( ___)(  _ \
-( (__  /    / )__)  )__)  )   / ) \   \___ \ )__)  )   /
- \___)\_\_\_)(____)(____)(_)\_)(___)  (____/(___)(_)\_)
-
-  API Workflow Studio  ·  Python-First  ·  Local-First[/bold cyan]
+Launches the Text User Interface (TUI) - zero web dependencies, pure terminal.
 """
 
-
-def show_setup_wizard(settings: SCLPLAPISettings) -> None:
-    """Run first-time setup wizard."""
-    console.clear()
-    console.print(LOGO)
-    console.print()
-
-    console.print(Panel(
-        "[bold]Welcome to SCLPLAPI![/bold]\n\n"
-        "This is your first run. Let's get you set up.",
-        title="[cyan]Setup Wizard[/cyan]",
-        border_style="cyan",
-    ))
-    console.print()
-
-    # Step 1: Database path
-    console.print("[bold]Step 1/3: Database Location[/bold]")
-    console.print("SCLPLAPI stores data in a local SQLite database.")
-    db_path = Prompt.ask(
-        "Database path",
-        default=settings.db_path,
-    )
-    settings.db_path = db_path
-    console.print(f"  [green]✓[/green] Database: {db_path}")
-    console.print()
-
-    # Step 2: Default UI
-    console.print("[bold]Step 2/3: Default Interface[/bold]")
-    console.print("Choose your preferred interface:")
-    console.print("  [cyan]1.[/cyan] TUI  — Terminal UI (Rich-based, works in any terminal)")
-    console.print("  [cyan]2.[/cyan] GUI  — Web Browser UI (FastAPI-based, modern SPA)")
-    console.print()
-
-    choice = Prompt.ask(
-        "Select default UI",
-        choices=["1", "2", "tui", "gui"],
-        default="tui",
-    )
-    if choice in ("1", "tui"):
-        settings.default_ui = "tui"
-        console.print("  [green]✓[/green] Default UI: TUI (Terminal)")
-    else:
-        settings.default_ui = "gui"
-        console.print("  [green]✓[/green] Default UI: GUI (Browser)")
-    console.print()
-
-    # Step 3: Web GUI settings (if selected)
-    if settings.default_ui == "gui":
-        console.print("[bold]Step 3/3: Web Server Settings[/bold]")
-        settings.web_host = Prompt.ask("Host", default=settings.web_host)
-        settings.web_port = int(Prompt.ask("Port", default=str(settings.web_port)))
-        settings.web_open_browser = Confirm.ask("Open browser on start", default=True)
-        console.print(f"  [green]✓[/green] Server: {settings.web_host}:{settings.web_port}")
-    else:
-        console.print("[bold]Step 3/3: All Set[/bold]")
-    console.print()
-
-    # Save
-    with Progress(
-        SpinnerColumn(),
-        TextColumn("[progress.description]{task.description}"),
-        console=console,
-    ) as progress:
-        task = progress.add_task("Saving settings...", total=None)
-        settings.mark_first_run_complete()
-        settings.save()
-        time.sleep(0.5)
-        progress.update(task, description="[green]Settings saved![/green]")
-        time.sleep(0.3)
-
-    console.print()
-    console.print(Panel(
-        f"[green]Setup complete![/green]\n\n"
-        f"Default UI: [cyan]{settings.default_ui.upper()}[/cyan]\n"
-        f"Database: [cyan]{settings.db_path}[/cyan]\n\n"
-        f"You can change these settings anytime from:\n"
-        f"  • TUI: Settings menu\n"
-        f"  • GUI: Settings page\n"
-        f"  • CLI: [cyan]sclplapi config[/cyan]",
-        title="[green]Ready![/green]",
-        border_style="green",
-    ))
-    console.print()
+import argparse
+import importlib
+import json
+import sys
+from pathlib import Path
 
 
-def show_ui_selector(settings: SCLPLAPISettings) -> str:
-    """Show UI selection menu and return choice."""
-    console.print()
-    console.print(Panel(
-        "[bold]SCLPLAPI[/bold] — Choose your interface",
-        border_style="cyan",
-    ))
-    console.print()
-
-    table = Table(show_header=False, box=box.SIMPLE, padding=(0, 2))
-    table.add_column("Key", style="cyan", width=4)
-    table.add_column("Option", style="white", width=30)
-    table.add_column("Description", style="dim")
-
-    table.add_row("[bold]1[/bold]", "TUI (Terminal)", "Rich-based terminal interface")
-    table.add_row("[bold]2[/bold]", "GUI (Browser)", "Web-based SPA interface")
-    table.add_row("[bold]S[/bold]", "Settings", "Configure default UI and preferences")
-    table.add_row("[bold]Q[/bold]", "Quit", "Exit SCLPLAPI")
-
-    console.print(table)
-    console.print()
-
-    default_hint = f"[dim](Enter for {settings.default_ui.upper()})[/dim]"
-    choice = Prompt.ask(
-        f"Select {default_hint}",
-        choices=["1", "2", "tui", "gui", "s", "settings", "q", "quit", ""],
-        default="",
-    )
-
-    if choice == "":
-        return settings.default_ui
-    if choice in ("1", "tui"):
-        return "tui"
-    if choice in ("2", "gui"):
-        return "gui"
-    if choice in ("s", "settings"):
-        return "settings"
-    return "quit"
+def _find_python() -> str:
+    """Return the absolute path of the current Python interpreter."""
+    return sys.executable
 
 
-def launch_tui(settings: SCLPLAPISettings) -> None:
-    """Launch the Terminal UI."""
-    from app.ui.tui import TUI
-    tui = TUI(db_path=settings.db_path)
-    tui.run()
+def _run_cli_command(args: list[str]) -> None:
+    """Run a CLI subcommand by dynamically importing the appropriate module."""
+    commands = {
+        "plugins": "app.ui.cli_plugins",
+        "collections": "app.ui.cli_collections",
+        "environments": "app.ui.cli_environments",
+        "history": "app.ui.cli_history",
+        "export": "app.ui.cli_export",
+    }
 
-
-def launch_gui(settings: SCLPLAPISettings) -> None:
-    """Launch the Web GUI."""
-    try:
-        import uvicorn
-        from app.web.server import create_app
-    except ImportError:
-        console.print("[red]Web UI dependencies not installed.[/red]")
-        console.print("Install with: [cyan]pip install sclplapi[web][/cyan]")
+    if not args:
+        print("Available commands: " + ", ".join(commands.keys()))
+        print("Usage: python -m app <command> [args]")
         return
 
-    application = create_app(settings.db_path)
-    if settings.web_open_browser:
-        import webbrowser
-        webbrowser.open(f"http://{settings.web_host}:{settings.web_port}")
-    console.print(f"[green]Starting web server at http://{settings.web_host}:{settings.web_port}[/green]")
-    console.print("[dim]Press Ctrl+C to stop[/dim]")
-    uvicorn.run(application, host=settings.web_host, port=settings.web_port)
+    cmd = args[0]
+    if cmd in commands:
+        try:
+            module = importlib.import_module(commands[cmd])
+            if hasattr(module, "main"):
+                module.main(args[1:])
+            else:
+                print(f"Error: {cmd} command not properly implemented")
+        except ImportError as e:
+            print(f"Error: Could not load {cmd} module: {e}")
+    else:
+        print(f"Unknown command: {cmd}")
+        print("Available commands: " + ", ".join(commands.keys()))
+
+
+def run_tui() -> None:
+    """Launch the Text User Interface."""
+    from app.ui.tui import TUI
+    app = TUI()
+    app.run()
 
 
 def run_launcher() -> None:
-    """Main entry point for SCLPLAPI launcher."""
-    settings = SCLPLAPISettings.load()
-
-    # First run: show setup wizard (only in interactive mode)
-    if not settings.first_run_complete and sys.stdin.isatty():
-        show_setup_wizard(settings)
-
-    # Parse command line args
-    args = sys.argv[1:] if len(sys.argv) > 1 else []
-
-    # Direct launch flags
-    if "--tui" in args:
-        launch_tui(settings)
-        return
-    if "--gui" in args or "--web" in args:
-        launch_gui(settings)
-        return
-    if "--setup" in args:
-        show_setup_wizard(settings)
-        return
-    if "--reset" in args:
-        settings = SCLPLAPISettings()
-        settings.save()
-        console.print("[yellow]Settings reset to defaults.[/yellow]")
+    """Parse CLI arguments and launch the appropriate mode."""
+    # Check for CLI subcommands first (e.g., python -m app plugins list)
+    if len(sys.argv) > 1 and not sys.argv[1].startswith("-"):
+        _run_cli_command(sys.argv[1:])
         return
 
-    # If user passed other args, let Typer handle them
-    if args:
-        from app.ui.cli import app
-        app()
-        return
+    parser = argparse.ArgumentParser(
+        prog="sclplapi",
+        description="SCLPLAPI - Local-first, Python-first API workflow studio",
+    )
+    parser.add_argument(
+        "--tui",
+        action="store_true",
+        help="Launch TUI directly",
+    )
+    parser.add_argument(
+        "--setup",
+        action="store_true",
+        help="Run setup wizard again",
+    )
+    parser.add_argument(
+        "--reset",
+        action="store_true",
+        help="Reset settings to defaults",
+    )
+    parser.add_argument(
+        "--enable-plugins",
+        action="store_true",
+        help="Enable plugin system (adds dependency overhead)",
+    )
 
-    # Non-interactive mode: show help
-    if not sys.stdin.isatty():
-        from app.ui.cli import app
-        app(["--help"])
-        return
+    args = parser.parse_args()
 
-    # No args + interactive: show UI selector
-    while True:
-        choice = show_ui_selector(settings)
-
-        if choice == "tui":
-            launch_tui(settings)
-            break
-        elif choice == "gui":
-            launch_gui(settings)
-            break
-        elif choice == "settings":
-            show_settings_menu(settings)
-            continue
+    # Handle --reset
+    if args.reset:
+        settings_path = Path("settings.json")
+        if settings_path.exists():
+            settings_path.unlink()
+            print("Settings reset to defaults")
         else:
-            console.print("[dim]Goodbye![/dim]")
-            break
+            print("No settings file found")
+        return
+
+    # Check if plugins should be enabled
+    if args.enable_plugins:
+        import os
+        os.environ["SCLPLAPI_PLUGINS_ENABLED"] = "1"
+        print("Plugin system enabled")
+
+    # Check for first run
+    settings = _load_settings()
+    if settings.get("first_run", True) or args.setup:
+        _run_setup_wizard(settings)
+        settings["first_run"] = False
+        _save_settings(settings)
+        print()
+
+    # Check for updates
+    if settings.get("auto_check_updates", True):
+        _check_for_updates(silent=True)
+
+    # Always launch TUI
+    run_tui()
 
 
-def show_settings_menu(settings: SCLPLAPISettings) -> None:
-    """Interactive settings menu."""
-    console.print()
-    console.print(Panel("[bold]Settings[/bold]", border_style="cyan"))
-    console.print()
+def _load_settings() -> dict:
+    """Load settings from settings.json."""
+    settings_path = Path("settings.json")
+    if settings_path.exists():
+        try:
+            return json.loads(settings_path.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError):
+            pass
+    return {
+        "first_run": True,
+        "default_mode": "tui",
+        "auto_check_updates": True,
+        "plugins_enabled": False,
+        "theme": "dark",
+    }
 
-    table = Table(show_header=False, box=box.SIMPLE, padding=(0, 2))
-    table.add_column("Setting", style="white", width=25)
-    table.add_column("Value", style="cyan")
 
-    table.add_row("Default UI", settings.default_ui.upper())
-    table.add_row("Database path", settings.db_path)
-    table.add_row("Web host", settings.web_host)
-    table.add_row("Web port", str(settings.web_port))
-    table.add_row("Open browser", str(settings.web_open_browser))
-    table.add_row("Theme", settings.theme)
+def _save_settings(settings: dict) -> None:
+    """Save settings to settings.json."""
+    settings_path = Path("settings.json")
+    settings_path.write_text(json.dumps(settings, indent=2), encoding="utf-8")
 
-    console.print(table)
-    console.print()
 
-    console.print("[bold]Change settings:[/bold]")
-    console.print("  [cyan]1.[/cyan] Set default UI")
-    console.print("  [cyan]2.[/cyan] Change database path")
-    console.print("  [cyan]3.[/cyan] Web server settings")
-    console.print("  [cyan]4.[/cyan] Reset all settings")
-    console.print("  [cyan]B.[/cyan] Back")
-    console.print()
+def _run_setup_wizard(settings: dict) -> None:
+    """Run the first-time setup wizard."""
+    print("=" * 60)
+    print("  SCLPLAPI Setup Wizard")
+    print("=" * 60)
+    print()
 
-    choice = Prompt.ask("Select", choices=["1", "2", "3", "4", "b", "back"], default="b")
+    # Show ASCII art
+    try:
+        from app.ui.logo import get_logo
+        print(get_logo())
+        print()
+    except ImportError:
+        pass
 
-    if choice == "1":
-        ui = Prompt.ask("Default UI", choices=["tui", "gui"], default=settings.default_ui)
-        settings.set_default_ui(ui)
-        console.print(f"[green]Default UI set to {ui.upper()}[/green]")
-    elif choice == "2":
-        db = Prompt.ask("Database path", default=settings.db_path)
-        settings.db_path = db
-        settings.save()
-        console.print(f"[green]Database path set to {db}[/green]")
-    elif choice == "3":
-        settings.web_host = Prompt.ask("Host", default=settings.web_host)
-        settings.web_port = int(Prompt.ask("Port", default=str(settings.web_port)))
-        settings.web_open_browser = Confirm.ask("Open browser", default=settings.web_open_browser)
-        settings.save()
-        console.print("[green]Web settings updated[/green]")
-    elif choice == "4":
-        if Confirm.ask("Reset all settings to defaults?"):
-            settings = SCLPLAPISettings()
-            settings.save()
-            console.print("[yellow]Settings reset[/yellow]")
+    # Show welcome message
+    print("Welcome to SCLPLAPI - Local-first, Python-first API workflow studio!")
+    print()
+    print("SCLPLAPI lets you:")
+    print("  * Send HTTP requests and test APIs")
+    print("  * Create workflows with the SCLPLL scripting language")
+    print("  * Build data pipelines with Python functions")
+    print("  * Export results to JSON, CSV, and HTML reports")
+    print()
 
-    console.print()
+    # Check Python version
+    python_version = sys.version_info
+    print(f"Python version: {python_version.major}.{python_version.minor}.{python_version.micro}")
+    if python_version.major < 3 or (python_version.major == 3 and python_version.minor < 9):
+        print("WARNING: SCLPLAPI requires Python 3.9 or higher")
+    else:
+        print("OK: Python version is compatible")
+    print()
+
+    # Check dependencies
+    print("Checking dependencies...")
+    deps_ok = _check_dependencies()
+    print()
+
+    # Show features
+    print("SCLPLAPI Features:")
+    print("  * TUI Mode - Terminal-based interface (no web dependencies)")
+    print("  * SCLPLL Language - Custom scripting for API workflows")
+    print("  * Plugin System - Extend with custom functions")
+    print("  * Export Engine - JSON, CSV, HTML, and summary exports")
+    print("  * Visual Workflows - See your data flow in real-time")
+    print()
+
+    # Ask for default mode (always TUI now)
+    settings["default_mode"] = "tui"
+
+    # Ask about updates
+    print("Automatic update checking:")
+    print("  SCLPLAPI can check for updates on startup.")
+    response = input("  Enable automatic update checking? (Y/n): ").strip().lower()
+    settings["auto_check_updates"] = response not in ("n", "no")
+    print()
+
+    print("Setup complete! SCLPLAPI is ready to use.")
+    print()
+
+
+def _check_dependencies() -> bool:
+    """Check if all required dependencies are installed."""
+    import importlib
+
+    required = [
+        ("httpx", "HTTP client"),
+        ("pydantic", "Data validation"),
+        ("rich", "TUI rendering"),
+        ("prompt_toolkit", "TUI input"),
+    ]
+
+    optional = [
+        ("uvicorn", "Web server"),
+        ("fastapi", "Web framework"),
+    ]
+
+    all_ok = True
+
+    for module_name, description in required:
+        try:
+            importlib.import_module(module_name)
+            print(f"  OK: {description} ({module_name})")
+        except ImportError:
+            print(f"  MISSING: {description} ({module_name})")
+            all_ok = False
+
+    for module_name, description in optional:
+        try:
+            importlib.import_module(module_name)
+            print(f"  OK: {description} ({module_name})")
+        except ImportError:
+            print(f"  SKIP: {description} ({module_name}) - optional")
+
+    return all_ok
+
+
+def _check_for_updates(silent: bool = False) -> None:
+    """Check for updates from PyPI."""
+    try:
+        from app.core.updater import check_for_updates
+        update_info = check_for_updates()
+        if update_info and not silent:
+            print(f"Update available: {update_info['latest_version']}")
+            print(f"Current version: {update_info['current_version']}")
+            print("Run 'pip install --upgrade sclplapi' to update")
+    except Exception:
+        if not silent:
+            print("Could not check for updates")
+
+
+if __name__ == "__main__":
+    run_launcher()
