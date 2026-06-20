@@ -101,11 +101,12 @@ Weather at 5AM Pipeline
 
 | Metric | Value |
 |--------|-------|
-| Total tests | 284 |
+| Total tests | 333 |
 | Unit tests | 202 |
 | Textual UI tests | 26 |
 | Feature tests | 56 |
-| Passed | 284 |
+| Comprehensive tests | 49 |
+| Passed | 333 |
 | Failed | 0 |
 
 ### Textual UI Tests (using pilot framework)
@@ -160,6 +161,29 @@ Weather at 5AM Pipeline
 | Notifications | 3 (info, error, warning) | PASS |
 | Layout | 5 (header, footer, log, sidebar, workspace) | PASS |
 | Performance | 1 (100 rapid tab switches) | PASS |
+
+### Comprehensive Tests (49 tests)
+
+| Category | Tests | Result |
+|----------|-------|--------|
+| Theme Switching | 3 (dark/light toggle, multiple) | PASS |
+| Collection Search | 2 (input, filter) | PASS |
+| Workflow Search | 2 (input, filter) | PASS |
+| Plugin Search | 1 (input) | PASS |
+| Command Palette Search | 3 (workflow, export, plugin) | PASS |
+| History Operations | 3 (filter, method filter, clear) | PASS |
+| Environment Operations | 5 (new, activate, delete, set/delete var) | PASS |
+| Function Browser | 2 (search, source viewer) | PASS |
+| Import/Export | 3 (export all, import all, openapi) | PASS |
+| Batch | 4 (load CSV, start, stop, progress) | PASS |
+| Logs | 2 (search, level filter) | PASS |
+| Settings | 5 (db path, export dir, timeout, save, reset) | PASS |
+| Response Viewer | 1 (tabs) | PASS |
+| Workflow Execution | 3 (run, view steps, export buttons) | PASS |
+| Collection Operations | 2 (new, delete) | PASS |
+| Notifications | 3 (info, error, warning) | PASS |
+| Keyboard Navigation | 2 (Ctrl+B, F2) | PASS |
+| Error Handling | 3 (empty request, invalid tab, rapid actions) | PASS |
 
 ---
 
