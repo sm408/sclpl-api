@@ -33,9 +33,14 @@ class CollectionList(Vertical):
     }
     """
 
+    def __init__(self, **kwargs) -> None:
+        super().__init__(**kwargs)
+        self._all_collections: list[dict] = []
+
     def compose(self) -> ComposeResult:
         with Horizontal(id="collections-header"):
             yield Static("[bold]Collections[/bold]", classes="header-title")
+            yield Input(placeholder="Search collections...", id="collection-search")
             yield Button("New", variant="primary", id="new-collection-btn", classes="header-action")
 
         yield DataTable(id="collections-table")
@@ -49,8 +54,19 @@ class CollectionList(Vertical):
         table.add_columns("Name", "Requests", "ID")
         table.cursor_type = "row"
 
+    @on(Input.Changed, "#collection-search")
+    def search_changed(self, event: Input.Changed) -> None:
+        """Filter collections by search query."""
+        query = event.value.lower().strip()
+        if not query:
+            self.set_collections(self._all_collections)
+        else:
+            filtered = [c for c in self._all_collections if query in c.get("name", "").lower()]
+            self.set_collections(filtered)
+
     def set_collections(self, collections: list[dict]) -> None:
         """Update the collection table."""
+        self._all_collections = collections
         table = self.query_one("#collections-table", DataTable)
         table.clear()
         for col in collections:

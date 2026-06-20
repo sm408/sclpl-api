@@ -5,7 +5,7 @@ from __future__ import annotations
 from textual import on
 from textual.app import ComposeResult
 from textual.containers import Horizontal, Vertical
-from textual.widgets import Button, DataTable, Static
+from textual.widgets import Button, DataTable, Input, Static
 
 
 class PluginBrowser(Vertical):
@@ -39,9 +39,14 @@ class PluginBrowser(Vertical):
     }
     """
 
+    def __init__(self, **kwargs) -> None:
+        super().__init__(**kwargs)
+        self._all_plugins: list = []
+
     def compose(self) -> ComposeResult:
         with Horizontal(id="plugin-header"):
             yield Static("[bold]Plugins[/bold]", classes="header-title")
+            yield Input(placeholder="Search plugins...", id="plugin-search")
             yield Button("Reload", id="reload-plugins-btn", classes="header-action")
 
         yield DataTable(id="plugin-table")
@@ -56,8 +61,19 @@ class PluginBrowser(Vertical):
         table.add_columns("Name", "Version", "Functions", "Status")
         table.cursor_type = "row"
 
+    @on(Input.Changed, "#plugin-search")
+    def search_changed(self, event: Input.Changed) -> None:
+        """Filter plugins by search query."""
+        query = event.value.lower().strip()
+        if not query:
+            self.set_plugins(self._all_plugins)
+        else:
+            filtered = [p for p in self._all_plugins if query in p.manifest.name.lower()]
+            self.set_plugins(filtered)
+
     def set_plugins(self, plugins: list) -> None:
         """Update the plugin table."""
+        self._all_plugins = plugins
         table = self.query_one("#plugin-table", DataTable)
         table.clear()
         for p in plugins:

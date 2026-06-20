@@ -74,10 +74,14 @@ class SCLPLTextualApp(App):
         Binding("ctrl+t", "new_request", "New Request"),
         Binding("ctrl+r", "run_request", "Run Request"),
         Binding("ctrl+w", "close_tab", "Close Tab"),
+        Binding("ctrl+b", "batch_mode", "Batch Mode"),
         Binding("f1", "help", "Help"),
+        Binding("f2", "toggle_theme", "Toggle Theme"),
         Binding("f5", "refresh", "Refresh"),
         Binding("escape", "cancel", "Cancel"),
     ]
+
+    THEME = "dark"
 
     TITLE = "SCLPLAPI"
     SUB_TITLE = "API Workflow Studio"
@@ -355,6 +359,15 @@ class SCLPLTextualApp(App):
 
     def action_batch_mode(self) -> None:
         self.query_one("#workspace", TabbedContent).active = "tab-batch"
+
+    def action_toggle_theme(self) -> None:
+        """Toggle between dark and light themes."""
+        if self.THEME == "dark":
+            self.THEME = "light"
+            self.notify("Switched to light theme")
+        else:
+            self.THEME = "dark"
+            self.notify("Switched to dark theme")
 
     def action_refresh(self) -> None:
         self._load_data()

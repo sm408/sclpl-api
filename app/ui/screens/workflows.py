@@ -10,7 +10,7 @@ from textual import on
 from textual.app import ComposeResult
 from textual.containers import Horizontal, Vertical
 from textual.message import Message
-from textual.widgets import Button, DataTable, ProgressBar, Static
+from textual.widgets import Button, DataTable, Input, ProgressBar, Static
 
 
 class WorkflowList(Vertical):
@@ -47,13 +47,25 @@ class WorkflowList(Vertical):
     def __init__(self, **kwargs) -> None:
         super().__init__(**kwargs)
         self._workflows: list[dict] = []
+        self._all_workflows: list[dict] = []
 
     def compose(self) -> ComposeResult:
+        yield Input(placeholder="Search workflows...", id="workflow-search")
         yield DataTable(id="workflow-table")
 
         with Horizontal(id="workflow-actions"):
             yield Button("Run", variant="success", id="run-workflow-btn")
             yield Button("View Steps", id="view-steps-btn")
+
+    @on(Input.Changed, "#workflow-search")
+    def search_changed(self, event: Input.Changed) -> None:
+        """Filter workflows by search query."""
+        query = event.value.lower().strip()
+        if not query:
+            self.set_workflows(self._all_workflows)
+        else:
+            filtered = [w for w in self._all_workflows if query in w.get("name", "").lower()]
+            self.set_workflows(filtered)
 
     def on_mount(self) -> None:
         table = self.query_one("#workflow-table", DataTable)
@@ -62,6 +74,7 @@ class WorkflowList(Vertical):
 
     def set_workflows(self, workflows: list[dict]) -> None:
         """Update the workflow table."""
+        self._all_workflows = workflows
         self._workflows = workflows
         table = self.query_one("#workflow-table", DataTable)
         table.clear()
