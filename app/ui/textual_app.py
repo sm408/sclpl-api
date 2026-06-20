@@ -33,6 +33,9 @@ from app.ui.screens.functions import FunctionBrowser
 from app.ui.screens.plugins import PluginBrowser
 from app.ui.screens.settings import SettingsView
 from app.ui.screens.import_export import ImportExportView
+from app.ui.screens.batch import BatchView
+from app.ui.screens.diff_viewer import DiffViewer
+from app.ui.screens.log_viewer import LogViewer
 
 
 class SCLPLTextualApp(App):
@@ -107,6 +110,10 @@ class SCLPLTextualApp(App):
                 yield PluginBrowser()
             with TabPane("Import/Export", id="tab-import-export"):
                 yield ImportExportView()
+            with TabPane("Batch", id="tab-batch"):
+                yield BatchView()
+            with TabPane("Logs", id="tab-logs"):
+                yield LogViewer()
             with TabPane("Settings", id="tab-settings"):
                 yield SettingsView()
         yield Static("[dim]Ready[/dim]", id="log-pane")
@@ -309,6 +316,20 @@ class SCLPLTextualApp(App):
     def on_import_openapi(self) -> None:
         self._import_openapi()
 
+    # ── Batch Messages ───────────────────────────────────────────────────
+
+    @on(Button.Pressed, "#load-csv-btn")
+    def on_load_csv(self) -> None:
+        self.notify("Load CSV: provide a CSV file path", severity="information")
+
+    @on(Button.Pressed, "#start-batch-btn")
+    def on_start_batch(self) -> None:
+        self.notify("Batch execution coming soon", severity="information")
+
+    @on(Button.Pressed, "#stop-batch-btn")
+    def on_stop_batch(self) -> None:
+        self.notify("No batch running", severity="warning")
+
     # ── Actions ──────────────────────────────────────────────────────────
 
     def action_command_palette(self) -> None:
@@ -331,6 +352,9 @@ class SCLPLTextualApp(App):
             if cmd.shortcut:
                 lines.append(f"  {cmd.shortcut:15} {cmd.name}")
         self.notify("Keyboard Shortcuts:\n" + "\n".join(lines), severity="information")
+
+    def action_batch_mode(self) -> None:
+        self.query_one("#workspace", TabbedContent).active = "tab-batch"
 
     def action_refresh(self) -> None:
         self._load_data()
