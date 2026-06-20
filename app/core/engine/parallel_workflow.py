@@ -141,6 +141,11 @@ class ParallelWorkflowEngine:
             tasks = []
             for step_id in ready:
                 step = step_map[step_id]
+                # Publish step_started event
+                self._event_bus.publish(Event(
+                    name="workflow.step_started",
+                    data={"step_id": step_id, "step_name": step.name},
+                ))
                 task = asyncio.create_task(
                     self._execute_step_safe(step, ctx, requests)
                 )
@@ -155,6 +160,12 @@ class ParallelWorkflowEngine:
                 if step_result.success:
                     completed.add(step_id)
                     ctx.step_outputs[step_id] = step_result.output
+
+                    # Publish step_completed event
+                    self._event_bus.publish(Event(
+                        name="workflow.step_completed",
+                        data={"step_id": step_id, "step_name": step.name, "duration_ms": step_result.duration_ms},
+                    ))
 
                     # Merge function output into context
                     if isinstance(step_result.output, ExecutionContext):
