@@ -45,11 +45,24 @@ def _run_cli_command(args: list[str]) -> None:
         print("Available commands: " + ", ".join(commands.keys()))
 
 
-def run_tui() -> None:
-    """Launch the Text User Interface."""
-    from app.ui.tui import TUI
-    app = TUI()
-    app.run()
+def run_tui(legacy: bool = False) -> None:
+    """Launch the Text User Interface.
+
+    Args:
+        legacy: If True, use the old Rich-based TUI instead of Textual.
+    """
+    if legacy:
+        from app.ui.tui import TUI
+        app = TUI()
+        app.run()
+    else:
+        from app.ui.textual_app import launch_textual_tui
+        launch_textual_tui()
+
+
+def run_legacy_tui() -> None:
+    """Launch the legacy Rich-based TUI."""
+    run_tui(legacy=True)
 
 
 def run_launcher() -> None:
@@ -66,7 +79,17 @@ def run_launcher() -> None:
     parser.add_argument(
         "--tui",
         action="store_true",
-        help="Launch TUI directly",
+        help="Launch Textual TUI (default)",
+    )
+    parser.add_argument(
+        "--textual",
+        action="store_true",
+        help="Launch Textual TUI (same as --tui)",
+    )
+    parser.add_argument(
+        "--legacy-tui",
+        action="store_true",
+        help="Launch legacy Rich-based TUI",
     )
     parser.add_argument(
         "--setup",
@@ -114,8 +137,11 @@ def run_launcher() -> None:
     if settings.get("auto_check_updates", True):
         _check_for_updates(silent=True)
 
-    # Always launch TUI
-    run_tui()
+    # Launch appropriate TUI
+    if args.legacy_tui:
+        run_tui(legacy=True)
+    else:
+        run_tui(legacy=False)
 
 
 def _load_settings() -> dict:
