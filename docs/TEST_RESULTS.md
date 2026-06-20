@@ -101,10 +101,42 @@ Weather at 5AM Pipeline
 
 | Metric | Value |
 |--------|-------|
-| Total tests | 202 |
-| Passed | 202 |
+| Total tests | 228 |
+| Unit tests | 202 |
+| Textual UI tests | 26 |
+| Passed | 228 |
 | Failed | 0 |
-| Warnings | 487 |
+
+### Textual UI Tests (using pilot framework)
+
+| Test | Result |
+|------|--------|
+| App launches without errors | PASS |
+| Sidebar visible | PASS |
+| Workspace visible | PASS |
+| Request tab default | PASS |
+| Ctrl+P opens command palette | PASS |
+| Ctrl+T switches to request | PASS |
+| Ctrl+R triggers request | PASS |
+| F1 shows help | PASS |
+| F5 refreshes | PASS |
+| Escape cancels | PASS |
+| Collections tab | PASS |
+| History tab | PASS |
+| Workflows tab | PASS |
+| Environments tab | PASS |
+| Functions tab | PASS |
+| Plugins tab | PASS |
+| Batch tab | PASS |
+| Logs tab | PASS |
+| Import/Export tab | PASS |
+| Settings tab | PASS |
+| All tabs accessible | PASS |
+| Sidebar has sections | PASS |
+| Log pane visible | PASS |
+| Request editor widgets | PASS |
+| Workflow list has table | PASS |
+| Rapid tab switching (40 switches) | PASS |
 
 ---
 
