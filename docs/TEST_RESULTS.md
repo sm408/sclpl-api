@@ -101,10 +101,11 @@ Weather at 5AM Pipeline
 
 | Metric | Value |
 |--------|-------|
-| Total tests | 228 |
+| Total tests | 284 |
 | Unit tests | 202 |
 | Textual UI tests | 26 |
-| Passed | 228 |
+| Feature tests | 56 |
+| Passed | 284 |
 | Failed | 0 |
 
 ### Textual UI Tests (using pilot framework)
@@ -137,6 +138,28 @@ Weather at 5AM Pipeline
 | Request editor widgets | PASS |
 | Workflow list has table | PASS |
 | Rapid tab switching (40 switches) | PASS |
+
+### Feature Tests (56 tests)
+
+| Category | Tests | Result |
+|----------|-------|--------|
+| Request Editor | 4 (method, URL, send, body) | PASS |
+| Response Viewer | 1 | PASS |
+| Collections | 3 (table, new, delete) | PASS |
+| History | 3 (table, filter, clear) | PASS |
+| Workflows | 5 (table, run, steps, execution, exports) | PASS |
+| Environments | 4 (table, new, activate, variables) | PASS |
+| Functions | 3 (table, search, source) | PASS |
+| Plugins | 3 (table, reload, functions) | PASS |
+| Import/Export | 4 (export all, import all, openapi) | PASS |
+| Batch | 4 (progress, CSV, start/stop) | PASS |
+| Logs | 3 (exists, search, filter) | PASS |
+| Settings | 3 (exists, db path, save) | PASS |
+| Sidebar | 3 (collections, workflows, envs) | PASS |
+| Command Palette | 3 (open, input, close) | PASS |
+| Notifications | 3 (info, error, warning) | PASS |
+| Layout | 5 (header, footer, log, sidebar, workspace) | PASS |
+| Performance | 1 (100 rapid tab switches) | PASS |
 
 ---
 
