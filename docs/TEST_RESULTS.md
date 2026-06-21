@@ -101,13 +101,14 @@ Weather at 5AM Pipeline
 
 | Metric | Value |
 |--------|-------|
-| Total tests | 372 |
+| Total tests | 392 |
 | Unit tests | 202 |
 | Textual UI tests | 26 |
 | Feature tests | 56 |
 | Comprehensive tests | 49 |
 | Advanced tests | 39 |
-| Passed | 372 |
+| Error handling tests | 20 |
+| Passed | 392 |
 | Failed | 0 |
 
 ### Textual UI Tests (using pilot framework)
@@ -201,6 +202,17 @@ Weather at 5AM Pipeline
 | Settings | 5 (db path, export dir, timeout, save, reset) | PASS |
 | Import/Export | 3 (export all, import all, openapi) | PASS |
 | Performance | 2 (200 tab switches, rapid actions) | PASS |
+
+### Error Handling Tests (20 tests)
+
+| Category | Tests | Result |
+|----------|-------|--------|
+| Error Handling | 5 (empty URL, invalid method, rapid switching, multiple refresh, palette) | PASS |
+| Persistence | 4 (collections, environments, history, settings) | PASS |
+| Navigation | 2 (all shortcuts, all tabs) | PASS |
+| Notifications | 1 (all types) | PASS |
+| Widget Existence | 5 (sidebar, workspace, log pane, header, footer) | PASS |
+| Performance | 3 (100 tab switches, 50 refreshes, 50 palette open/close) | PASS |
 
 ---
 
