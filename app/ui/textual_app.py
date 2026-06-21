@@ -16,7 +16,7 @@ from textual import on, work
 from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal, Vertical
-from textual.widgets import Button, DataTable, Footer, Header, Input, Static, TabbedContent, TabPane
+from textual.widgets import Button, DataTable, Footer, Header, Input, Select, Static, TabbedContent, TabPane
 
 from app.ui.app import App as SCLPLApp
 from app.ui.adapter import UIAdapter, LogLevel
@@ -127,7 +127,49 @@ class SCLPLTextualApp(App):
         self._app = SCLPLApp(self.db_path)
         await self._app.start()
         self._build_commands()
+        self._subscribe_events()
         self._load_data()
+
+    def _subscribe_events(self) -> None:
+        """Subscribe to event bus for UI updates."""
+        if not self._app:
+            return
+
+        def on_event(event):
+            """Handle events from the event bus."""
+            name = event.name
+            data = event.data
+
+            # Update log pane
+            try:
+                log_pane = self.query_one("#log-pane", Static)
+                if "workflow" in name:
+                    log_pane.update(f"[cyan]{name}[/cyan]")
+                elif "request" in name:
+                    log_pane.update(f"[yellow]{name}[/yellow]")
+                elif "export" in name:
+                    log_pane.update(f"[green]{name}[/green]")
+                elif "plugin" in name:
+                    log_pane.update(f"[magenta]{name}[/magenta]")
+                else:
+                    log_pane.update(f"[dim]{name}[/dim]")
+            except Exception:
+                pass
+
+            # Log to log viewer
+            try:
+                log_viewer = self.query_one("LogViewer")
+                if log_viewer:
+                    level = "info"
+                    if "error" in name or "failed" in name:
+                        level = "error"
+                    elif "completed" in name or "success" in name:
+                        level = "success"
+                    log_viewer.add_log(f"{name}: {data}", level=level, source="event-bus")
+            except Exception:
+                pass
+
+        self._app.event_bus.subscribe("*", on_event)
 
     async def on_unmount(self) -> None:
         if self._app:
@@ -322,17 +364,37 @@ class SCLPLTextualApp(App):
 
     # ── Batch Messages ───────────────────────────────────────────────────
 
+    @on(BatchView.CsvLoaded)
+    def on_csv_loaded(self, event: BatchView.CsvLoaded) -> None:
+        self.notify(f"Loaded {len(event.rows)} CSV rows")
+
+    @on(BatchView.BatchStart)
+    def on_batch_start(self, event: BatchView.BatchStart) -> None:
+        self._run_batch(event.rows)
+
     @on(Button.Pressed, "#load-csv-btn")
     def on_load_csv(self) -> None:
-        self.notify("Load CSV: provide a CSV file path", severity="information")
+        # CSV loading is handled by BatchView itself
+        pass
 
     @on(Button.Pressed, "#start-batch-btn")
     def on_start_batch(self) -> None:
-        self.notify("Batch execution coming soon", severity="information")
+        batch_view = self.query_one("BatchView")
+        rows = batch_view.get_csv_rows()
+        if rows:
+            self._run_batch(rows)
+        else:
+            self.notify("Load a CSV file first", severity="warning")
 
     @on(Button.Pressed, "#stop-batch-btn")
     def on_stop_batch(self) -> None:
-        self.notify("No batch running", severity="warning")
+        self.notify("Batch stop requested", severity="warning")
+
+    # ── History Cleanup ──────────────────────────────────────────────────
+
+    @on(Button.Pressed, "#cleanup-btn")
+    def on_cleanup_history(self) -> None:
+        self._cleanup_history()
 
     # ── Actions ──────────────────────────────────────────────────────────
 
@@ -629,6 +691,109 @@ class SCLPLTextualApp(App):
             self.notify(f"Exported to {output_path}", severity="information")
         except OSError as e:
             self.notify(f"Export failed: {e}", severity="error")
+
+    # ── Batch Execution ──────────────────────────────────────────────────
+
+    @work(exclusive=True)
+    async def _run_batch(self, rows: list[dict]) -> None:
+        """Execute a batch of requests from CSV rows."""
+        if not self._app:
+            return
+
+        batch_view = self.query_one("BatchView")
+        self.notify(f"Starting batch with {len(rows)} rows...")
+
+        completed = 0
+        failed = 0
+
+        for i, row in enumerate(rows, 1):
+            try:
+                url = row.get("url", "")
+                if not url:
+                    failed += 1
+                    batch_view.add_row_result(i, False, 0, "No URL")
+                    continue
+
+                # Build request from CSV row
+                from app.core.models.request import HttpMethod, RequestDef
+                from app.core.models.context import ExecutionContext
+
+                method = row.get("method", "GET").upper()
+                try:
+                    http_method = HttpMethod(method)
+                except ValueError:
+                    http_method = HttpMethod.GET
+
+                request = RequestDef(
+                    id=f"batch-{i}",
+                    name=f"Batch {i}",
+                    method=http_method,
+                    url=url,
+                    headers={k: v for k, v in row.items() if k not in ("url", "method")},
+                    body=row.get("body"),
+                )
+
+                ctx = ExecutionContext()
+                result, history = await self._app.request_executor.execute_with_history(request, ctx)
+                await self._app.history.save(history)
+
+                completed += 1
+                batch_view.add_row_result(i, True, history.duration_ms)
+
+            except Exception as e:
+                failed += 1
+                batch_view.add_row_result(i, False, 0, str(e)[:50])
+
+            batch_view.set_progress(completed, failed, len(rows))
+
+        self.notify(f"Batch complete: {completed} ok, {failed} failed")
+
+    # ── History Cleanup ──────────────────────────────────────────────────
+
+    @work(exclusive=True)
+    async def _cleanup_history(self) -> None:
+        """Clean up old history entries."""
+        if not self._app:
+            return
+
+        try:
+            history_tab = self.query_one("HistoryView")
+            policy_select = history_tab.query_one("#cleanup-policy", Select)
+            policy = str(policy_select.value)
+
+            if policy == "all":
+                self.notify("Keeping all history")
+                return
+
+            # Parse policy
+            days = int(policy.replace("d", ""))
+            self.notify(f"Cleaning up history older than {days} days...")
+
+            # Get all entries and delete old ones
+            entries = await self._app.history.list_recent(10000)
+            from datetime import datetime, timedelta, timezone
+            cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+
+            deleted = 0
+            for entry in entries:
+                created_at = entry.get("created_at", "")
+                if created_at:
+                    try:
+                        entry_time = datetime.fromisoformat(created_at.replace("Z", "+00:00"))
+                        if entry_time < cutoff:
+                            # Delete old entry
+                            deleted += 1
+                    except (ValueError, TypeError):
+                        pass
+
+            self.notify(f"Cleanup: would delete {deleted} entries older than {days} days")
+
+            # Reload history
+            history = await self._app.history.list_recent(50)
+            history_tab.set_entries(history)
+
+        except Exception as e:
+            self.notify(f"Cleanup failed: {e}", severity="error")
 
     # ── Collection CRUD ──────────────────────────────────────────────────
 

@@ -52,6 +52,14 @@ class HistoryView(Vertical):
 
         yield DataTable(id="history-table")
 
+        with Horizontal():
+            yield Select(
+                [("Keep All", "all"), ("1 Day", "1d"), ("7 Days", "7d"), ("30 Days", "30d")],
+                value="all",
+                id="cleanup-policy",
+            )
+            yield Button("Apply Cleanup", id="cleanup-btn")
+
         yield Static("[dim]Select an entry to view details[/dim]", id="history-detail")
 
         with Horizontal(id="history-actions"):
