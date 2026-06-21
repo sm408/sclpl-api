@@ -101,12 +101,13 @@ Weather at 5AM Pipeline
 
 | Metric | Value |
 |--------|-------|
-| Total tests | 333 |
+| Total tests | 372 |
 | Unit tests | 202 |
 | Textual UI tests | 26 |
 | Feature tests | 56 |
 | Comprehensive tests | 49 |
-| Passed | 333 |
+| Advanced tests | 39 |
+| Passed | 372 |
 | Failed | 0 |
 
 ### Textual UI Tests (using pilot framework)
@@ -184,6 +185,22 @@ Weather at 5AM Pipeline
 | Notifications | 3 (info, error, warning) | PASS |
 | Keyboard Navigation | 2 (Ctrl+B, F2) | PASS |
 | Error Handling | 3 (empty request, invalid tab, rapid actions) | PASS |
+
+### Advanced Tests (39 tests)
+
+| Category | Tests | Result |
+|----------|-------|--------|
+| Authentication | 5 (type select, options, token, basic, apikey) | PASS |
+| Request Editor Tabs | 6 (body, headers, params, auth, editors) | PASS |
+| Batch CSV Import | 6 (input, load, start, stop, progress, table) | PASS |
+| History Cleanup | 2 (policy selector, cleanup button) | PASS |
+| Response Viewer | 4 (tabs, JSON tree) | PASS |
+| Diff Viewer | 2 (import, methods) | PASS |
+| Log Viewer | 2 (search, level filter) | PASS |
+| Event Bus | 2 (subscribe, multiple events) | PASS |
+| Settings | 5 (db path, export dir, timeout, save, reset) | PASS |
+| Import/Export | 3 (export all, import all, openapi) | PASS |
+| Performance | 2 (200 tab switches, rapid actions) | PASS |
 
 ---
 
