@@ -116,6 +116,8 @@ class SCLPLTextualApp(App):
                 yield ImportExportView()
             with TabPane("Batch", id="tab-batch"):
                 yield BatchView()
+            with TabPane("Diff", id="tab-diff"):
+                yield DiffViewer()
             with TabPane("Logs", id="tab-logs"):
                 yield LogViewer()
             with TabPane("Settings", id="tab-settings"):
@@ -797,6 +799,22 @@ class SCLPLTextualApp(App):
 
     # ── Collection CRUD ──────────────────────────────────────────────────
 
+    @on(CollectionList.CollectionCreated)
+    def on_collection_created(self, event: CollectionList.CollectionCreated) -> None:
+        self._create_collection()
+
+    @on(CollectionList.CollectionDeleted)
+    def on_collection_deleted(self, event: CollectionList.CollectionDeleted) -> None:
+        self._delete_collection_by_id(event.collection_id)
+
+    @on(CollectionList.CollectionRenamed)
+    def on_collection_renamed(self, event: CollectionList.CollectionRenamed) -> None:
+        self._rename_collection(event.collection_id)
+
+    @on(CollectionList.CollectionDuplicated)
+    def on_collection_duplicated(self, event: CollectionList.CollectionDuplicated) -> None:
+        self._duplicate_collection(event.collection_id)
+
     @work(exclusive=True)
     async def _create_collection(self) -> None:
         if not self._app:
@@ -812,18 +830,71 @@ class SCLPLTextualApp(App):
             self.notify(f"Failed: {e}", severity="error")
 
     @work(exclusive=True)
-    async def _delete_collection(self) -> None:
+    async def _delete_collection_by_id(self, collection_id: str) -> None:
         if not self._app:
             return
         try:
-            table = self.query_one("CollectionList").query_one("#collections-table", DataTable)
-            cols = await self._app.collections.list_all()
-            if table.cursor_row is not None and table.cursor_row < len(cols):
-                col = cols[table.cursor_row]
-                if await self.confirm(f"Delete '{col['name']}'?"):
-                    await self._app.collections.delete(col["id"])
-                    self.notify(f"Deleted '{col['name']}'")
-                    self._load_data()
+            col = await self._app.collections.get(collection_id)
+            if col and await self.confirm(f"Delete '{col['name']}'?"):
+                await self._app.collections.delete(collection_id)
+                self.notify(f"Deleted '{col['name']}'")
+                self._load_data()
+        except Exception as e:
+            self.notify(f"Failed: {e}", severity="error")
+
+    @work(exclusive=True)
+    async def _rename_collection(self, collection_id: str) -> None:
+        if not self._app:
+            return
+        try:
+            col = await self._app.collections.get(collection_id)
+            if not col:
+                return
+            new_name = await self.prompt(f"Rename '{col['name']}' to:", default=col["name"])
+            if not new_name or new_name == col["name"]:
+                return
+            # Update collection name
+            await self._app.collections.delete(collection_id)
+            new_col = await self._app.collections.create(new_name, col.get("description", ""))
+            # Move requests to new collection
+            reqs = await self._app.requests.list_all(collection_id=collection_id)
+            for req in reqs:
+                await self._app.requests.create({
+                    "collection_id": new_col["id"],
+                    "name": req.get("name", ""),
+                    "method": req.get("method", "GET"),
+                    "url": req.get("url", ""),
+                    "headers": req.get("headers", []),
+                    "body": req.get("body"),
+                })
+            self.notify(f"Renamed to '{new_name}'")
+            self._load_data()
+        except Exception as e:
+            self.notify(f"Failed: {e}", severity="error")
+
+    @work(exclusive=True)
+    async def _duplicate_collection(self, collection_id: str) -> None:
+        if not self._app:
+            return
+        try:
+            col = await self._app.collections.get(collection_id)
+            if not col:
+                return
+            new_name = f"{col['name']} (copy)"
+            new_col = await self._app.collections.create(new_name, col.get("description", ""))
+            # Copy requests
+            reqs = await self._app.requests.list_all(collection_id=collection_id)
+            for req in reqs:
+                await self._app.requests.create({
+                    "collection_id": new_col["id"],
+                    "name": req.get("name", ""),
+                    "method": req.get("method", "GET"),
+                    "url": req.get("url", ""),
+                    "headers": req.get("headers", []),
+                    "body": req.get("body"),
+                })
+            self.notify(f"Duplicated as '{new_name}'")
+            self._load_data()
         except Exception as e:
             self.notify(f"Failed: {e}", severity="error")
 
