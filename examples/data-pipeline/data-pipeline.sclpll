@@ -1,0 +1,31 @@
+@workflow data-pipeline "Data Pipeline Workflow"
+    Fetch data from multiple sources in parallel,
+    transform it, and generate a report.
+    Uses JSONPlaceholder API (no auth needed).
+
+@base_url https://jsonplaceholder.typicode.com
+
+# ── Parallel data fetching ──────────────────────────────────────────────
+
+@step fetch_users -> users
+    request GET {{base_url}}/users
+
+@step fetch_posts -> posts
+    request GET {{base_url}}/posts
+
+@step fetch_comments -> comments
+    request GET {{base_url}}/comments
+
+@step fetch_albums -> albums
+    request GET {{base_url}}/albums
+
+@step fetch_photos -> photos
+    request GET {{base_url}}/photos
+
+# ── Data processing ─────────────────────────────────────────────────────
+
+@step merge_all <- fetch_users, fetch_posts, fetch_comments, fetch_albums, fetch_photos -> merged_data
+    func merge_all_data
+
+@step generate_report <- merge_all -> report
+    func generate_report

@@ -1,0 +1,83 @@
+{
+  "id": "api-testing",
+  "name": "API Testing Workflow",
+  "description": "Test multiple API endpoints with parallel requests, validate responses, and generate a test report.",
+  "variables": {
+    "base_url": "https://jsonplaceholder.typicode.com"
+  },
+  "steps": [
+    {
+      "id": "test_get_users",
+      "name": "Test GET /users",
+      "type": "request",
+      "config": {
+        "method": "GET",
+        "url": "{{base_url}}/users"
+      },
+      "depends_on": [],
+      "output_variable": "users_response"
+    },
+    {
+      "id": "test_get_posts",
+      "name": "Test GET /posts",
+      "type": "request",
+      "config": {
+        "method": "GET",
+        "url": "{{base_url}}/posts"
+      },
+      "depends_on": [],
+      "output_variable": "posts_response"
+    },
+    {
+      "id": "test_get_comments",
+      "name": "Test GET /comments",
+      "type": "request",
+      "config": {
+        "method": "GET",
+        "url": "{{base_url}}/comments"
+      },
+      "depends_on": [],
+      "output_variable": "comments_response"
+    },
+    {
+      "id": "test_create_post",
+      "name": "Test POST /posts",
+      "type": "request",
+      "config": {
+        "method": "POST",
+        "url": "{{base_url}}/posts",
+        "headers": {
+          "Content-Type": "application/json"
+        },
+        "body": "{\"title\": \"Test Post\", \"body\": \"Test body\", \"userId\": 1}"
+      },
+      "depends_on": [],
+      "output_variable": "create_response"
+    },
+    {
+      "id": "test_update_post",
+      "name": "Test PUT /posts/1",
+      "type": "request",
+      "config": {
+        "method": "PUT",
+        "url": "{{base_url}}/posts/1",
+        "headers": {
+          "Content-Type": "application/json"
+        },
+        "body": "{\"id\": 1, \"title\": \"Updated Post\", \"body\": \"Updated body\", \"userId\": 1}"
+      },
+      "depends_on": [],
+      "output_variable": "update_response"
+    },
+    {
+      "id": "validate_responses",
+      "name": "Validate all responses",
+      "type": "function",
+      "config": {
+        "function_name": "merge_all_data"
+      },
+      "depends_on": ["test_get_users", "test_get_posts", "test_get_comments", "test_create_post", "test_update_post"],
+      "output_variable": "validation_result"
+    }
+  ]
+}

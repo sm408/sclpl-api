@@ -1,0 +1,85 @@
+{
+  "id": "data-pipeline",
+  "name": "Data Pipeline Workflow",
+  "description": "Fetch data from multiple sources, transform it, and generate a report. Demonstrates parallel fetching and data processing.",
+  "variables": {
+    "base_url": "https://jsonplaceholder.typicode.com"
+  },
+  "steps": [
+    {
+      "id": "fetch_users",
+      "name": "Fetch users",
+      "type": "request",
+      "config": {
+        "method": "GET",
+        "url": "{{base_url}}/users"
+      },
+      "depends_on": [],
+      "output_variable": "users"
+    },
+    {
+      "id": "fetch_posts",
+      "name": "Fetch posts",
+      "type": "request",
+      "config": {
+        "method": "GET",
+        "url": "{{base_url}}/posts"
+      },
+      "depends_on": [],
+      "output_variable": "posts"
+    },
+    {
+      "id": "fetch_comments",
+      "name": "Fetch comments",
+      "type": "request",
+      "config": {
+        "method": "GET",
+        "url": "{{base_url}}/comments"
+      },
+      "depends_on": [],
+      "output_variable": "comments"
+    },
+    {
+      "id": "fetch_albums",
+      "name": "Fetch albums",
+      "type": "request",
+      "config": {
+        "method": "GET",
+        "url": "{{base_url}}/albums"
+      },
+      "depends_on": [],
+      "output_variable": "albums"
+    },
+    {
+      "id": "fetch_photos",
+      "name": "Fetch photos",
+      "type": "request",
+      "config": {
+        "method": "GET",
+        "url": "{{base_url}}/photos"
+      },
+      "depends_on": [],
+      "output_variable": "photos"
+    },
+    {
+      "id": "merge_all",
+      "name": "Merge all data sources",
+      "type": "function",
+      "config": {
+        "function_name": "merge_all_data"
+      },
+      "depends_on": ["fetch_users", "fetch_posts", "fetch_comments", "fetch_albums", "fetch_photos"],
+      "output_variable": "merged_data"
+    },
+    {
+      "id": "generate_report",
+      "name": "Generate data report",
+      "type": "function",
+      "config": {
+        "function_name": "generate_report"
+      },
+      "depends_on": ["merge_all"],
+      "output_variable": "report"
+    }
+  ]
+}
