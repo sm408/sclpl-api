@@ -8,6 +8,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 from app.core.models.monitor import Monitor, MonitorEvent, MonitorStatus, NotificationMode
+from app.core.models.project import DEFAULT_PROJECT_ID
 from app.storage.db import Database
 
 
@@ -32,35 +33,21 @@ class MonitorService:
         """Create a new monitor."""
         now = datetime.now(timezone.utc).isoformat()
         monitor_id = str(uuid.uuid4())
+        pid = project_id or DEFAULT_PROJECT_ID
 
-        if project_id:
-            await self._db.execute(
-                """INSERT INTO monitors
-                (id, name, url, method, headers, body, interval_seconds, condition,
-                 notification_on, enabled, status, run_count, trigger_count, project_id, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-                (
-                    monitor_id, name, url, method,
-                    json.dumps(headers or {}),
-                    body, interval_seconds, condition,
-                    notification_on, True, MonitorStatus.STOPPED.value,
-                    0, 0, project_id, now, now,
-                ),
-            )
-        else:
-            await self._db.execute(
-                """INSERT INTO monitors
-                (id, name, url, method, headers, body, interval_seconds, condition,
-                 notification_on, enabled, status, run_count, trigger_count, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-                (
-                    monitor_id, name, url, method,
-                    json.dumps(headers or {}),
-                    body, interval_seconds, condition,
-                    notification_on, True, MonitorStatus.STOPPED.value,
-                    0, 0, now, now,
-                ),
-            )
+        await self._db.execute(
+            """INSERT INTO monitors
+            (id, name, url, method, headers, body, interval_seconds, condition,
+             notification_on, enabled, status, run_count, trigger_count, project_id, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (
+                monitor_id, name, url, method,
+                json.dumps(headers or {}),
+                body, interval_seconds, condition,
+                notification_on, True, MonitorStatus.STOPPED.value,
+                0, 0, pid, now, now,
+            ),
+        )
         await self._db.commit()
 
         return Monitor(

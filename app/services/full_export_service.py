@@ -13,17 +13,17 @@ class FullExportService:
     def __init__(self, db: Database) -> None:
         self._db = db
 
-    async def export_all(self, output_dir: str | Path) -> Path:
+    async def export_all(self, output_dir: str | Path, project_id: str | None = None) -> Path:
         base = Path(output_dir)
         base.mkdir(parents=True, exist_ok=True)
 
         await self.export_projects(base / "projects")
-        await self.export_workflows(base / "workflows")
+        await self.export_workflows(base / "workflows", project_id=project_id)
         await self.export_functions(base / "functions")
-        await self.export_plugins(base / "plugins")
-        await self.export_history(base / "history")
-        await self.export_environments(base / "environments")
-        await self.export_collections(base / "collections")
+        await self.export_plugins(base / "plugins", project_id=project_id)
+        await self.export_history(base / "history", project_id=project_id)
+        await self.export_environments(base / "environments", project_id=project_id)
+        await self.export_collections(base / "collections", project_id=project_id)
         await self.export_database(base / "database")
         self._write_manifest(base)
         self._write_import_script(base)
@@ -40,11 +40,14 @@ class FullExportService:
         )
         return len(rows)
 
-    async def export_workflows(self, output_dir: str | Path) -> int:
+    async def export_workflows(self, output_dir: str | Path, project_id: str | None = None) -> int:
         out = Path(output_dir)
         out.mkdir(parents=True, exist_ok=True)
 
-        rows = await self._db.fetch_all("SELECT * FROM workflows")
+        if project_id:
+            rows = await self._db.fetch_all("SELECT * FROM workflows WHERE project_id = ?", (project_id,))
+        else:
+            rows = await self._db.fetch_all("SELECT * FROM workflows")
         for wf in rows:
             sclpll = wf.get("sclpll_source", "")
             steps = wf.get("steps", "[]")
@@ -93,11 +96,14 @@ class FullExportService:
 
         return count
 
-    async def export_plugins(self, output_dir: str | Path) -> int:
+    async def export_plugins(self, output_dir: str | Path, project_id: str | None = None) -> int:
         out = Path(output_dir)
         out.mkdir(parents=True, exist_ok=True)
 
-        rows = await self._db.fetch_all("SELECT * FROM plugins")
+        if project_id:
+            rows = await self._db.fetch_all("SELECT * FROM plugins WHERE project_id = ?", (project_id,))
+        else:
+            rows = await self._db.fetch_all("SELECT * FROM plugins")
         for plugin in rows:
             plugin_dir = out / plugin["name"]
             plugin_dir.mkdir(parents=True, exist_ok=True)
@@ -125,21 +131,29 @@ class FullExportService:
 
         return len(rows)
 
-    async def export_history(self, output_dir: str | Path) -> int:
+    async def export_history(self, output_dir: str | Path, project_id: str | None = None) -> int:
         out = Path(output_dir)
         out.mkdir(parents=True, exist_ok=True)
 
-        rows = await self._db.fetch_all("SELECT * FROM history ORDER BY created_at DESC")
+        if project_id:
+            rows = await self._db.fetch_all(
+                "SELECT * FROM history WHERE project_id = ? ORDER BY created_at DESC", (project_id,)
+            )
+        else:
+            rows = await self._db.fetch_all("SELECT * FROM history ORDER BY created_at DESC")
         (out / "history.json").write_text(
             json.dumps(rows, indent=2, default=str), encoding="utf-8"
         )
         return len(rows)
 
-    async def export_environments(self, output_dir: str | Path) -> int:
+    async def export_environments(self, output_dir: str | Path, project_id: str | None = None) -> int:
         out = Path(output_dir)
         out.mkdir(parents=True, exist_ok=True)
 
-        envs = await self._db.fetch_all("SELECT * FROM environments")
+        if project_id:
+            envs = await self._db.fetch_all("SELECT * FROM environments WHERE project_id = ?", (project_id,))
+        else:
+            envs = await self._db.fetch_all("SELECT * FROM environments")
         for env in envs:
             env["variables"] = await self._db.fetch_all(
                 "SELECT key, value, scope, is_secret, enabled FROM variables WHERE environment_id = ?",
@@ -151,11 +165,14 @@ class FullExportService:
         )
         return len(envs)
 
-    async def export_collections(self, output_dir: str | Path) -> int:
+    async def export_collections(self, output_dir: str | Path, project_id: str | None = None) -> int:
         out = Path(output_dir)
         out.mkdir(parents=True, exist_ok=True)
 
-        collections = await self._db.fetch_all("SELECT * FROM collections")
+        if project_id:
+            collections = await self._db.fetch_all("SELECT * FROM collections WHERE project_id = ?", (project_id,))
+        else:
+            collections = await self._db.fetch_all("SELECT * FROM collections")
         for col in collections:
             col["requests"] = await self._db.fetch_all(
                 "SELECT * FROM requests WHERE collection_id = ?", (col["id"],)

@@ -22,6 +22,8 @@ class AddPluginTables(Migration):
                 author TEXT DEFAULT '',
                 status TEXT DEFAULT 'inactive',
                 manifest_json TEXT DEFAULT '{}',
+                project_id TEXT DEFAULT '00000000-0000-0000-0000-000000000001',
+                revision INTEGER DEFAULT 1,
                 installed_at TEXT NOT NULL
             )"""
         )

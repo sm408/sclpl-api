@@ -65,9 +65,11 @@ class App:
     async def start(self) -> None:
         await self.db.connect()
         await self.db.initialize()
+        # Resolve the default project to ensure it exists
+        self._active_project = await self.projects.get_or_default(None)
         # Start monitor runner
         await self.monitor_runner.start()
-        logger.info("SCLPLAPI started")
+        logger.info("SCLPLAPI started (project: %s)", self._active_project.name)
 
     async def stop(self) -> None:
         # Stop monitor runner

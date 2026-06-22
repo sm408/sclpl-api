@@ -36,6 +36,8 @@ class AddMonitors(Migration):
                 last_changed TEXT,
                 run_count INTEGER DEFAULT 0,
                 trigger_count INTEGER DEFAULT 0,
+                project_id TEXT DEFAULT '00000000-0000-0000-0000-000000000001',
+                revision INTEGER DEFAULT 1,
                 created_at TEXT,
                 updated_at TEXT
             )

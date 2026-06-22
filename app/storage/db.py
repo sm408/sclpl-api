@@ -33,7 +33,8 @@ CREATE TABLE IF NOT EXISTS collections (
     project_id TEXT DEFAULT '00000000-0000-0000-0000-000000000001',
     revision INTEGER DEFAULT 1,
     created_at TEXT NOT NULL,
-    updated_at TEXT NOT NULL
+    updated_at TEXT NOT NULL,
+    FOREIGN KEY (project_id) REFERENCES projects(id)
 );
 
 CREATE TABLE IF NOT EXISTS requests (
@@ -52,7 +53,8 @@ CREATE TABLE IF NOT EXISTS requests (
     revision INTEGER DEFAULT 1,
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL,
-    FOREIGN KEY (collection_id) REFERENCES collections(id) ON DELETE SET NULL
+    FOREIGN KEY (collection_id) REFERENCES collections(id) ON DELETE SET NULL,
+    FOREIGN KEY (project_id) REFERENCES projects(id)
 );
 
 CREATE TABLE IF NOT EXISTS environments (
@@ -62,7 +64,8 @@ CREATE TABLE IF NOT EXISTS environments (
     project_id TEXT DEFAULT '00000000-0000-0000-0000-000000000001',
     revision INTEGER DEFAULT 1,
     created_at TEXT NOT NULL,
-    updated_at TEXT NOT NULL
+    updated_at TEXT NOT NULL,
+    FOREIGN KEY (project_id) REFERENCES projects(id)
 );
 
 CREATE TABLE IF NOT EXISTS variables (
@@ -92,7 +95,8 @@ CREATE TABLE IF NOT EXISTS history (
     variables_used TEXT DEFAULT '{}',
     project_id TEXT DEFAULT '00000000-0000-0000-0000-000000000001',
     revision INTEGER DEFAULT 1,
-    created_at TEXT NOT NULL
+    created_at TEXT NOT NULL,
+    FOREIGN KEY (project_id) REFERENCES projects(id)
 );
 
 CREATE TABLE IF NOT EXISTS workflows (
@@ -104,7 +108,8 @@ CREATE TABLE IF NOT EXISTS workflows (
     project_id TEXT DEFAULT '00000000-0000-0000-0000-000000000001',
     revision INTEGER DEFAULT 1,
     created_at TEXT NOT NULL,
-    updated_at TEXT NOT NULL
+    updated_at TEXT NOT NULL,
+    FOREIGN KEY (project_id) REFERENCES projects(id)
 );
 
 CREATE TABLE IF NOT EXISTS export_presets (
@@ -115,15 +120,89 @@ CREATE TABLE IF NOT EXISTS export_presets (
     filters TEXT DEFAULT '{}',
     project_id TEXT DEFAULT '00000000-0000-0000-0000-000000000001',
     revision INTEGER DEFAULT 1,
-    created_at TEXT NOT NULL
+    created_at TEXT NOT NULL,
+    FOREIGN KEY (project_id) REFERENCES projects(id)
 );
 
-CREATE INDEX IF NOT EXISTS idx_collections_project_id ON collections(project_id);
-CREATE INDEX IF NOT EXISTS idx_requests_project_id ON requests(project_id);
-CREATE INDEX IF NOT EXISTS idx_environments_project_id ON environments(project_id);
-CREATE INDEX IF NOT EXISTS idx_history_project_id ON history(project_id);
-CREATE INDEX IF NOT EXISTS idx_workflows_project_id ON workflows(project_id);
-CREATE INDEX IF NOT EXISTS idx_export_presets_project_id ON export_presets(project_id);
+CREATE TABLE IF NOT EXISTS monitors (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    url TEXT NOT NULL,
+    method TEXT DEFAULT 'GET',
+    headers TEXT DEFAULT '{}',
+    body TEXT,
+    interval_seconds INTEGER DEFAULT 60,
+    condition TEXT DEFAULT '',
+    notification_on TEXT DEFAULT 'change',
+    enabled INTEGER DEFAULT 1,
+    status TEXT DEFAULT 'stopped',
+    last_run TEXT,
+    last_status_code INTEGER,
+    last_body TEXT,
+    last_error TEXT,
+    last_changed TEXT,
+    run_count INTEGER DEFAULT 0,
+    trigger_count INTEGER DEFAULT 0,
+    project_id TEXT DEFAULT '00000000-0000-0000-0000-000000000001',
+    revision INTEGER DEFAULT 1,
+    created_at TEXT,
+    updated_at TEXT,
+    FOREIGN KEY (project_id) REFERENCES projects(id)
+);
+
+CREATE TABLE IF NOT EXISTS monitor_events (
+    id TEXT PRIMARY KEY,
+    monitor_id TEXT NOT NULL,
+    monitor_name TEXT NOT NULL,
+    event_type TEXT NOT NULL,
+    status_code INTEGER,
+    body TEXT,
+    condition_met INTEGER DEFAULT 0,
+    changed INTEGER DEFAULT 0,
+    error TEXT,
+    duration_ms INTEGER DEFAULT 0,
+    created_at TEXT,
+    FOREIGN KEY (monitor_id) REFERENCES monitors(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS plugins (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    version TEXT NOT NULL,
+    description TEXT DEFAULT '',
+    author TEXT DEFAULT '',
+    status TEXT DEFAULT 'inactive',
+    manifest_json TEXT DEFAULT '{}',
+    project_id TEXT DEFAULT '00000000-0000-0000-0000-000000000001',
+    revision INTEGER DEFAULT 1,
+    installed_at TEXT NOT NULL,
+    FOREIGN KEY (project_id) REFERENCES projects(id)
+);
+
+CREATE TABLE IF NOT EXISTS plugin_variables (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    plugin_id TEXT NOT NULL,
+    key TEXT NOT NULL,
+    value TEXT NOT NULL,
+    FOREIGN KEY (plugin_id) REFERENCES plugins(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS workflow_versions (
+    id TEXT PRIMARY KEY,
+    workflow_id TEXT NOT NULL,
+    version INTEGER NOT NULL,
+    sclpll_source TEXT DEFAULT '',
+    json_source TEXT DEFAULT '{}',
+    created_at TEXT NOT NULL,
+    FOREIGN KEY (workflow_id) REFERENCES workflows(id) ON DELETE CASCADE
+);
+
+-- Note: project_id indexes (idx_*_project_id) are created by migration m005
+-- after it ensures the project_id columns exist on all tables.  They are
+-- deliberately omitted here so that existing databases (created before the
+-- project model) do not fail when SCHEMA_SQL runs against tables that lack
+-- the project_id column.
+CREATE INDEX IF NOT EXISTS idx_monitor_events_monitor_id ON monitor_events(monitor_id);
 """
 
 

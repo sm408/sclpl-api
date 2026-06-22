@@ -3,6 +3,7 @@ from __future__ import annotations
 import uuid
 from datetime import datetime, timezone
 
+from app.core.models.project import DEFAULT_PROJECT_ID
 from app.storage.db import Database
 
 
@@ -13,18 +14,13 @@ class EnvironmentRepository:
     async def create(self, name: str, project_id: str | None = None) -> dict:
         now = datetime.now(timezone.utc).isoformat()
         eid = str(uuid.uuid4())
-        if project_id:
-            await self._db.execute(
-                "INSERT INTO environments (id, name, is_active, project_id, created_at, updated_at) VALUES (?, ?, 0, ?, ?, ?)",
-                (eid, name, project_id, now, now),
-            )
-        else:
-            await self._db.execute(
-                "INSERT INTO environments (id, name, is_active, created_at, updated_at) VALUES (?, ?, 0, ?, ?)",
-                (eid, name, now, now),
-            )
+        pid = project_id or DEFAULT_PROJECT_ID
+        await self._db.execute(
+            "INSERT INTO environments (id, name, is_active, project_id, created_at, updated_at) VALUES (?, ?, 0, ?, ?, ?)",
+            (eid, name, pid, now, now),
+        )
         await self._db.commit()
-        return {"id": eid, "name": name, "is_active": False, "created_at": now, "project_id": project_id}
+        return {"id": eid, "name": name, "is_active": False, "created_at": now, "project_id": pid}
 
     async def list_all(self, project_id: str | None = None) -> list[dict]:
         if project_id:
@@ -71,11 +67,14 @@ class EnvironmentRepository:
             await self._db.execute(
                 "UPDATE environments SET is_active = 0 WHERE project_id = ?", (project_id,)
             )
+            await self._db.execute(
+                "UPDATE environments SET is_active = 1 WHERE id = ? AND project_id = ?", (env_id, project_id)
+            )
         else:
             await self._db.execute("UPDATE environments SET is_active = 0")
-        await self._db.execute(
-            "UPDATE environments SET is_active = 1 WHERE id = ?", (env_id,)
-        )
+            await self._db.execute(
+                "UPDATE environments SET is_active = 1 WHERE id = ?", (env_id,)
+            )
         await self._db.commit()
 
     async def delete(self, env_id: str) -> bool:

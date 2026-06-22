@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 
 from app.core.models.history import HistoryEntry, RunStatus
+from app.core.models.project import DEFAULT_PROJECT_ID
 from app.storage.db import Database
 
 
@@ -11,55 +12,31 @@ class HistoryRepository:
         self._db = db
 
     async def save(self, entry: HistoryEntry, project_id: str | None = None) -> None:
-        if project_id:
-            await self._db.execute(
-                """INSERT INTO history
-                (id, request_id, request_name, method, url, status, status_code,
-                 response_body, response_headers, duration_ms, error_message,
-                 environment_id, variables_used, project_id, created_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-                (
-                    entry.id,
-                    entry.request_id,
-                    entry.request_name,
-                    entry.method,
-                    entry.url,
-                    entry.status.value,
-                    entry.status_code,
-                    entry.response_body,
-                    str(entry.response_headers),
-                    entry.duration_ms,
-                    entry.error_message,
-                    entry.environment_id,
-                    str(entry.variables_used),
-                    project_id,
-                    entry.created_at or datetime.now(timezone.utc).isoformat(),
-                ),
-            )
-        else:
-            await self._db.execute(
-                """INSERT INTO history
-                (id, request_id, request_name, method, url, status, status_code,
-                 response_body, response_headers, duration_ms, error_message,
-                 environment_id, variables_used, created_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-                (
-                    entry.id,
-                    entry.request_id,
-                    entry.request_name,
-                    entry.method,
-                    entry.url,
-                    entry.status.value,
-                    entry.status_code,
-                    entry.response_body,
-                    str(entry.response_headers),
-                    entry.duration_ms,
-                    entry.error_message,
-                    entry.environment_id,
-                    str(entry.variables_used),
-                    entry.created_at or datetime.now(timezone.utc).isoformat(),
-                ),
-            )
+        pid = project_id or DEFAULT_PROJECT_ID
+        await self._db.execute(
+            """INSERT INTO history
+            (id, request_id, request_name, method, url, status, status_code,
+             response_body, response_headers, duration_ms, error_message,
+             environment_id, variables_used, project_id, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (
+                entry.id,
+                entry.request_id,
+                entry.request_name,
+                entry.method,
+                entry.url,
+                entry.status.value,
+                entry.status_code,
+                entry.response_body,
+                str(entry.response_headers),
+                entry.duration_ms,
+                entry.error_message,
+                entry.environment_id,
+                str(entry.variables_used),
+                pid,
+                entry.created_at or datetime.now(timezone.utc).isoformat(),
+            ),
+        )
         await self._db.commit()
 
     async def list_recent(self, limit: int = 50, project_id: str | None = None) -> list[dict]:

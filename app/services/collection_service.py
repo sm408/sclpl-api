@@ -4,6 +4,7 @@ import json
 import uuid
 from datetime import datetime, timezone
 
+from app.core.models.project import DEFAULT_PROJECT_ID
 from app.storage.db import Database
 
 
@@ -14,18 +15,13 @@ class CollectionRepository:
     async def create(self, name: str, description: str = "", project_id: str | None = None) -> dict:
         now = datetime.now(timezone.utc).isoformat()
         cid = str(uuid.uuid4())
-        if project_id:
-            await self._db.execute(
-                "INSERT INTO collections (id, name, description, project_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)",
-                (cid, name, description, project_id, now, now),
-            )
-        else:
-            await self._db.execute(
-                "INSERT INTO collections (id, name, description, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
-                (cid, name, description, now, now),
-            )
+        pid = project_id or DEFAULT_PROJECT_ID
+        await self._db.execute(
+            "INSERT INTO collections (id, name, description, project_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)",
+            (cid, name, description, pid, now, now),
+        )
         await self._db.commit()
-        return {"id": cid, "name": name, "description": description, "created_at": now, "project_id": project_id}
+        return {"id": cid, "name": name, "description": description, "created_at": now, "project_id": pid}
 
     async def list_all(self, project_id: str | None = None) -> list[dict]:
         if project_id:
@@ -55,52 +51,30 @@ class RequestRepository:
     async def create(self, data: dict) -> dict:
         now = datetime.now(timezone.utc).isoformat()
         rid = data.get("id", str(uuid.uuid4()))
-        project_id = data.get("project_id")
-        if project_id:
-            await self._db.execute(
-                """INSERT INTO requests
-                (id, name, method, url, headers, query_params, body, body_type, auth_type, auth_config, collection_id, project_id, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-                (
-                    rid,
-                    data["name"],
-                    data["method"],
-                    data["url"],
-                    json.dumps(data.get("headers", [])),
-                    json.dumps(data.get("query_params", [])),
-                    data.get("body"),
-                    data.get("body_type"),
-                    data.get("auth_type"),
-                    json.dumps(data.get("auth_config", {})),
-                    data.get("collection_id"),
-                    project_id,
-                    now,
-                    now,
-                ),
-            )
-        else:
-            await self._db.execute(
-                """INSERT INTO requests
-                (id, name, method, url, headers, query_params, body, body_type, auth_type, auth_config, collection_id, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-                (
-                    rid,
-                    data["name"],
-                    data["method"],
-                    data["url"],
-                    json.dumps(data.get("headers", [])),
-                    json.dumps(data.get("query_params", [])),
-                    data.get("body"),
-                    data.get("body_type"),
-                    data.get("auth_type"),
-                    json.dumps(data.get("auth_config", {})),
-                    data.get("collection_id"),
-                    now,
-                    now,
-                ),
-            )
+        project_id = data.get("project_id") or DEFAULT_PROJECT_ID
+        await self._db.execute(
+            """INSERT INTO requests
+            (id, name, method, url, headers, query_params, body, body_type, auth_type, auth_config, collection_id, project_id, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (
+                rid,
+                data["name"],
+                data["method"],
+                data["url"],
+                json.dumps(data.get("headers", [])),
+                json.dumps(data.get("query_params", [])),
+                data.get("body"),
+                data.get("body_type"),
+                data.get("auth_type"),
+                json.dumps(data.get("auth_config", {})),
+                data.get("collection_id"),
+                project_id,
+                now,
+                now,
+            ),
+        )
         await self._db.commit()
-        return {**data, "id": rid, "created_at": now}
+        return {**data, "id": rid, "created_at": now, "project_id": project_id}
 
     async def list_all(self, collection_id: str | None = None, project_id: str | None = None) -> list[dict]:
         if collection_id:
