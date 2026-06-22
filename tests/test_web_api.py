@@ -1,18 +1,29 @@
 """Tests for the FastAPI web API foundation.
 
 Covers: lifecycle, health, projects CRUD, camelCase aliases, error
-protocol, validation, host/origin rejection, SPA fallback, shutdown.
+protocol, validation, host/origin rejection, shutdown, correlation IDs.
 """
 
 from __future__ import annotations
+
+import json
+from pathlib import Path
 
 import pytest
 from httpx import ASGITransport, AsyncClient
 
 from app.core.models.project import DEFAULT_PROJECT_ID
-from app.web.server import create_app  # noqa: I001
+from app.web.server import CORRELATION_ID_HEADER, create_app  # noqa: I001
 
 # ── Fixtures ────────────────────────────────────────────────────────────
+
+_SNAPSHOT_PATH = Path(__file__).resolve().parent.parent / "openapi_snapshot.json"
+
+
+@pytest.fixture
+def snapshot_path() -> Path:
+    """Return the path to the committed OpenAPI snapshot file."""
+    return _SNAPSHOT_PATH
 
 
 @pytest.fixture
@@ -195,11 +206,27 @@ async def test_create_project_empty_name_fails(client):
 
 @pytest.mark.asyncio
 async def test_create_project_missing_name_fails(client):
+    """Missing required field must return the standard error envelope."""
     resp = await client.post(
         "/api/v1/projects",
         json={"description": "no name"},
     )
     assert resp.status_code == 422
+    body = resp.json()
+    # Verify the full {error: {code, message, fieldErrors, correlationId}} envelope
+    assert "error" in body
+    err = body["error"]
+    assert err["code"] == "VALIDATION_ERROR"
+    assert isinstance(err["message"], str) and len(err["message"]) > 0
+    assert isinstance(err["fieldErrors"], list)
+    assert len(err["fieldErrors"]) > 0
+    # At least one field error should reference "name"
+    field_names = [fe["field"] for fe in err["fieldErrors"]]
+    assert any("name" in fn for fn in field_names), (
+        f"Expected a 'name' field error, got: {err['fieldErrors']}"
+    )
+    assert "correlationId" in err
+    assert isinstance(err["correlationId"], str) and len(err["correlationId"]) > 0
 
 
 # ── Projects — get ─────────────────────────────────────────────────────
@@ -342,11 +369,11 @@ async def test_validation_error_has_field_errors(client):
     assert isinstance(err["fieldErrors"], list)
 
 
-# ── SPA fallback exclusions ────────────────────────────────────────────
+# ── API routes return JSON, not caught by any fallback ─────────────────
 
 
 @pytest.mark.asyncio
-async def test_api_routes_not_caught_by_spa_fallback(client):
+async def test_api_routes_return_json(client):
     """API routes should return proper JSON, not HTML."""
     resp = await client.get("/api/v1/projects")
     assert resp.status_code == 200
@@ -354,17 +381,62 @@ async def test_api_routes_not_caught_by_spa_fallback(client):
 
 
 @pytest.mark.asyncio
-async def test_health_not_caught_by_spa_fallback(client):
+async def test_health_returns_json(client):
     resp = await client.get("/health")
     assert resp.status_code == 200
     assert resp.headers["content-type"].startswith("application/json")
 
 
 @pytest.mark.asyncio
-async def test_unknown_route_returns_404(client):
-    """Unknown routes should get a 404 JSON error, not HTML."""
+async def test_unknown_api_route_returns_404(client):
+    """Unknown API routes should get a 404 JSON error."""
     resp = await client.get("/api/v1/nonexistent")
     assert resp.status_code == 404
+
+
+# ── Correlation ID ─────────────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_correlation_id_generated_when_not_provided(client):
+    """Every response should include an X-Correlation-ID header."""
+    resp = await client.get("/health")
+    assert CORRELATION_ID_HEADER in resp.headers
+    cid = resp.headers[CORRELATION_ID_HEADER]
+    assert len(cid) == 12  # uuid4 hex truncated to 12 chars
+
+
+@pytest.mark.asyncio
+async def test_correlation_id_echoed_from_request(client):
+    """When the client sends X-Correlation-ID, it should be echoed back."""
+    resp = await client.get(
+        "/health",
+        headers={CORRELATION_ID_HEADER: "my-test-cid-1"},
+    )
+    assert resp.headers[CORRELATION_ID_HEADER] == "my-test-cid-1"
+
+
+@pytest.mark.asyncio
+async def test_correlation_id_in_error_response(client):
+    """Error responses should carry the same correlation ID as the request."""
+    resp = await client.get(
+        "/api/v1/projects/nonexistent",
+        headers={CORRELATION_ID_HEADER: "err-cid-test"},
+    )
+    body = resp.json()
+    assert body["error"]["correlationId"] == "err-cid-test"
+
+
+@pytest.mark.asyncio
+async def test_correlation_id_in_validation_error(client):
+    """Validation errors should use the request's correlation ID."""
+    resp = await client.post(
+        "/api/v1/projects",
+        json={"description": "no name"},
+        headers={CORRELATION_ID_HEADER: "val-cid-test"},
+    )
+    body = resp.json()
+    assert body["error"]["correlationId"] == "val-cid-test"
 
 
 # ── OpenAPI ─────────────────────────────────────────────────────────────
@@ -385,6 +457,31 @@ async def test_openapi_version_matches(client):
     resp = await client.get("/openapi.json")
     spec = resp.json()
     assert spec["info"]["version"] == "0.1.0"
+
+
+@pytest.mark.asyncio
+async def test_openapi_snapshot_matches(client, snapshot_path):
+    """The OpenAPI spec must match the committed snapshot.
+
+    If this test fails, run ``python scripts/generate_openapi_snapshot.py``
+    and commit the updated snapshot.
+    """
+    resp = await client.get("/openapi.json")
+    actual = resp.json()
+    actual_str = json.dumps(actual, indent=2, sort_keys=True)
+
+    if not snapshot_path.exists():
+        pytest.fail(
+            f"OpenAPI snapshot not found at {snapshot_path}. "
+            "Run: python scripts/generate_openapi_snapshot.py"
+        )
+
+    expected_str = snapshot_path.read_text(encoding="utf-8").rstrip("\n")
+    assert actual_str == expected_str, (
+        "OpenAPI spec has drifted from the snapshot. "
+        "If the change is intentional, run: "
+        "python scripts/generate_openapi_snapshot.py"
+    )
 
 
 # ── Shutdown ────────────────────────────────────────────────────────────

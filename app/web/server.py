@@ -8,6 +8,7 @@ validation, and the API router tree.
 from __future__ import annotations
 
 import logging
+import uuid
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -26,6 +27,30 @@ from app.web.deps import ServiceContainer
 from app.web.errors import register_error_handlers
 
 logger = logging.getLogger(__name__)
+
+# ── Correlation ID ──────────────────────────────────────────────────────
+
+CORRELATION_ID_HEADER = "X-Correlation-ID"
+
+
+class CorrelationIdMiddleware(BaseHTTPMiddleware):
+    """Generate or accept a correlation ID for every request.
+
+    If the incoming request carries an ``X-Correlation-ID`` header its
+    value is reused; otherwise a new 12-char hex ID is generated.
+    The ID is stored on ``request.state.correlation_id`` and echoed
+    back in the response header.
+    """
+
+    async def dispatch(
+        self, request: Request, call_next: RequestResponseEndpoint
+    ) -> Response:
+        cid = request.headers.get(CORRELATION_ID_HEADER) or uuid.uuid4().hex[:12]
+        request.state.correlation_id = cid
+        response = await call_next(request)
+        response.headers[CORRELATION_ID_HEADER] = cid
+        return response
+
 
 # ── Security headers ────────────────────────────────────────────────────
 
@@ -78,6 +103,7 @@ class HostValidationMiddleware(BaseHTTPMiddleware):
         # Strip port for comparison
         hostname = host.split(":")[0] if host else ""
         if hostname and hostname not in {"127.0.0.1", "localhost"}:
+            cid = getattr(request.state, "correlation_id", "")
             return JSONResponse(
                 status_code=400,
                 content={
@@ -85,7 +111,7 @@ class HostValidationMiddleware(BaseHTTPMiddleware):
                         "code": "BAD_REQUEST",
                         "message": "Invalid Host header.",
                         "fieldErrors": [],
-                        "correlationId": "",
+                        "correlationId": cid,
                     }
                 },
             )
@@ -103,6 +129,7 @@ class LoopbackOnlyMiddleware(BaseHTTPMiddleware):
         if request.url.path in self._PROTECTED:
             client = request.client
             if client and client.host not in {"127.0.0.1", "::1", "localhost"}:
+                cid = getattr(request.state, "correlation_id", "")
                 return JSONResponse(
                     status_code=403,
                     content={
@@ -113,7 +140,7 @@ class LoopbackOnlyMiddleware(BaseHTTPMiddleware):
                                 "accessible from localhost."
                             ),
                             "fieldErrors": [],
-                            "correlationId": "",
+                            "correlationId": cid,
                         }
                     },
                 )
@@ -192,6 +219,7 @@ def create_app(
     app.add_middleware(SecurityHeadersMiddleware)
     app.add_middleware(LoopbackOnlyMiddleware)
     app.add_middleware(HostValidationMiddleware)
+    app.add_middleware(CorrelationIdMiddleware)
 
     # Error handlers
     register_error_handlers(app)
@@ -199,8 +227,5 @@ def create_app(
     # Routers
     app.include_router(health_router)
     app.include_router(projects_router)
-
-    # SPA fallback — serve index.html for non-API, non-asset routes
-    # This is registered last so API routes take precedence.
 
     return app

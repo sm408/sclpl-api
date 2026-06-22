@@ -31,7 +31,3 @@ async def _get_db(request: Request) -> AsyncGenerator[Database, None]:
 
 async def _get_project_repo(request: Request) -> ProjectRepository:
     return request.app.state.services.projects
-
-
-async def get_services(request: Request) -> ServiceContainer:
-    return request.app.state.services

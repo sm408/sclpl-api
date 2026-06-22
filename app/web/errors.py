@@ -11,9 +11,22 @@ import uuid
 from typing import Any
 
 from fastapi import FastAPI, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
 logger = logging.getLogger(__name__)
+
+
+# ── Helpers ─────────────────────────────────────────────────────────────
+
+
+def _get_correlation_id(request: Request) -> str:
+    """Extract the correlation ID set by CorrelationIdMiddleware.
+
+    Falls back to generating a new one if the middleware has not run
+    (e.g. during unit tests that bypass middleware).
+    """
+    return getattr(request.state, "correlation_id", uuid.uuid4().hex[:12])
 
 
 # ── Domain exceptions ───────────────────────────────────────────────────
@@ -38,7 +51,7 @@ class ApiError(Exception):
         if code is not None:
             self.code = code
         self.field_errors = field_errors or []
-        self.correlation_id = correlation_id or uuid.uuid4().hex[:12]
+        self.correlation_id = correlation_id
 
 
 class NotFoundError(ApiError):
@@ -65,18 +78,6 @@ class BadRequestError(ApiError):
     message = "The request was malformed or invalid."
 
 
-class RateLimitError(ApiError):
-    status_code = 429
-    code = "RATE_LIMITED"
-    message = "Too many requests. Please try again later."
-
-
-class ServiceUnavailableError(ApiError):
-    status_code = 503
-    code = "SERVICE_UNAVAILABLE"
-    message = "The service is temporarily unavailable."
-
-
 # ── Exception handlers ──────────────────────────────────────────────────
 
 
@@ -99,52 +100,42 @@ def _build_error_response(
     return JSONResponse(status_code=status, content=body)
 
 
-async def _api_error_handler(_request: Request, exc: ApiError) -> JSONResponse:
+async def _api_error_handler(request: Request, exc: ApiError) -> JSONResponse:
+    cid = exc.correlation_id or _get_correlation_id(request)
     return _build_error_response(
         status=exc.status_code,
         code=exc.code,
         message=str(exc),
         field_errors=exc.field_errors,
-        correlation_id=exc.correlation_id,
+        correlation_id=cid,
     )
 
 
 async def _validation_error_handler(
-    _request: Request, exc: Exception
+    request: Request, exc: RequestValidationError
 ) -> JSONResponse:
-    """Handle Pydantic validation errors raised by FastAPI."""
-    from pydantic import ValidationError as PydanticValidationError
+    """Handle FastAPI request validation errors (wraps Pydantic errors).
 
-    if isinstance(exc, PydanticValidationError):
-        field_errors = []
-        for err in exc.errors():
-            loc = ".".join(str(part) for part in err.get("loc", []))
-            field_errors.append(
-                {"field": loc, "message": err.get("msg", "")}
-            )
-        cid = uuid.uuid4().hex[:12]
-        return _build_error_response(
-            status=422,
-            code="VALIDATION_ERROR",
-            message="The request body failed validation.",
-            field_errors=field_errors,
-            correlation_id=cid,
-        )
-    # Fallback for other validation-like errors
-    cid = uuid.uuid4().hex[:12]
-    logger.exception("Unhandled validation error")
+    Returns the spec's {error: {code, message, fieldErrors, correlationId}} envelope.
+    """
+    field_errors: list[dict[str, str]] = []
+    for err in exc.errors():
+        loc = ".".join(str(part) for part in err.get("loc", []))
+        field_errors.append({"field": loc, "message": err.get("msg", "")})
+    cid = _get_correlation_id(request)
     return _build_error_response(
         status=422,
         code="VALIDATION_ERROR",
-        message=str(exc),
+        message="The request body failed validation.",
+        field_errors=field_errors,
         correlation_id=cid,
     )
 
 
 async def _generic_error_handler(
-    _request: Request, exc: Exception
+    request: Request, exc: Exception
 ) -> JSONResponse:
-    cid = uuid.uuid4().hex[:12]
+    cid = _get_correlation_id(request)
     logger.exception("Unhandled error [%s]", cid)
     return _build_error_response(
         status=500,
@@ -157,4 +148,5 @@ async def _generic_error_handler(
 def register_error_handlers(app: FastAPI) -> None:
     """Attach all error handlers to the FastAPI app."""
     app.add_exception_handler(ApiError, _api_error_handler)  # type: ignore[arg-type]
+    app.add_exception_handler(RequestValidationError, _validation_error_handler)  # type: ignore[arg-type]
     app.add_exception_handler(Exception, _generic_error_handler)
