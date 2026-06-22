@@ -18,6 +18,7 @@ async def test_initialize_creates_tables(db):
         "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name"
     )
     table_names = [t["name"] for t in tables]
+    assert "projects" in table_names
     assert "collections" in table_names
     assert "requests" in table_names
     assert "environments" in table_names
@@ -34,7 +35,69 @@ async def test_initialize_creates_tables(db):
 @pytest.mark.asyncio
 async def test_schema_version(db):
     row = await db.fetch_one("SELECT MAX(version) as version FROM schema_version")
-    assert row["version"] == 4
+    assert row["version"] == 5
+
+
+@pytest.mark.asyncio
+async def test_default_project_exists(db):
+    row = await db.fetch_one("SELECT * FROM projects WHERE is_default = 1")
+    assert row is not None
+    assert row["id"] == "00000000-0000-0000-0000-000000000001"
+    assert row["name"] == "Default"
+
+
+@pytest.mark.asyncio
+async def test_collections_have_project_id_column(db):
+    cols = await db.fetch_all("PRAGMA table_info(collections)")
+    col_names = [c["name"] for c in cols]
+    assert "project_id" in col_names
+    assert "revision" in col_names
+
+
+@pytest.mark.asyncio
+async def test_requests_have_project_id_column(db):
+    cols = await db.fetch_all("PRAGMA table_info(requests)")
+    col_names = [c["name"] for c in cols]
+    assert "project_id" in col_names
+    assert "revision" in col_names
+
+
+@pytest.mark.asyncio
+async def test_environments_have_project_id_column(db):
+    cols = await db.fetch_all("PRAGMA table_info(environments)")
+    col_names = [c["name"] for c in cols]
+    assert "project_id" in col_names
+    assert "revision" in col_names
+
+
+@pytest.mark.asyncio
+async def test_history_has_project_id_column(db):
+    cols = await db.fetch_all("PRAGMA table_info(history)")
+    col_names = [c["name"] for c in cols]
+    assert "project_id" in col_names
+    assert "revision" in col_names
+
+
+@pytest.mark.asyncio
+async def test_workflows_have_project_id_column(db):
+    cols = await db.fetch_all("PRAGMA table_info(workflows)")
+    col_names = [c["name"] for c in cols]
+    assert "project_id" in col_names
+    assert "revision" in col_names
+
+
+@pytest.mark.asyncio
+async def test_project_id_indexes_exist(db):
+    indexes = await db.fetch_all(
+        "SELECT name FROM sqlite_master WHERE type='index' AND name LIKE 'idx_%_project_id'"
+    )
+    idx_names = {i["name"] for i in indexes}
+    assert "idx_collections_project_id" in idx_names
+    assert "idx_requests_project_id" in idx_names
+    assert "idx_environments_project_id" in idx_names
+    assert "idx_history_project_id" in idx_names
+    assert "idx_workflows_project_id" in idx_names
+    assert "idx_export_presets_project_id" in idx_names
 
 
 @pytest.mark.asyncio

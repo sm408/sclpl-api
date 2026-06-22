@@ -27,24 +27,40 @@ class MonitorService:
         interval_seconds: int = 60,
         condition: str = "",
         notification_on: str = "change",
+        project_id: str | None = None,
     ) -> Monitor:
         """Create a new monitor."""
         now = datetime.now(timezone.utc).isoformat()
         monitor_id = str(uuid.uuid4())
 
-        await self._db.execute(
-            """INSERT INTO monitors
-            (id, name, url, method, headers, body, interval_seconds, condition,
-             notification_on, enabled, status, run_count, trigger_count, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-            (
-                monitor_id, name, url, method,
-                json.dumps(headers or {}),
-                body, interval_seconds, condition,
-                notification_on, True, MonitorStatus.STOPPED.value,
-                0, 0, now, now,
-            ),
-        )
+        if project_id:
+            await self._db.execute(
+                """INSERT INTO monitors
+                (id, name, url, method, headers, body, interval_seconds, condition,
+                 notification_on, enabled, status, run_count, trigger_count, project_id, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (
+                    monitor_id, name, url, method,
+                    json.dumps(headers or {}),
+                    body, interval_seconds, condition,
+                    notification_on, True, MonitorStatus.STOPPED.value,
+                    0, 0, project_id, now, now,
+                ),
+            )
+        else:
+            await self._db.execute(
+                """INSERT INTO monitors
+                (id, name, url, method, headers, body, interval_seconds, condition,
+                 notification_on, enabled, status, run_count, trigger_count, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (
+                    monitor_id, name, url, method,
+                    json.dumps(headers or {}),
+                    body, interval_seconds, condition,
+                    notification_on, True, MonitorStatus.STOPPED.value,
+                    0, 0, now, now,
+                ),
+            )
         await self._db.commit()
 
         return Monitor(
@@ -63,9 +79,15 @@ class MonitorService:
             updated_at=now,
         )
 
-    async def list_all(self) -> list[Monitor]:
+    async def list_all(self, project_id: str | None = None) -> list[Monitor]:
         """List all monitors."""
-        rows = await self._db.fetch_all("SELECT * FROM monitors ORDER BY name")
+        if project_id:
+            rows = await self._db.fetch_all(
+                "SELECT * FROM monitors WHERE project_id = ? ORDER BY name",
+                (project_id,),
+            )
+        else:
+            rows = await self._db.fetch_all("SELECT * FROM monitors ORDER BY name")
         return [self._row_to_monitor(row) for row in rows]
 
     async def get(self, monitor_id: str) -> Monitor | None:

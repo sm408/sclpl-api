@@ -17,6 +17,7 @@ class FullExportService:
         base = Path(output_dir)
         base.mkdir(parents=True, exist_ok=True)
 
+        await self.export_projects(base / "projects")
         await self.export_workflows(base / "workflows")
         await self.export_functions(base / "functions")
         await self.export_plugins(base / "plugins")
@@ -28,6 +29,16 @@ class FullExportService:
         self._write_import_script(base)
 
         return base
+
+    async def export_projects(self, output_dir: str | Path) -> int:
+        out = Path(output_dir)
+        out.mkdir(parents=True, exist_ok=True)
+
+        rows = await self._db.fetch_all("SELECT * FROM projects")
+        (out / "projects.json").write_text(
+            json.dumps(rows, indent=2, default=str), encoding="utf-8"
+        )
+        return len(rows)
 
     async def export_workflows(self, output_dir: str | Path) -> int:
         out = Path(output_dir)
@@ -172,6 +183,7 @@ class FullExportService:
             "created_at": datetime.now(timezone.utc).isoformat(),
             "export_id": str(uuid.uuid4()),
             "sections": [
+                "projects",
                 "workflows",
                 "functions",
                 "plugins",

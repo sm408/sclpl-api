@@ -10,18 +10,30 @@ class EnvironmentRepository:
     def __init__(self, db: Database) -> None:
         self._db = db
 
-    async def create(self, name: str) -> dict:
+    async def create(self, name: str, project_id: str | None = None) -> dict:
         now = datetime.now(timezone.utc).isoformat()
         eid = str(uuid.uuid4())
-        await self._db.execute(
-            "INSERT INTO environments (id, name, is_active, created_at, updated_at) VALUES (?, ?, 0, ?, ?)",
-            (eid, name, now, now),
-        )
+        if project_id:
+            await self._db.execute(
+                "INSERT INTO environments (id, name, is_active, project_id, created_at, updated_at) VALUES (?, ?, 0, ?, ?, ?)",
+                (eid, name, project_id, now, now),
+            )
+        else:
+            await self._db.execute(
+                "INSERT INTO environments (id, name, is_active, created_at, updated_at) VALUES (?, ?, 0, ?, ?)",
+                (eid, name, now, now),
+            )
         await self._db.commit()
-        return {"id": eid, "name": name, "is_active": False, "created_at": now}
+        return {"id": eid, "name": name, "is_active": False, "created_at": now, "project_id": project_id}
 
-    async def list_all(self) -> list[dict]:
-        envs = await self._db.fetch_all("SELECT * FROM environments ORDER BY name")
+    async def list_all(self, project_id: str | None = None) -> list[dict]:
+        if project_id:
+            envs = await self._db.fetch_all(
+                "SELECT * FROM environments WHERE project_id = ? ORDER BY name",
+                (project_id,),
+            )
+        else:
+            envs = await self._db.fetch_all("SELECT * FROM environments ORDER BY name")
         for env in envs:
             env["variables"] = await self._db.fetch_all(
                 "SELECT * FROM variables WHERE environment_id = ?", (env["id"],)
@@ -38,18 +50,29 @@ class EnvironmentRepository:
             )
         return env
 
-    async def get_active(self) -> dict | None:
-        env = await self._db.fetch_one(
-            "SELECT * FROM environments WHERE is_active = 1"
-        )
+    async def get_active(self, project_id: str | None = None) -> dict | None:
+        if project_id:
+            env = await self._db.fetch_one(
+                "SELECT * FROM environments WHERE is_active = 1 AND project_id = ?",
+                (project_id,),
+            )
+        else:
+            env = await self._db.fetch_one(
+                "SELECT * FROM environments WHERE is_active = 1"
+            )
         if env:
             env["variables"] = await self._db.fetch_all(
                 "SELECT * FROM variables WHERE environment_id = ?", (env["id"],)
             )
         return env
 
-    async def set_active(self, env_id: str) -> None:
-        await self._db.execute("UPDATE environments SET is_active = 0")
+    async def set_active(self, env_id: str, project_id: str | None = None) -> None:
+        if project_id:
+            await self._db.execute(
+                "UPDATE environments SET is_active = 0 WHERE project_id = ?", (project_id,)
+            )
+        else:
+            await self._db.execute("UPDATE environments SET is_active = 0")
         await self._db.execute(
             "UPDATE environments SET is_active = 1 WHERE id = ?", (env_id,)
         )

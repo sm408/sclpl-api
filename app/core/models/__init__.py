@@ -6,6 +6,7 @@ from app.core.models.workflow import WorkflowDef, WorkflowStep, StepType
 from app.core.models.export import ExportFormat, ExportJob, ExportPreset
 from app.core.models.context import ExecutionContext
 from app.core.models.plugin import PluginInfo, PluginManifest, PluginStatus
+from app.core.models.project import Project
 
 __all__ = [
     "HttpMethod",
@@ -27,4 +28,5 @@ __all__ = [
     "PluginInfo",
     "PluginManifest",
     "PluginStatus",
+    "Project",
 ]

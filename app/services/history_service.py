@@ -10,33 +10,64 @@ class HistoryRepository:
     def __init__(self, db: Database) -> None:
         self._db = db
 
-    async def save(self, entry: HistoryEntry) -> None:
-        await self._db.execute(
-            """INSERT INTO history
-            (id, request_id, request_name, method, url, status, status_code,
-             response_body, response_headers, duration_ms, error_message,
-             environment_id, variables_used, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-            (
-                entry.id,
-                entry.request_id,
-                entry.request_name,
-                entry.method,
-                entry.url,
-                entry.status.value,
-                entry.status_code,
-                entry.response_body,
-                str(entry.response_headers),
-                entry.duration_ms,
-                entry.error_message,
-                entry.environment_id,
-                str(entry.variables_used),
-                entry.created_at or datetime.now(timezone.utc).isoformat(),
-            ),
-        )
+    async def save(self, entry: HistoryEntry, project_id: str | None = None) -> None:
+        if project_id:
+            await self._db.execute(
+                """INSERT INTO history
+                (id, request_id, request_name, method, url, status, status_code,
+                 response_body, response_headers, duration_ms, error_message,
+                 environment_id, variables_used, project_id, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (
+                    entry.id,
+                    entry.request_id,
+                    entry.request_name,
+                    entry.method,
+                    entry.url,
+                    entry.status.value,
+                    entry.status_code,
+                    entry.response_body,
+                    str(entry.response_headers),
+                    entry.duration_ms,
+                    entry.error_message,
+                    entry.environment_id,
+                    str(entry.variables_used),
+                    project_id,
+                    entry.created_at or datetime.now(timezone.utc).isoformat(),
+                ),
+            )
+        else:
+            await self._db.execute(
+                """INSERT INTO history
+                (id, request_id, request_name, method, url, status, status_code,
+                 response_body, response_headers, duration_ms, error_message,
+                 environment_id, variables_used, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (
+                    entry.id,
+                    entry.request_id,
+                    entry.request_name,
+                    entry.method,
+                    entry.url,
+                    entry.status.value,
+                    entry.status_code,
+                    entry.response_body,
+                    str(entry.response_headers),
+                    entry.duration_ms,
+                    entry.error_message,
+                    entry.environment_id,
+                    str(entry.variables_used),
+                    entry.created_at or datetime.now(timezone.utc).isoformat(),
+                ),
+            )
         await self._db.commit()
 
-    async def list_recent(self, limit: int = 50) -> list[dict]:
+    async def list_recent(self, limit: int = 50, project_id: str | None = None) -> list[dict]:
+        if project_id:
+            return await self._db.fetch_all(
+                "SELECT * FROM history WHERE project_id = ? ORDER BY created_at DESC LIMIT ?",
+                (project_id, limit),
+            )
         return await self._db.fetch_all(
             "SELECT * FROM history ORDER BY created_at DESC LIMIT ?",
             (limit,),
@@ -53,7 +84,12 @@ class HistoryRepository:
             (request_id, limit),
         )
 
-    async def clear(self) -> int:
-        cursor = await self._db.execute("DELETE FROM history")
+    async def clear(self, project_id: str | None = None) -> int:
+        if project_id:
+            cursor = await self._db.execute(
+                "DELETE FROM history WHERE project_id = ?", (project_id,)
+            )
+        else:
+            cursor = await self._db.execute("DELETE FROM history")
         await self._db.commit()
         return cursor.rowcount

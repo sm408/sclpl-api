@@ -12,6 +12,7 @@ from app.services.export_service import DefaultExportPipeline
 from app.services.history_service import HistoryRepository
 from app.services.monitor_service import MonitorService
 from app.services.monitor_runner import MonitorRunner
+from app.services.project_service import ProjectRepository
 from app.services.request_executor import HttpRequestExecutor
 from app.storage.db import Database
 
@@ -26,6 +27,7 @@ class App:
         self.request_executor = HttpRequestExecutor(self.variable_resolver)
         self.export_pipeline = DefaultExportPipeline()
 
+        self.projects = ProjectRepository(self.db)
         self.collections = CollectionRepository(self.db)
         self.requests = RequestRepository(self.db)
         self.environments = EnvironmentRepository(self.db)

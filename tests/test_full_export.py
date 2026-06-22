@@ -60,6 +60,7 @@ async def test_export_all_creates_structure(populated_db, tmp_path):
 
     assert (base / "manifest.json").exists()
     assert (base / "import.py").exists()
+    assert (base / "projects").is_dir()
     assert (base / "workflows").is_dir()
     assert (base / "functions").is_dir()
     assert (base / "plugins").is_dir()
@@ -188,6 +189,7 @@ async def test_roundtrip(populated_db, tmp_path):
     importer = FullImportService(fresh_db)
     result = await importer.import_all(export_dir)
 
+    assert result["projects"] >= 1  # Default project at minimum
     assert result["workflows"] == 1
     assert result["history"] == 1
     assert result["environments"] == 1

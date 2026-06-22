@@ -9,17 +9,29 @@ logger = logging.getLogger(__name__)
 
 DEFAULT_DB_PATH = Path("data") / "sclplapi.db"
 
-SCHEMA_VERSION = 4
+SCHEMA_VERSION = 5
 
 SCHEMA_SQL = """
 CREATE TABLE IF NOT EXISTS schema_version (
     version INTEGER PRIMARY KEY
 );
 
+CREATE TABLE IF NOT EXISTS projects (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    description TEXT DEFAULT '',
+    root_path TEXT DEFAULT '',
+    is_default INTEGER DEFAULT 0,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS collections (
     id TEXT PRIMARY KEY,
     name TEXT NOT NULL,
     description TEXT DEFAULT '',
+    project_id TEXT DEFAULT '00000000-0000-0000-0000-000000000001',
+    revision INTEGER DEFAULT 1,
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL
 );
@@ -36,6 +48,8 @@ CREATE TABLE IF NOT EXISTS requests (
     auth_type TEXT,
     auth_config TEXT DEFAULT '{}',
     collection_id TEXT,
+    project_id TEXT DEFAULT '00000000-0000-0000-0000-000000000001',
+    revision INTEGER DEFAULT 1,
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL,
     FOREIGN KEY (collection_id) REFERENCES collections(id) ON DELETE SET NULL
@@ -45,6 +59,8 @@ CREATE TABLE IF NOT EXISTS environments (
     id TEXT PRIMARY KEY,
     name TEXT NOT NULL,
     is_active INTEGER DEFAULT 0,
+    project_id TEXT DEFAULT '00000000-0000-0000-0000-000000000001',
+    revision INTEGER DEFAULT 1,
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL
 );
@@ -74,6 +90,8 @@ CREATE TABLE IF NOT EXISTS history (
     error_message TEXT,
     environment_id TEXT,
     variables_used TEXT DEFAULT '{}',
+    project_id TEXT DEFAULT '00000000-0000-0000-0000-000000000001',
+    revision INTEGER DEFAULT 1,
     created_at TEXT NOT NULL
 );
 
@@ -83,6 +101,8 @@ CREATE TABLE IF NOT EXISTS workflows (
     description TEXT DEFAULT '',
     steps TEXT DEFAULT '[]',
     variables TEXT DEFAULT '{}',
+    project_id TEXT DEFAULT '00000000-0000-0000-0000-000000000001',
+    revision INTEGER DEFAULT 1,
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL
 );
@@ -93,8 +113,17 @@ CREATE TABLE IF NOT EXISTS export_presets (
     format TEXT NOT NULL,
     field_mappings TEXT DEFAULT '[]',
     filters TEXT DEFAULT '{}',
+    project_id TEXT DEFAULT '00000000-0000-0000-0000-000000000001',
+    revision INTEGER DEFAULT 1,
     created_at TEXT NOT NULL
 );
+
+CREATE INDEX IF NOT EXISTS idx_collections_project_id ON collections(project_id);
+CREATE INDEX IF NOT EXISTS idx_requests_project_id ON requests(project_id);
+CREATE INDEX IF NOT EXISTS idx_environments_project_id ON environments(project_id);
+CREATE INDEX IF NOT EXISTS idx_history_project_id ON history(project_id);
+CREATE INDEX IF NOT EXISTS idx_workflows_project_id ON workflows(project_id);
+CREATE INDEX IF NOT EXISTS idx_export_presets_project_id ON export_presets(project_id);
 """
 
 
@@ -103,7 +132,8 @@ def get_all_migrations():
     from app.storage.migrations.m002_add_workflow_versioning import AddWorkflowVersioning
     from app.storage.migrations.m003_add_export_presets import AddExportPresets
     from app.storage.migrations.m004_add_monitors import AddMonitors
-    return [AddPluginTables(), AddWorkflowVersioning(), AddExportPresets(), AddMonitors()]
+    from app.storage.migrations.m005_add_projects import AddProjects
+    return [AddPluginTables(), AddWorkflowVersioning(), AddExportPresets(), AddMonitors(), AddProjects()]
 
 
 class Database:

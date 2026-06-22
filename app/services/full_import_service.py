@@ -20,12 +20,56 @@ class FullImportService:
             raise FileNotFoundError(f"No manifest.json in {base}")
 
         results = {}
+        results["projects"] = await self.import_projects(base)
         results["workflows"] = await self.import_workflows(base)
         results["functions"] = await self.import_functions(base)
         results["history"] = await self.import_history(base)
         results["environments"] = await self.import_environments(base)
         results["collections"] = await self.import_collections(base)
         return results
+
+    async def import_projects(self, export_dir: str | Path) -> int:
+        proj_path = Path(export_dir) / "projects" / "projects.json"
+        if not proj_path.exists():
+            return 0
+
+        projects = json.loads(proj_path.read_text(encoding="utf-8"))
+        count = 0
+        now = datetime.now(timezone.utc).isoformat()
+
+        for proj in projects:
+            existing = await self._db.fetch_one(
+                "SELECT id FROM projects WHERE id = ?", (proj["id"],)
+            )
+            if existing:
+                await self._db.execute(
+                    "UPDATE projects SET name=?, description=?, root_path=?, is_default=?, updated_at=? WHERE id=?",
+                    (
+                        proj["name"],
+                        proj.get("description", ""),
+                        proj.get("root_path", ""),
+                        int(proj.get("is_default", 0)),
+                        now,
+                        proj["id"],
+                    ),
+                )
+            else:
+                await self._db.execute(
+                    "INSERT INTO projects (id, name, description, root_path, is_default, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                    (
+                        proj["id"],
+                        proj["name"],
+                        proj.get("description", ""),
+                        proj.get("root_path", ""),
+                        int(proj.get("is_default", 0)),
+                        proj.get("created_at", now),
+                        now,
+                    ),
+                )
+            count += 1
+
+        await self._db.commit()
+        return count
 
     async def import_workflows(self, export_dir: str | Path) -> int:
         wf_dir = Path(export_dir) / "workflows"
