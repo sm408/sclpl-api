@@ -102,7 +102,8 @@ def get_all_migrations():
     from app.storage.migrations.m001_add_plugin_tables import AddPluginTables
     from app.storage.migrations.m002_add_workflow_versioning import AddWorkflowVersioning
     from app.storage.migrations.m003_add_export_presets import AddExportPresets
-    return [AddPluginTables(), AddWorkflowVersioning(), AddExportPresets()]
+    from app.storage.migrations.m004_add_monitors import AddMonitors
+    return [AddPluginTables(), AddWorkflowVersioning(), AddExportPresets(), AddMonitors()]
 
 
 class Database:
