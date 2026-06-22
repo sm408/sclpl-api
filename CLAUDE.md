@@ -4,55 +4,76 @@
 
 SCLPLAPI is a programmable, local-first API workflow studio with Python-native extensibility. It provides:
 
-- **API Client** - Send HTTP requests with variable resolution
-- **Workflow Runner** - Chain steps with dependencies and parallelism
-- **Transformation Engine** - Process responses with Python functions
-- **Export Workbench** - Output results to JSON, CSV, or reports
+- **API Client** — Send HTTP requests with variable resolution
+- **Workflow Runner** — Chain steps with dependencies and parallelism
+- **Transformation Engine** — Process responses with Python functions
+- **Live Monitor** — Watch APIs in background, get notified on events
+- **Export Workbench** — Output results to JSON, CSV, or reports
 
 ## Architecture
 
 ```
-TUI (Rich/Prompt Toolkit)  →  Core Engine  →  Storage (SQLite)
-        ↓                        ↓                  ↓
-   CLI Interface           Workflow Engine      Collections
-   Interactive Mode        Function Runner      History
-                           Plugin Registry      Environments
-                           Export Pipeline      Functions
+Textual TUI  →  UI Adapter  →  Service Layer  →  Core Engine  →  Storage (SQLite)
+    ↓              ↓               ↓                ↓                ↓
+  Screens       Abstract        Collections      Workflow         SQLite
+  Widgets       Interface       Environments     SCLPLL           Migrations
+  Commands      (future GUI)    History          Functions
+                                Monitors         Plugins
+                                Export           Event Bus
 ```
 
 ## Technology Stack
 
 | Layer | Technology |
 |-------|-----------|
-| TUI | Python, Rich, Prompt Toolkit |
+| TUI | Python, Textual, Rich |
 | Core | Python, Pydantic, httpx |
-| Storage | SQLite |
+| Storage | SQLite, aiosqlite |
 | Workflows | SCLPLL (custom DSL) |
 | Plugins | Python modules with plugin.json manifests |
+| Monitors | Background polling with condition evaluation |
 
-## Open Source First Philosophy
+## Key Components
 
-Before implementing any major subsystem, determine whether an actively maintained, permissively licensed open-source project already solves 80% of the problem.
+### TUI (`app/ui/`)
+- `textual_app.py` — Main Textual application
+- `adapter.py` — Abstract UIAdapter base class
+- `screens/` — Request, Collections, History, Workflows, Environments, Functions, Plugins, Monitors, Batch, Import/Export, Diff, Logs, Settings
+- `widgets/` — Sidebar, Command Palette, JSON Viewer, Method Badge
+- `commands.py` — Command registry for palette
 
-Do NOT rebuild mature infrastructure from scratch. Instead:
-1. Evaluate existing projects
-2. Prefer adopting or forking proven foundations
-3. Keep local modifications isolated
-4. Preserve upstream compatibility
-5. Document every deviation
-6. Build product-specific functionality on top
+### Services (`app/services/`)
+- `collection_service.py` — Collection and request CRUD
+- `environment_service.py` — Environment management
+- `history_service.py` — Request history
+- `monitor_service.py` — Monitor CRUD
+- `monitor_runner.py` — Background API polling
+- `export_service.py` — JSON/CSV/Excel export
+- `full_export_service.py` — Full workspace backup
+- `full_import_service.py` — Full workspace restore
+- `request_executor.py` — HTTP execution
+- `batch_runner.py` — Batch request execution
+
+### Core (`app/core/`)
+- `engine/` — Workflow, SCLPLL compiler, parallel execution, plugins, event bus
+- `models/` — Request, Workflow, Context, Collection, Environment, History, Monitor, Plugin, Export
+- `contracts/` — Abstract interfaces
+
+### Storage (`app/storage/`)
+- `db.py` — SQLite connection
+- `migrations/` — Schema migrations (4 total)
 
 ## Development Philosophy
 
-- Never build infrastructure that already exists in mature open-source projects
-- Spend engineering effort only on what differentiates this product
-- Every new feature should improve the platform, not just solve today's requirement
-- Think in decades, not sprints
-- Prefer extending existing abstractions over introducing new one-off systems
+- Python owns all execution
+- TUI is the primary interface
+- No web frontend dependencies required
+- Services are UI-agnostic (CLI, TUI, future GUI all use same services)
+- Event-driven architecture for real-time updates
 
 ## Backend Rules
 
-- Python owns all execution
 - SQLite for storage, Pydantic for validation
-- TUI is the primary interface
-- No web frontend dependencies required
+- All async operations through service layer
+- Event bus for cross-component communication
+- Background tasks for monitors and batch execution

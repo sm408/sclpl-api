@@ -1,73 +1,35 @@
-# Docs Index
+# Documentation
 
-This directory contains supporting documentation and ADRs for SCLPLAPI.
+This directory contains documentation for SCLPLAPI.
 
 ## Quick Links
 
-- [SCLPLL Language Reference](SCLPLL_LANGUAGE.md) — scripting language for workflows
-- [User Guide](perspectives/user/README.md) — for end users
-- [Developer Guide](perspectives/developer/README.md) — for contributors
-- [Sales & Marketing](perspectives/sales-marketing/README.md) — value proposition
-- [Enthusiast Showcase](perspectives/enthusiast-showcase/README.md) — advanced patterns
+| Document | Description |
+|----------|-------------|
+| [ARCHITECTURE.md](ARCHITECTURE.md) | Backend architecture and layer design |
+| [SCLPLL_LANGUAGE.md](SCLPLL_LANGUAGE.md) | SCLPLL scripting language reference |
+| [PLUGIN_SYSTEM.md](PLUGIN_SYSTEM.md) | Plugin development guide |
+| [WORKFLOW_ENGINE.md](WORKFLOW_ENGINE.md) | Workflow engine design |
+| [TEST_PLAN.md](TEST_PLAN.md) | TUI test plan |
+| [TEST_RESULTS.md](TEST_RESULTS.md) | Test execution results |
 
-## architecture/
+## Architecture
 
-Architectural concept docs and models:
+- **Core** (`app/core/`) — Engine, models, contracts
+- **Services** (`app/services/`) — Business logic (collections, environments, history, monitors, export)
+- **Storage** (`app/storage/`) — SQLite database with migrations
+- **TUI** (`app/ui/`) — Textual-based terminal interface
 
-- `API_CONTRACTS.md` — typed contracts between layers
-- `RUNTIME_MODEL.md` — execution model overview
-- `SECURITY_MODEL.md` — local-first security boundaries
-- `STORAGE_MODEL.md` — persistence domain design
-- `architecture.md` — subsystem architecture guide
-- `core.md` — core layer guide
-- `storage.md` — storage layer guide
-- `ui.md` — UI layer guide
+## Key Concepts
 
-## subsystems/
+### SCLPLL Language
+Custom scripting language for defining API workflows with parallel execution, dependencies, and Python functions.
 
-Subsystem-specific design docs:
+### Live Monitor
+Background API polling with condition evaluation and notifications. Monitor endpoints while working on other tasks.
 
-- `ANALYTICS_ENGINE.md` — local analytics and reports
-- `EVENT_BUS.md` — lightweight in-process event bus
-- `GRAPH_REPORT.md` — normalized workflow run report
-- `HEADLESS_MODE.md` — non-interactive execution
-- `IMPORT_EXPORT.md` — import/export subsystem
-- `PLUGIN_REGISTRY.md` — plugin discovery and registry
-- `PLUGIN_SPEC.md` — plugin-facing surface spec
-- `VARIABLE_SYSTEM.md` — variable resolution system
-- `VISUAL_WORKFLOW_BUILDER.md` — deferred visual builder
-- `functions.md` — function runtime guide
-- `workflows.md` — workflow engine guide
+### Event Bus
+In-process pub/sub system for real-time updates between components (workflow execution, monitors, UI).
 
-## planning/
-
-Roadmap, strategy, and development guidance:
-
-- `ROADMAP.md` — phased delivery plan
-- `DEVELOPMENT.md` — implementation order
-- `NON_GOALS.md` — explicit non-goals
-- `PERFORMANCE_GUIDE.md` — performance priorities
-- `UI_PHILOSOPHY.md` — UI design principles
-- `WORKFLOWS.md` — workflow progression strategy
-- `future_roadmap.md` — longer-term vision
-- `CHANGELOG.md` — project change log
-- `CONTRIBUTING.md` — contributor guidance
-
-## perspectives/
-
-Documentation from different viewpoints:
-
-- [User Guide](perspectives/user/README.md) — quick start, SCLPLL syntax, patterns, troubleshooting
-- [Developer Guide](perspectives/developer/README.md) — architecture, extending, testing, conventions
-- [Sales & Marketing](perspectives/sales-marketing/README.md) — value prop, differentiators, use cases
-- [Enthusiast Showcase](perspectives/enthusiast-showcase/README.md) — advanced patterns, real-world examples
-
-## decisions/
-
-Architecture decision records index:
-
-- `DECISIONS.md` — ADR index
-
-## adr/
-
-Detailed ADR files.
+### Plugin System
+Filesystem-based plugin discovery with hooks, functions, and workflows.
