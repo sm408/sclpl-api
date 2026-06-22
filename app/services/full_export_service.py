@@ -63,6 +63,7 @@ class FullExportService:
                 "description": wf.get("description", ""),
                 "steps": json.loads(steps) if isinstance(steps, str) else steps,
                 "variables": json.loads(variables) if isinstance(variables, str) else variables,
+                "project_id": wf.get("project_id", ""),
                 "created_at": wf.get("created_at", ""),
                 "updated_at": wf.get("updated_at", ""),
             }

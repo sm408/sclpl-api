@@ -6,6 +6,7 @@ import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 
+from app.core.models.project import DEFAULT_PROJECT_ID
 from app.storage.db import Database
 
 
@@ -99,10 +100,11 @@ class FullImportService:
                     (data["name"], data.get("description", ""), steps, variables, now, wf_id),
                 )
             else:
+                wf_project_id = data.get("project_id", DEFAULT_PROJECT_ID)
                 await self._db.execute(
-                    """INSERT INTO workflows (id, name, description, steps, variables, created_at, updated_at)
-                    VALUES (?, ?, ?, ?, ?, ?, ?)""",
-                    (wf_id, data["name"], data.get("description", ""), steps, variables, now, now),
+                    """INSERT INTO workflows (id, name, description, steps, variables, project_id, created_at, updated_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+                    (wf_id, data["name"], data.get("description", ""), steps, variables, wf_project_id, now, now),
                 )
             count += 1
 
@@ -156,12 +158,13 @@ class FullImportService:
                 "SELECT id FROM history WHERE id = ?", (entry["id"],)
             )
             if not existing:
+                hist_project_id = entry.get("project_id", DEFAULT_PROJECT_ID)
                 await self._db.execute(
                     """INSERT INTO history
                     (id, request_id, request_name, method, url, status, status_code,
                      response_body, response_headers, duration_ms, error_message,
-                     environment_id, variables_used, created_at)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                     environment_id, variables_used, project_id, created_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                     (
                         entry["id"],
                         entry.get("request_id"),
@@ -176,6 +179,7 @@ class FullImportService:
                         entry.get("error_message"),
                         entry.get("environment_id"),
                         entry.get("variables_used", "{}"),
+                        hist_project_id,
                         entry.get("created_at", now),
                     ),
                 )
@@ -203,9 +207,10 @@ class FullImportService:
                     (env["name"], int(env.get("is_active", 0)), now, env["id"]),
                 )
             else:
+                env_project_id = env.get("project_id", DEFAULT_PROJECT_ID)
                 await self._db.execute(
-                    "INSERT INTO environments (id, name, is_active, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
-                    (env["id"], env["name"], int(env.get("is_active", 0)), now, now),
+                    "INSERT INTO environments (id, name, is_active, project_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)",
+                    (env["id"], env["name"], int(env.get("is_active", 0)), env_project_id, now, now),
                 )
 
             await self._db.execute(
@@ -247,9 +252,10 @@ class FullImportService:
                     (col["name"], col.get("description", ""), now, col["id"]),
                 )
             else:
+                col_project_id = col.get("project_id", DEFAULT_PROJECT_ID)
                 await self._db.execute(
-                    "INSERT INTO collections (id, name, description, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
-                    (col["id"], col["name"], col.get("description", ""), col.get("created_at", now), now),
+                    "INSERT INTO collections (id, name, description, project_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)",
+                    (col["id"], col["name"], col.get("description", ""), col_project_id, col.get("created_at", now), now),
                 )
 
             for req in col.get("requests", []):
@@ -257,17 +263,19 @@ class FullImportService:
                     "SELECT id FROM requests WHERE id = ?", (req["id"],)
                 )
                 if not req_existing:
+                    req_project_id = req.get("project_id", DEFAULT_PROJECT_ID)
                     await self._db.execute(
                         """INSERT INTO requests
                         (id, name, method, url, headers, query_params, body, body_type,
-                         auth_type, auth_config, collection_id, created_at, updated_at)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                         auth_type, auth_config, collection_id, project_id, created_at, updated_at)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                         (
                             req["id"], req["name"], req["method"], req["url"],
                             req.get("headers", "[]"), req.get("query_params", "[]"),
                             req.get("body"), req.get("body_type"),
                             req.get("auth_type"), req.get("auth_config", "{}"),
-                            req.get("collection_id"), req.get("created_at", now), now,
+                            req.get("collection_id"), req_project_id,
+                            req.get("created_at", now), now,
                         ),
                     )
             count += 1
