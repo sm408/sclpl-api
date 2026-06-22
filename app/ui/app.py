@@ -10,6 +10,8 @@ from app.services.collection_service import CollectionRepository, RequestReposit
 from app.services.environment_service import EnvironmentRepository
 from app.services.export_service import DefaultExportPipeline
 from app.services.history_service import HistoryRepository
+from app.services.monitor_service import MonitorService
+from app.services.monitor_runner import MonitorRunner
 from app.services.request_executor import HttpRequestExecutor
 from app.storage.db import Database
 
@@ -28,6 +30,8 @@ class App:
         self.requests = RequestRepository(self.db)
         self.environments = EnvironmentRepository(self.db)
         self.history = HistoryRepository(self.db)
+        self.monitors = MonitorService(self.db)
+        self.monitor_runner = MonitorRunner(self.monitors, self.event_bus)
 
         self.plugin_registry = None
         self._init_plugins()
@@ -59,9 +63,13 @@ class App:
     async def start(self) -> None:
         await self.db.connect()
         await self.db.initialize()
+        # Start monitor runner
+        await self.monitor_runner.start()
         logger.info("SCLPLAPI started")
 
     async def stop(self) -> None:
+        # Stop monitor runner
+        await self.monitor_runner.stop()
         await self.db.close()
         logger.info("SCLPLAPI stopped")
 

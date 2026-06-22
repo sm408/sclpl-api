@@ -36,6 +36,7 @@ from app.ui.screens.import_export import ImportExportView
 from app.ui.screens.batch import BatchView
 from app.ui.screens.diff_viewer import DiffViewer
 from app.ui.screens.log_viewer import LogViewer
+from app.ui.screens.monitors import MonitorList, MonitorDetail
 
 
 class SCLPLTextualApp(App):
@@ -75,6 +76,7 @@ class SCLPLTextualApp(App):
         Binding("ctrl+r", "run_request", "Run Request"),
         Binding("ctrl+w", "close_tab", "Close Tab"),
         Binding("ctrl+b", "batch_mode", "Batch Mode"),
+        Binding("ctrl+m", "show_monitors", "Monitors"),
         Binding("f1", "help", "Help"),
         Binding("f2", "toggle_theme", "Toggle Theme"),
         Binding("f5", "refresh", "Refresh"),
@@ -114,6 +116,8 @@ class SCLPLTextualApp(App):
                 yield PluginBrowser()
             with TabPane("Import/Export", id="tab-import-export"):
                 yield ImportExportView()
+            with TabPane("Monitors", id="tab-monitors"):
+                yield MonitorList()
             with TabPane("Batch", id="tab-batch"):
                 yield BatchView()
             with TabPane("Diff", id="tab-diff"):
@@ -265,6 +269,13 @@ class SCLPLTextualApp(App):
                 except Exception:
                     pass
 
+            # Monitors
+            monitors = await self._get_monitor_dicts()
+            try:
+                self.query_one("MonitorList").set_monitors(monitors)
+            except Exception:
+                pass
+
         except Exception as e:
             self.log(f"Error loading data: {e}")
 
@@ -392,6 +403,28 @@ class SCLPLTextualApp(App):
     def on_stop_batch(self) -> None:
         self.notify("Batch stop requested", severity="warning")
 
+    # ── Monitor Messages ─────────────────────────────────────────────────
+
+    @on(MonitorList.NewMonitor)
+    def on_new_monitor(self, event: MonitorList.NewMonitor) -> None:
+        self._create_monitor()
+
+    @on(MonitorList.StartMonitor)
+    def on_start_monitor(self, event: MonitorList.StartMonitor) -> None:
+        self._start_monitor(event.monitor_id)
+
+    @on(MonitorList.StopMonitor)
+    def on_stop_monitor(self, event: MonitorList.StopMonitor) -> None:
+        self._stop_monitor(event.monitor_id)
+
+    @on(MonitorList.DeleteMonitor)
+    def on_delete_monitor(self, event: MonitorList.DeleteMonitor) -> None:
+        self._delete_monitor(event.monitor_id)
+
+    @on(MonitorList.ViewDetail)
+    def on_view_monitor_detail(self, event: MonitorList.ViewDetail) -> None:
+        self._view_monitor_detail(event.monitor_id)
+
     # ── History Cleanup ──────────────────────────────────────────────────
 
     @on(Button.Pressed, "#cleanup-btn")
@@ -423,6 +456,28 @@ class SCLPLTextualApp(App):
 
     def action_batch_mode(self) -> None:
         self.query_one("#workspace", TabbedContent).active = "tab-batch"
+
+    def action_show_monitors(self) -> None:
+        self.query_one("#workspace", TabbedContent).active = "tab-monitors"
+
+    def action_new_monitor(self) -> None:
+        self._create_monitor()
+
+    def action_start_monitor(self) -> None:
+        monitor_list = self.query_one("MonitorList")
+        m = monitor_list.get_selected_monitor()
+        if m:
+            self._start_monitor(m["id"])
+        else:
+            self.notify("Select a monitor first", severity="warning")
+
+    def action_stop_monitor(self) -> None:
+        monitor_list = self.query_one("MonitorList")
+        m = monitor_list.get_selected_monitor()
+        if m:
+            self._stop_monitor(m["id"])
+        else:
+            self.notify("Select a monitor first", severity="warning")
 
     def action_toggle_theme(self) -> None:
         """Toggle between dark and light themes."""
@@ -693,6 +748,152 @@ class SCLPLTextualApp(App):
             self.notify(f"Exported to {output_path}", severity="information")
         except OSError as e:
             self.notify(f"Export failed: {e}", severity="error")
+
+    # ── Monitor Operations ───────────────────────────────────────────────
+
+    @work(exclusive=True)
+    async def _create_monitor(self) -> None:
+        """Create a new monitor."""
+        if not self._app:
+            return
+
+        name = await self.prompt("Monitor name:")
+        if not name:
+            return
+
+        url = await self.prompt("URL to monitor:")
+        if not url:
+            return
+
+        interval_str = await self.prompt("Poll interval (seconds):", default="60")
+        try:
+            interval = int(interval_str)
+        except (ValueError, TypeError):
+            interval = 60
+
+        condition = await self.prompt("Condition (e.g., status == 200):", default="")
+
+        try:
+            monitor = await self._app.monitors.create(
+                name=name,
+                url=url,
+                interval_seconds=interval,
+                condition=condition,
+            )
+            self.notify(f"Created monitor '{name}'")
+            self._load_monitors()
+        except Exception as e:
+            self.notify(f"Failed: {e}", severity="error")
+
+    @work(exclusive=True)
+    async def _start_monitor(self, monitor_id: str) -> None:
+        """Start a monitor."""
+        if not self._app or not self._app.monitor_runner:
+            return
+        try:
+            await self._app.monitor_runner.start_monitor(monitor_id)
+            self.notify("Monitor started")
+            self._load_monitors()
+        except Exception as e:
+            self.notify(f"Failed: {e}", severity="error")
+
+    @work(exclusive=True)
+    async def _stop_monitor(self, monitor_id: str) -> None:
+        """Stop a monitor."""
+        if not self._app or not self._app.monitor_runner:
+            return
+        try:
+            await self._app.monitor_runner.stop_monitor(monitor_id)
+            self.notify("Monitor stopped")
+            self._load_monitors()
+        except Exception as e:
+            self.notify(f"Failed: {e}", severity="error")
+
+    @work(exclusive=True)
+    async def _delete_monitor(self, monitor_id: str) -> None:
+        """Delete a monitor."""
+        if not self._app:
+            return
+        try:
+            monitor = await self._app.monitors.get(monitor_id)
+            if monitor and await self.confirm(f"Delete monitor '{monitor.name}'?"):
+                # Stop first if running
+                if self._app.monitor_runner:
+                    await self._app.monitor_runner.stop_monitor(monitor_id)
+                await self._app.monitors.delete(monitor_id)
+                self.notify(f"Deleted monitor '{monitor.name}'")
+                self._load_monitors()
+        except Exception as e:
+            self.notify(f"Failed: {e}", severity="error")
+
+    @work(exclusive=True)
+    async def _view_monitor_detail(self, monitor_id: str) -> None:
+        """View monitor detail."""
+        if not self._app:
+            return
+        try:
+            monitor = await self._app.monitors.get(monitor_id)
+            if not monitor:
+                self.notify("Monitor not found", severity="error")
+                return
+
+            events = await self._app.monitors.get_events(monitor_id, limit=100)
+
+            # Switch to monitors tab and show detail
+            workspace = self.query_one("#workspace", TabbedContent)
+            workspace.active = "tab-monitors"
+
+            monitor_list = self.query_one("MonitorList")
+            monitor_list.set_monitors(await self._get_monitor_dicts())
+
+            # TODO: Show detail view in a modal or sub-screen
+            self.notify(f"Monitor: {monitor.name} - {len(events)} events")
+
+        except Exception as e:
+            self.notify(f"Failed: {e}", severity="error")
+
+    def _load_monitors(self) -> None:
+        """Load monitors into the list."""
+        if not self._app:
+            return
+        try:
+            asyncio.create_task(self._load_monitors_async())
+        except Exception:
+            pass
+
+    async def _load_monitors_async(self) -> None:
+        """Load monitors asynchronously."""
+        if not self._app:
+            return
+        try:
+            monitors = await self._get_monitor_dicts()
+            monitor_list = self.query_one("MonitorList")
+            monitor_list.set_monitors(monitors)
+        except Exception:
+            pass
+
+    async def _get_monitor_dicts(self) -> list[dict]:
+        """Get monitors as dicts."""
+        if not self._app:
+            return []
+        monitors = await self._app.monitors.list_all()
+        return [
+            {
+                "id": m.id,
+                "name": m.name,
+                "url": m.url,
+                "method": m.method,
+                "interval_seconds": m.interval_seconds,
+                "condition": m.condition,
+                "status": m.status.value,
+                "enabled": m.enabled,
+                "run_count": m.run_count,
+                "trigger_count": m.trigger_count,
+                "last_run": m.last_run,
+                "last_status_code": m.last_status_code,
+            }
+            for m in monitors
+        ]
 
     # ── Batch Execution ──────────────────────────────────────────────────
 

@@ -34,6 +34,12 @@ COMMANDS: list[CommandDef] = [
     CommandDef("Environments", "action_show_environments", "", "Manage environments", "Navigation"),
     CommandDef("Functions", "action_show_functions", "", "Browse functions", "Navigation"),
     CommandDef("Plugins", "action_show_plugins", "", "View plugins", "Navigation"),
+    CommandDef("Monitors", "action_show_monitors", "Ctrl+M", "Live API monitors", "Navigation"),
+
+    # Monitor
+    CommandDef("New Monitor", "action_new_monitor", "", "Create a new API monitor", "Monitor"),
+    CommandDef("Start Monitor", "action_start_monitor", "", "Start a monitor", "Monitor"),
+    CommandDef("Stop Monitor", "action_stop_monitor", "", "Stop a monitor", "Monitor"),
 
     # Tools
     CommandDef("Import/Export", "action_show_import_export", "", "Backup or restore workspace", "Tools"),
