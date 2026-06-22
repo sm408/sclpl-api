@@ -19,12 +19,15 @@ from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoin
 from starlette.responses import Response
 
 from app.core.engine.event_bus import SimpleEventBus
+from app.services.operation_registry import OperationRegistry
 from app.services.project_service import ProjectRepository
 from app.storage.db import Database
 from app.web.api.health import router as health_router
+from app.web.api.operations import router as operations_router
 from app.web.api.projects import router as projects_router
 from app.web.deps import ServiceContainer
 from app.web.errors import register_error_handlers
+from app.web.sse import SSEManager
 
 logger = logging.getLogger(__name__)
 
@@ -175,10 +178,14 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     )
     event_bus = SimpleEventBus()
     project_repo = ProjectRepository(db, data_root=data_root)
+    operation_registry = OperationRegistry()
+    sse_manager = SSEManager()
 
     services = ServiceContainer(
         db=db,
         projects=project_repo,
+        operations=operation_registry,
+        sse=sse_manager,
     )
 
     app.state.db = db
@@ -191,6 +198,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
     # Shutdown
     logger.info("Web API shutting down")
+    await sse_manager.shutdown()
     await db.close()
 
 
@@ -227,5 +235,6 @@ def create_app(
     # Routers
     app.include_router(health_router)
     app.include_router(projects_router)
+    app.include_router(operations_router)
 
     return app
