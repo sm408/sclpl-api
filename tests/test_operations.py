@@ -278,172 +278,202 @@ class TestIllegalTransitions:
 class TestOperationRegistry:
     """Test OperationRegistry."""
 
-    def test_create_operation(self):
+    @pytest.mark.asyncio
+    async def test_create_operation(self):
         registry = OperationRegistry()
-        op = registry.create_operation("proj-1", OperationType.WORKFLOW_RUN)
+        op = await registry.create_operation("proj-1", OperationType.WORKFLOW_RUN)
         assert op.project_id == "proj-1"
         assert op.status == OperationStatus.QUEUED
         assert op.id
 
-    def test_create_operation_with_id(self):
+    @pytest.mark.asyncio
+    async def test_create_operation_with_id(self):
         registry = OperationRegistry()
-        op = registry.create_operation(
+        op = await registry.create_operation(
             "proj-1", OperationType.WORKFLOW_RUN, operation_id="custom"
         )
         assert op.id == "custom"
 
-    def test_get_operation(self):
+    @pytest.mark.asyncio
+    async def test_get_operation(self):
         registry = OperationRegistry()
-        op = registry.create_operation("proj-1", OperationType.WORKFLOW_RUN)
-        fetched = registry.get_operation(op.id, "proj-1")
+        op = await registry.create_operation("proj-1", OperationType.WORKFLOW_RUN)
+        fetched = await registry.get_operation(op.id, "proj-1")
         assert fetched.id == op.id
 
-    def test_get_operation_not_found(self):
+    @pytest.mark.asyncio
+    async def test_get_operation_not_found(self):
         registry = OperationRegistry()
         with pytest.raises(OperationNotFoundError):
-            registry.get_operation("nonexistent", "proj-1")
+            await registry.get_operation("nonexistent", "proj-1")
 
-    def test_get_operation_wrong_project(self):
+    @pytest.mark.asyncio
+    async def test_get_operation_wrong_project(self):
         registry = OperationRegistry()
-        op = registry.create_operation("proj-1", OperationType.WORKFLOW_RUN)
+        op = await registry.create_operation("proj-1", OperationType.WORKFLOW_RUN)
         with pytest.raises(OperationNotFoundError):
-            registry.get_operation(op.id, "proj-2")
+            await registry.get_operation(op.id, "proj-2")
 
-    def test_project_isolation(self):
+    @pytest.mark.asyncio
+    async def test_project_isolation(self):
         registry = OperationRegistry()
-        op1 = registry.create_operation("proj-1", OperationType.WORKFLOW_RUN)
-        op2 = registry.create_operation("proj-2", OperationType.WORKFLOW_RUN)
+        op1 = await registry.create_operation("proj-1", OperationType.WORKFLOW_RUN)
+        op2 = await registry.create_operation("proj-2", OperationType.WORKFLOW_RUN)
 
         # Each project only sees its own operations
-        ops1 = registry.list_operations("proj-1")
-        ops2 = registry.list_operations("proj-2")
+        ops1 = await registry.list_operations("proj-1")
+        ops2 = await registry.list_operations("proj-2")
         assert len(ops1) == 1
         assert len(ops2) == 1
         assert ops1[0].id == op1.id
         assert ops2[0].id == op2.id
 
-    def test_list_operations_filter_by_status(self):
+    @pytest.mark.asyncio
+    async def test_list_operations_filter_by_status(self):
         registry = OperationRegistry()
-        op1 = registry.create_operation("proj-1", OperationType.WORKFLOW_RUN)
-        op2 = registry.create_operation("proj-1", OperationType.BATCH_RUN)
-        registry.transition(op1.id, "proj-1", OperationStatus.RUNNING)
+        op1 = await registry.create_operation("proj-1", OperationType.WORKFLOW_RUN)
+        op2 = await registry.create_operation("proj-1", OperationType.BATCH_RUN)
+        await registry.transition(op1.id, "proj-1", OperationStatus.RUNNING)
 
-        queued = registry.list_operations("proj-1", status=OperationStatus.QUEUED)
-        running = registry.list_operations("proj-1", status=OperationStatus.RUNNING)
+        queued = await registry.list_operations("proj-1", status=OperationStatus.QUEUED)
+        running = await registry.list_operations("proj-1", status=OperationStatus.RUNNING)
         assert len(queued) == 1
         assert len(running) == 1
         assert queued[0].id == op2.id
         assert running[0].id == op1.id
 
-    def test_transition(self):
+    @pytest.mark.asyncio
+    async def test_transition(self):
         registry = OperationRegistry()
-        op = registry.create_operation("proj-1", OperationType.WORKFLOW_RUN)
-        registry.transition(op.id, "proj-1", OperationStatus.RUNNING)
-        fetched = registry.get_operation(op.id, "proj-1")
+        op = await registry.create_operation("proj-1", OperationType.WORKFLOW_RUN)
+        await registry.transition(op.id, "proj-1", OperationStatus.RUNNING)
+        fetched = await registry.get_operation(op.id, "proj-1")
         assert fetched.status == OperationStatus.RUNNING
 
-    def test_transition_with_result(self):
+    @pytest.mark.asyncio
+    async def test_transition_with_result(self):
         registry = OperationRegistry()
-        op = registry.create_operation("proj-1", OperationType.WORKFLOW_RUN)
-        registry.transition(op.id, "proj-1", OperationStatus.RUNNING)
-        registry.transition(
+        op = await registry.create_operation("proj-1", OperationType.WORKFLOW_RUN)
+        await registry.transition(op.id, "proj-1", OperationStatus.RUNNING)
+        await registry.transition(
             op.id,
             "proj-1",
             OperationStatus.SUCCEEDED,
             result={"output": "done"},
         )
-        fetched = registry.get_operation(op.id, "proj-1")
+        fetched = await registry.get_operation(op.id, "proj-1")
         assert fetched.result == {"output": "done"}
 
-    def test_transition_with_error(self):
+    @pytest.mark.asyncio
+    async def test_transition_with_error(self):
         registry = OperationRegistry()
-        op = registry.create_operation("proj-1", OperationType.WORKFLOW_RUN)
-        registry.transition(op.id, "proj-1", OperationStatus.RUNNING)
-        registry.transition(
+        op = await registry.create_operation("proj-1", OperationType.WORKFLOW_RUN)
+        await registry.transition(op.id, "proj-1", OperationStatus.RUNNING)
+        await registry.transition(
             op.id,
             "proj-1",
             OperationStatus.FAILED,
             error="Something went wrong",
         )
-        fetched = registry.get_operation(op.id, "proj-1")
+        fetched = await registry.get_operation(op.id, "proj-1")
         assert fetched.error == "Something went wrong"
 
-    def test_cancel_queued_operation(self):
+    @pytest.mark.asyncio
+    async def test_cancel_queued_operation(self):
         registry = OperationRegistry()
-        op = registry.create_operation("proj-1", OperationType.WORKFLOW_RUN)
-        registry.cancel_operation(op.id, "proj-1")
-        fetched = registry.get_operation(op.id, "proj-1")
+        op = await registry.create_operation("proj-1", OperationType.WORKFLOW_RUN)
+        await registry.cancel_operation(op.id, "proj-1")
+        fetched = await registry.get_operation(op.id, "proj-1")
         assert fetched.status == OperationStatus.CANCELLED
 
-    def test_cancel_running_operation(self):
+    @pytest.mark.asyncio
+    async def test_cancel_running_operation(self):
         registry = OperationRegistry()
-        op = registry.create_operation("proj-1", OperationType.WORKFLOW_RUN)
-        registry.transition(op.id, "proj-1", OperationStatus.RUNNING)
-        registry.cancel_operation(op.id, "proj-1")
-        fetched = registry.get_operation(op.id, "proj-1")
+        op = await registry.create_operation("proj-1", OperationType.WORKFLOW_RUN)
+        await registry.transition(op.id, "proj-1", OperationStatus.RUNNING)
+        await registry.cancel_operation(op.id, "proj-1")
+        fetched = await registry.get_operation(op.id, "proj-1")
         assert fetched.status == OperationStatus.CANCELLING
 
-    def test_cancel_terminal_operation_fails(self):
+    @pytest.mark.asyncio
+    async def test_cancel_cancelling_operation_is_idempotent(self):
+        """Cancelling an already-CANCELLING operation returns it as-is."""
         registry = OperationRegistry()
-        op = registry.create_operation("proj-1", OperationType.WORKFLOW_RUN)
-        registry.transition(op.id, "proj-1", OperationStatus.RUNNING)
-        registry.transition(op.id, "proj-1", OperationStatus.SUCCEEDED)
-        with pytest.raises(InvalidTransition):
-            registry.cancel_operation(op.id, "proj-1")
+        op = await registry.create_operation("proj-1", OperationType.WORKFLOW_RUN)
+        await registry.transition(op.id, "proj-1", OperationStatus.RUNNING)
+        await registry.cancel_operation(op.id, "proj-1")
+        # Cancel again — should be idempotent
+        fetched = await registry.cancel_operation(op.id, "proj-1")
+        assert fetched.status == OperationStatus.CANCELLING
 
-    def test_cancel_failed_operation_fails(self):
+    @pytest.mark.asyncio
+    async def test_cancel_terminal_operation_fails(self):
         registry = OperationRegistry()
-        op = registry.create_operation("proj-1", OperationType.WORKFLOW_RUN)
-        registry.transition(op.id, "proj-1", OperationStatus.RUNNING)
-        registry.transition(op.id, "proj-1", OperationStatus.FAILED)
+        op = await registry.create_operation("proj-1", OperationType.WORKFLOW_RUN)
+        await registry.transition(op.id, "proj-1", OperationStatus.RUNNING)
+        await registry.transition(op.id, "proj-1", OperationStatus.SUCCEEDED)
         with pytest.raises(InvalidTransition):
-            registry.cancel_operation(op.id, "proj-1")
+            await registry.cancel_operation(op.id, "proj-1")
 
-    def test_get_operation_any_project(self):
+    @pytest.mark.asyncio
+    async def test_cancel_failed_operation_fails(self):
         registry = OperationRegistry()
-        op = registry.create_operation("proj-1", OperationType.WORKFLOW_RUN)
-        fetched = registry.get_operation_any_project(op.id)
+        op = await registry.create_operation("proj-1", OperationType.WORKFLOW_RUN)
+        await registry.transition(op.id, "proj-1", OperationStatus.RUNNING)
+        await registry.transition(op.id, "proj-1", OperationStatus.FAILED)
+        with pytest.raises(InvalidTransition):
+            await registry.cancel_operation(op.id, "proj-1")
+
+    @pytest.mark.asyncio
+    async def test_get_operation_any_project(self):
+        registry = OperationRegistry()
+        op = await registry.create_operation("proj-1", OperationType.WORKFLOW_RUN)
+        fetched = await registry.get_operation_any_project(op.id)
         assert fetched.id == op.id
         assert fetched.project_id == "proj-1"
 
-    def test_get_operation_any_project_not_found(self):
+    @pytest.mark.asyncio
+    async def test_get_operation_any_project_not_found(self):
         registry = OperationRegistry()
         with pytest.raises(OperationNotFoundError):
-            registry.get_operation_any_project("nonexistent")
+            await registry.get_operation_any_project("nonexistent")
 
-    def test_enforce_limit(self):
+    @pytest.mark.asyncio
+    async def test_enforce_limit(self):
         registry = OperationRegistry(max_per_project=3)
         # Create 4 operations (3 will be terminal)
         ops = []
         for _ in range(4):
-            op = registry.create_operation("proj-1", OperationType.WORKFLOW_RUN)
+            op = await registry.create_operation("proj-1", OperationType.WORKFLOW_RUN)
             ops.append(op)
 
         # Make first 3 terminal
         for op in ops[:3]:
-            registry.transition(op.id, "proj-1", OperationStatus.RUNNING)
-            registry.transition(op.id, "proj-1", OperationStatus.SUCCEEDED)
+            await registry.transition(op.id, "proj-1", OperationStatus.RUNNING)
+            await registry.transition(op.id, "proj-1", OperationStatus.SUCCEEDED)
 
         # The limit should have removed the oldest terminal ops
-        remaining = registry.list_operations("proj-1")
+        remaining = await registry.list_operations("proj-1")
         assert len(remaining) <= 3
 
-    def test_cleanup_terminal(self):
+    @pytest.mark.asyncio
+    async def test_cleanup_terminal(self):
         registry = OperationRegistry(max_terminal_age_seconds=0)
-        op = registry.create_operation("proj-1", OperationType.WORKFLOW_RUN)
-        registry.transition(op.id, "proj-1", OperationStatus.RUNNING)
-        registry.transition(op.id, "proj-1", OperationStatus.SUCCEEDED)
+        op = await registry.create_operation("proj-1", OperationType.WORKFLOW_RUN)
+        await registry.transition(op.id, "proj-1", OperationStatus.RUNNING)
+        await registry.transition(op.id, "proj-1", OperationStatus.SUCCEEDED)
 
         # With 0 age, cleanup should remove it
-        removed = registry.cleanup_terminal("proj-1")
+        removed = await registry.cleanup_terminal("proj-1")
         assert removed == 1
         assert registry.total_count == 0
 
-    def test_total_count(self):
+    @pytest.mark.asyncio
+    async def test_total_count(self):
         registry = OperationRegistry()
-        registry.create_operation("proj-1", OperationType.WORKFLOW_RUN)
-        registry.create_operation("proj-1", OperationType.BATCH_RUN)
-        registry.create_operation("proj-2", OperationType.WORKFLOW_RUN)
+        await registry.create_operation("proj-1", OperationType.WORKFLOW_RUN)
+        await registry.create_operation("proj-1", OperationType.BATCH_RUN)
+        await registry.create_operation("proj-2", OperationType.WORKFLOW_RUN)
         assert registry.total_count == 3
 
 
@@ -805,7 +835,7 @@ class TestOperationLifecycle:
         queue = manager.subscribe("proj-1")
 
         # Create and run operation
-        op = registry.create_operation("proj-1", OperationType.WORKFLOW_RUN)
+        op = await registry.create_operation("proj-1", OperationType.WORKFLOW_RUN)
 
         # Publish started event
         started_event = StreamEvent.create(
@@ -818,7 +848,7 @@ class TestOperationLifecycle:
         await manager.publish(started_event)
 
         # Transition to running
-        registry.transition(op.id, "proj-1", OperationStatus.RUNNING)
+        await registry.transition(op.id, "proj-1", OperationStatus.RUNNING)
 
         # Publish progress
         progress_event = StreamEvent.create(
@@ -831,7 +861,7 @@ class TestOperationLifecycle:
         await manager.publish(progress_event)
 
         # Complete
-        registry.transition(
+        await registry.transition(
             op.id, "proj-1", OperationStatus.SUCCEEDED, result={"output": "done"}
         )
         completed_event = StreamEvent.create(
@@ -860,16 +890,16 @@ class TestOperationLifecycle:
     async def test_cancellation_lifecycle(self):
         registry = OperationRegistry()
 
-        op = registry.create_operation("proj-1", OperationType.WORKFLOW_RUN)
-        registry.transition(op.id, "proj-1", OperationStatus.RUNNING)
+        op = await registry.create_operation("proj-1", OperationType.WORKFLOW_RUN)
+        await registry.transition(op.id, "proj-1", OperationStatus.RUNNING)
 
         # Cancel
-        cancelled_op = registry.cancel_operation(op.id, "proj-1")
+        cancelled_op = await registry.cancel_operation(op.id, "proj-1")
         assert cancelled_op.status == OperationStatus.CANCELLING
 
         # Complete cancellation
-        registry.transition(op.id, "proj-1", OperationStatus.CANCELLED)
-        final_op = registry.get_operation(op.id, "proj-1")
+        await registry.transition(op.id, "proj-1", OperationStatus.CANCELLED)
+        final_op = await registry.get_operation(op.id, "proj-1")
         assert final_op.status == OperationStatus.CANCELLED
         assert final_op.is_terminal
 
@@ -949,3 +979,214 @@ class TestRedaction:
         op.error = "Request timeout"
         d = op.to_dict()
         assert d["error"] == "Request timeout"
+
+
+# ── Concurrency Tests ────────────────────────────────────────────────────
+
+
+class TestConcurrency:
+    """Test concurrent access to the operation registry.
+
+    These tests verify that the asyncio.Lock protects the registry
+    against race conditions when multiple coroutines access it.
+    """
+
+    @pytest.mark.asyncio
+    async def test_concurrent_create_operations(self):
+        """Multiple concurrent creates should all succeed."""
+        registry = OperationRegistry()
+
+        async def create_one(i: int) -> ExecutionOperation:
+            return await registry.create_operation(
+                "proj-1", OperationType.WORKFLOW_RUN, operation_id=f"op-{i}"
+            )
+
+        results = await asyncio.gather(*[create_one(i) for i in range(20)])
+        assert len(results) == 20
+        assert registry.total_count == 20
+        # All IDs should be unique
+        ids = {op.id for op in results}
+        assert len(ids) == 20
+
+    @pytest.mark.asyncio
+    async def test_concurrent_create_and_transition(self):
+        """Concurrent creates followed by transitions should be consistent."""
+        registry = OperationRegistry()
+        created: list[ExecutionOperation] = []
+
+        async def create_and_run(i: int) -> None:
+            op = await registry.create_operation(
+                "proj-1", OperationType.WORKFLOW_RUN, operation_id=f"op-{i}"
+            )
+            await registry.transition(op.id, "proj-1", OperationStatus.RUNNING)
+            created.append(op)
+
+        await asyncio.gather(*[create_and_run(i) for i in range(15)])
+        assert len(created) == 15
+        # All should be RUNNING
+        for op in created:
+            fetched = await registry.get_operation(op.id, "proj-1")
+            assert fetched.status == OperationStatus.RUNNING
+
+    @pytest.mark.asyncio
+    async def test_concurrent_cancel_operations(self):
+        """Concurrent cancels on different operations should all succeed."""
+        registry = OperationRegistry()
+        ops = []
+        for i in range(10):
+            op = await registry.create_operation(
+                "proj-1", OperationType.WORKFLOW_RUN, operation_id=f"op-{i}"
+            )
+            await registry.transition(op.id, "proj-1", OperationStatus.RUNNING)
+            ops.append(op)
+
+        async def cancel_one(op: ExecutionOperation) -> OperationStatus:
+            result = await registry.cancel_operation(op.id, "proj-1")
+            return result.status
+
+        statuses = await asyncio.gather(*[cancel_one(op) for op in ops])
+        assert all(s == OperationStatus.CANCELLING for s in statuses)
+
+    @pytest.mark.asyncio
+    async def test_concurrent_cancel_already_cancelling(self):
+        """Cancelling an already-CANCELLING operation concurrently should be safe."""
+        registry = OperationRegistry()
+        op = await registry.create_operation("proj-1", OperationType.WORKFLOW_RUN)
+        await registry.transition(op.id, "proj-1", OperationStatus.RUNNING)
+
+        async def cancel() -> OperationStatus:
+            result = await registry.cancel_operation(op.id, "proj-1")
+            return result.status
+
+        # Multiple concurrent cancels on the same operation
+        statuses = await asyncio.gather(*[cancel() for _ in range(5)])
+        # All should see CANCELLING (idempotent)
+        assert all(s == OperationStatus.CANCELLING for s in statuses)
+
+    @pytest.mark.asyncio
+    async def test_concurrent_mixed_operations(self):
+        """Mix of concurrent creates, transitions, cancels, and reads."""
+        registry = OperationRegistry()
+
+        async def create_op(i: int) -> str:
+            op = await registry.create_operation(
+                "proj-1", OperationType.WORKFLOW_RUN, operation_id=f"op-{i}"
+            )
+            return op.id
+
+        # Create operations concurrently
+        op_ids = await asyncio.gather(*[create_op(i) for i in range(10)])
+        assert len(op_ids) == 10
+
+        async def transition_op(op_id: str) -> None:
+            await registry.transition(op_id, "proj-1", OperationStatus.RUNNING)
+
+        async def read_op(op_id: str) -> ExecutionOperation:
+            return await registry.get_operation(op_id, "proj-1")
+
+        # Concurrently transition some and read others
+        tasks = []
+        for i, op_id in enumerate(op_ids):
+            if i % 2 == 0:
+                tasks.append(transition_op(op_id))
+            else:
+                tasks.append(read_op(op_id))
+
+        await asyncio.gather(*tasks)
+
+        # Verify final state
+        for i, op_id in enumerate(op_ids):
+            op = await registry.get_operation(op_id, "proj-1")
+            if i % 2 == 0:
+                assert op.status == OperationStatus.RUNNING
+            else:
+                assert op.status == OperationStatus.QUEUED
+
+    @pytest.mark.asyncio
+    async def test_concurrent_cleanup_and_create(self):
+        """Concurrent cleanup and create should not interfere."""
+        registry = OperationRegistry(max_terminal_age_seconds=0)
+
+        # Create some terminal operations
+        for i in range(5):
+            op = await registry.create_operation(
+                "proj-1", OperationType.WORKFLOW_RUN, operation_id=f"old-{i}"
+            )
+            await registry.transition(op.id, "proj-1", OperationStatus.RUNNING)
+            await registry.transition(op.id, "proj-1", OperationStatus.SUCCEEDED)
+
+        async def cleanup() -> int:
+            return await registry.cleanup_terminal("proj-1")
+
+        async def create_new(i: int) -> ExecutionOperation:
+            return await registry.create_operation(
+                "proj-1", OperationType.WORKFLOW_RUN, operation_id=f"new-{i}"
+            )
+
+        # Run cleanup and creates concurrently
+        results = await asyncio.gather(
+            cleanup(),
+            *[create_new(i) for i in range(5)],
+        )
+        removed = results[0]
+        new_ops = results[1:]
+        assert removed == 5
+        assert len(new_ops) == 5
+        # New ops should still exist
+        for op in new_ops:
+            fetched = await registry.get_operation(op.id, "proj-1")
+            assert fetched.status == OperationStatus.QUEUED
+
+    @pytest.mark.asyncio
+    async def test_concurrent_list_and_modify(self):
+        """Concurrent list and modify operations should be safe."""
+        registry = OperationRegistry()
+
+        # Seed some operations
+        for i in range(5):
+            await registry.create_operation(
+                "proj-1", OperationType.WORKFLOW_RUN, operation_id=f"op-{i}"
+            )
+
+        async def list_ops() -> list[ExecutionOperation]:
+            return await registry.list_operations("proj-1")
+
+        async def modify_op(i: int) -> None:
+            await registry.transition(f"op-{i}", "proj-1", OperationStatus.RUNNING)
+
+        # Concurrent list and modify
+        results = await asyncio.gather(
+            list_ops(),
+            *[modify_op(i) for i in range(5)],
+        )
+        ops_list = results[0]
+        # List should have returned some snapshot (no crash)
+        assert len(ops_list) == 5
+
+    @pytest.mark.asyncio
+    async def test_concurrent_project_isolation(self):
+        """Operations from different projects should not interfere."""
+        registry = OperationRegistry()
+
+        async def create_for_project(proj: str, count: int) -> list[ExecutionOperation]:
+            ops = []
+            for i in range(count):
+                op = await registry.create_operation(
+                    proj, OperationType.WORKFLOW_RUN, operation_id=f"{proj}-op-{i}"
+                )
+                ops.append(op)
+            return ops
+
+        # Create operations for two projects concurrently
+        proj1_ops, proj2_ops = await asyncio.gather(
+            create_for_project("proj-1", 10),
+            create_for_project("proj-2", 10),
+        )
+
+        # Each project should only see its own
+        list1 = await registry.list_operations("proj-1")
+        list2 = await registry.list_operations("proj-2")
+        assert len(list1) == 10
+        assert len(list2) == 10
+        assert all(op.project_id == "proj-1" for op in list1)
+        assert all(op.project_id == "proj-2" for op in list2)

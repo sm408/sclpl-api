@@ -61,8 +61,8 @@ class TestOperationsAPI:
     @pytest.mark.asyncio
     async def test_list_operations_with_data(self, app, client, default_project_id):
         registry = app.state.services.operations
-        registry.create_operation(default_project_id, OperationType.WORKFLOW_RUN)
-        registry.create_operation(default_project_id, OperationType.BATCH_RUN)
+        await registry.create_operation(default_project_id, OperationType.WORKFLOW_RUN)
+        await registry.create_operation(default_project_id, OperationType.BATCH_RUN)
 
         resp = await client.get(
             "/api/v1/operations",
@@ -76,9 +76,9 @@ class TestOperationsAPI:
     @pytest.mark.asyncio
     async def test_list_operations_filter_by_status(self, app, client, default_project_id):
         registry = app.state.services.operations
-        op1 = registry.create_operation(default_project_id, OperationType.WORKFLOW_RUN)
-        registry.create_operation(default_project_id, OperationType.BATCH_RUN)
-        registry.transition(op1.id, default_project_id, OperationStatus.RUNNING)
+        op1 = await registry.create_operation(default_project_id, OperationType.WORKFLOW_RUN)
+        await registry.create_operation(default_project_id, OperationType.BATCH_RUN)
+        await registry.transition(op1.id, default_project_id, OperationStatus.RUNNING)
 
         resp = await client.get(
             "/api/v1/operations",
@@ -91,7 +91,7 @@ class TestOperationsAPI:
     @pytest.mark.asyncio
     async def test_get_operation(self, app, client, default_project_id):
         registry = app.state.services.operations
-        op = registry.create_operation(default_project_id, OperationType.WORKFLOW_RUN)
+        op = await registry.create_operation(default_project_id, OperationType.WORKFLOW_RUN)
 
         resp = await client.get(f"/api/v1/operations/{op.id}")
         assert resp.status_code == 200
@@ -109,7 +109,7 @@ class TestOperationsAPI:
     @pytest.mark.asyncio
     async def test_cancel_queued_operation(self, app, client, default_project_id):
         registry = app.state.services.operations
-        op = registry.create_operation(default_project_id, OperationType.WORKFLOW_RUN)
+        op = await registry.create_operation(default_project_id, OperationType.WORKFLOW_RUN)
 
         resp = await client.delete(f"/api/v1/operations/{op.id}")
         assert resp.status_code == 200
@@ -119,8 +119,8 @@ class TestOperationsAPI:
     @pytest.mark.asyncio
     async def test_cancel_running_operation(self, app, client, default_project_id):
         registry = app.state.services.operations
-        op = registry.create_operation(default_project_id, OperationType.WORKFLOW_RUN)
-        registry.transition(op.id, default_project_id, OperationStatus.RUNNING)
+        op = await registry.create_operation(default_project_id, OperationType.WORKFLOW_RUN)
+        await registry.transition(op.id, default_project_id, OperationStatus.RUNNING)
 
         resp = await client.delete(f"/api/v1/operations/{op.id}")
         assert resp.status_code == 200
@@ -130,9 +130,9 @@ class TestOperationsAPI:
     @pytest.mark.asyncio
     async def test_cancel_terminal_operation_fails(self, app, client, default_project_id):
         registry = app.state.services.operations
-        op = registry.create_operation(default_project_id, OperationType.WORKFLOW_RUN)
-        registry.transition(op.id, default_project_id, OperationStatus.RUNNING)
-        registry.transition(op.id, default_project_id, OperationStatus.SUCCEEDED)
+        op = await registry.create_operation(default_project_id, OperationType.WORKFLOW_RUN)
+        await registry.transition(op.id, default_project_id, OperationStatus.RUNNING)
+        await registry.transition(op.id, default_project_id, OperationStatus.SUCCEEDED)
 
         resp = await client.delete(f"/api/v1/operations/{op.id}")
         assert resp.status_code == 409
@@ -146,8 +146,8 @@ class TestOperationsAPI:
     @pytest.mark.asyncio
     async def test_operation_camel_case(self, app, client, default_project_id):
         registry = app.state.services.operations
-        op = registry.create_operation(default_project_id, OperationType.WORKFLOW_RUN)
-        registry.transition(op.id, default_project_id, OperationStatus.RUNNING)
+        op = await registry.create_operation(default_project_id, OperationType.WORKFLOW_RUN)
+        await registry.transition(op.id, default_project_id, OperationStatus.RUNNING)
 
         resp = await client.get(f"/api/v1/operations/{op.id}")
         body = resp.json()
@@ -159,9 +159,9 @@ class TestOperationsAPI:
     @pytest.mark.asyncio
     async def test_operation_with_result(self, app, client, default_project_id):
         registry = app.state.services.operations
-        op = registry.create_operation(default_project_id, OperationType.WORKFLOW_RUN)
-        registry.transition(op.id, default_project_id, OperationStatus.RUNNING)
-        registry.transition(
+        op = await registry.create_operation(default_project_id, OperationType.WORKFLOW_RUN)
+        await registry.transition(op.id, default_project_id, OperationStatus.RUNNING)
+        await registry.transition(
             op.id,
             default_project_id,
             OperationStatus.SUCCEEDED,
@@ -176,9 +176,9 @@ class TestOperationsAPI:
     @pytest.mark.asyncio
     async def test_operation_with_error(self, app, client, default_project_id):
         registry = app.state.services.operations
-        op = registry.create_operation(default_project_id, OperationType.WORKFLOW_RUN)
-        registry.transition(op.id, default_project_id, OperationStatus.RUNNING)
-        registry.transition(
+        op = await registry.create_operation(default_project_id, OperationType.WORKFLOW_RUN)
+        await registry.transition(op.id, default_project_id, OperationStatus.RUNNING)
+        await registry.transition(
             op.id,
             default_project_id,
             OperationStatus.FAILED,
@@ -212,7 +212,7 @@ class TestOperationLifecycleWithSSE:
         sse_manager = app.state.services.sse
 
         # Create operation
-        op = registry.create_operation(default_project_id, OperationType.WORKFLOW_RUN)
+        op = await registry.create_operation(default_project_id, OperationType.WORKFLOW_RUN)
 
         # Simulate lifecycle with events
         from app.web.sse import EventType, OperationCompletedData, OperationStartedData, StreamEvent
@@ -227,10 +227,10 @@ class TestOperationLifecycleWithSSE:
         await sse_manager.publish(started_event)
 
         # Transition to running
-        registry.transition(op.id, default_project_id, OperationStatus.RUNNING)
+        await registry.transition(op.id, default_project_id, OperationStatus.RUNNING)
 
         # Complete
-        registry.transition(
+        await registry.transition(
             op.id,
             default_project_id,
             OperationStatus.SUCCEEDED,
@@ -267,8 +267,8 @@ class TestOperationLifecycleWithSSE:
         sse_manager = app.state.services.sse
 
         # Create and start operation
-        op = registry.create_operation(default_project_id, OperationType.WORKFLOW_RUN)
-        registry.transition(op.id, default_project_id, OperationStatus.RUNNING)
+        op = await registry.create_operation(default_project_id, OperationType.WORKFLOW_RUN)
+        await registry.transition(op.id, default_project_id, OperationStatus.RUNNING)
 
         # Cancel via API (which should emit event)
         resp = await client.delete(f"/api/v1/operations/{op.id}")
@@ -315,9 +315,9 @@ class TestOperationErrors:
     async def test_cancel_terminal_error_shape(self, app, client, default_project_id):
         """Test that cancellation conflict errors follow the standard envelope."""
         registry = app.state.services.operations
-        op = registry.create_operation(default_project_id, OperationType.WORKFLOW_RUN)
-        registry.transition(op.id, default_project_id, OperationStatus.RUNNING)
-        registry.transition(op.id, default_project_id, OperationStatus.SUCCEEDED)
+        op = await registry.create_operation(default_project_id, OperationType.WORKFLOW_RUN)
+        await registry.transition(op.id, default_project_id, OperationStatus.RUNNING)
+        await registry.transition(op.id, default_project_id, OperationStatus.SUCCEEDED)
 
         resp = await client.delete(f"/api/v1/operations/{op.id}")
         assert resp.status_code == 409

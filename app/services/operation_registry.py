@@ -55,14 +55,16 @@ class OperationRegistry:
         self._max_terminal_age = max_terminal_age_seconds
         self._lock = asyncio.Lock()
 
-    def create_operation(
+    # ── Internal (unlocked) implementations ──────────────────────────────
+
+    def _create_operation_impl(
         self,
         project_id: str,
         operation_type: OperationType,
         *,
         operation_id: str | None = None,
     ) -> ExecutionOperation:
-        """Create and register a new QUEUED operation."""
+        """Create and register a new QUEUED operation (no lock)."""
         op = ExecutionOperation.create(
             project_id=project_id,
             operation_type=operation_type,
@@ -72,33 +74,33 @@ class OperationRegistry:
         self._enforce_limit(project_id)
         return op
 
-    def get_operation(self, operation_id: str, project_id: str) -> ExecutionOperation:
-        """Retrieve an operation by ID, scoped to a project."""
+    def _get_operation_impl(self, operation_id: str, project_id: str) -> ExecutionOperation:
+        """Retrieve an operation by ID, scoped to a project (no lock)."""
         op = self._operations.get(project_id, {}).get(operation_id)
         if op is None:
             raise OperationNotFoundError(operation_id)
         return op
 
-    def get_operation_any_project(self, operation_id: str) -> ExecutionOperation:
-        """Retrieve an operation by ID across all projects."""
+    def _get_operation_any_project_impl(self, operation_id: str) -> ExecutionOperation:
+        """Retrieve an operation by ID across all projects (no lock)."""
         for project_ops in self._operations.values():
             if operation_id in project_ops:
                 return project_ops[operation_id]
         raise OperationNotFoundError(operation_id)
 
-    def list_operations(
+    def _list_operations_impl(
         self,
         project_id: str,
         *,
         status: OperationStatus | None = None,
     ) -> list[ExecutionOperation]:
-        """List all operations for a project, optionally filtered by status."""
+        """List all operations for a project (no lock)."""
         ops = list(self._operations.get(project_id, {}).values())
         if status is not None:
             ops = [op for op in ops if op.status == status]
         return sorted(ops, key=lambda o: o.created_at, reverse=True)
 
-    def transition(
+    def _transition_impl(
         self,
         operation_id: str,
         project_id: str,
@@ -108,8 +110,8 @@ class OperationRegistry:
         error: str | None = None,
         progress: float | None = None,
     ) -> ExecutionOperation:
-        """Transition an operation to a new status."""
-        op = self.get_operation(operation_id, project_id)
+        """Transition an operation to a new status (no lock)."""
+        op = self._get_operation_impl(operation_id, project_id)
         op.transition_to(target)
         if result is not None:
             op.result = result
@@ -122,28 +124,26 @@ class OperationRegistry:
             self._enforce_limit(project_id)
         return op
 
-    def cancel_operation(
+    def _cancel_operation_impl(
         self,
         operation_id: str,
         project_id: str,
     ) -> ExecutionOperation:
-        """Request cancellation of an operation.
-
-        QUEUED operations are immediately CANCELLED.
-        RUNNING operations transition to CANCELLING.
-        Terminal operations raise InvalidTransition.
-        """
-        op = self.get_operation(operation_id, project_id)
+        """Request cancellation of an operation (no lock)."""
+        op = self._get_operation_impl(operation_id, project_id)
         if op.status == OperationStatus.QUEUED:
             op.transition_to(OperationStatus.CANCELLED)
         elif op.status == OperationStatus.RUNNING:
             op.transition_to(OperationStatus.CANCELLING)
+        elif op.status == OperationStatus.CANCELLING:
+            # Already cancelling — idempotent, return as-is
+            pass
         else:
             raise InvalidTransition(op.status, OperationStatus.CANCELLED)
         return op
 
-    def cleanup_terminal(self, project_id: str | None = None) -> int:
-        """Remove expired terminal operations. Returns count removed."""
+    def _cleanup_terminal_impl(self, project_id: str | None = None) -> int:
+        """Remove expired terminal operations (no lock)."""
         now = datetime.now(UTC)
         removed = 0
         project_ids = [project_id] if project_id else list(self._operations.keys())
@@ -161,8 +161,83 @@ class OperationRegistry:
                 removed += 1
         return removed
 
+    # ── Public (locked) API ──────────────────────────────────────────────
+
+    async def create_operation(
+        self,
+        project_id: str,
+        operation_type: OperationType,
+        *,
+        operation_id: str | None = None,
+    ) -> ExecutionOperation:
+        """Create and register a new QUEUED operation."""
+        async with self._lock:
+            return self._create_operation_impl(
+                project_id, operation_type, operation_id=operation_id
+            )
+
+    async def get_operation(self, operation_id: str, project_id: str) -> ExecutionOperation:
+        """Retrieve an operation by ID, scoped to a project."""
+        async with self._lock:
+            return self._get_operation_impl(operation_id, project_id)
+
+    async def get_operation_any_project(self, operation_id: str) -> ExecutionOperation:
+        """Retrieve an operation by ID across all projects."""
+        async with self._lock:
+            return self._get_operation_any_project_impl(operation_id)
+
+    async def list_operations(
+        self,
+        project_id: str,
+        *,
+        status: OperationStatus | None = None,
+    ) -> list[ExecutionOperation]:
+        """List all operations for a project, optionally filtered by status."""
+        async with self._lock:
+            return self._list_operations_impl(project_id, status=status)
+
+    async def transition(
+        self,
+        operation_id: str,
+        project_id: str,
+        target: OperationStatus,
+        *,
+        result: dict | None = None,
+        error: str | None = None,
+        progress: float | None = None,
+    ) -> ExecutionOperation:
+        """Transition an operation to a new status."""
+        async with self._lock:
+            return self._transition_impl(
+                operation_id, project_id, target,
+                result=result, error=error, progress=progress,
+            )
+
+    async def cancel_operation(
+        self,
+        operation_id: str,
+        project_id: str,
+    ) -> ExecutionOperation:
+        """Request cancellation of an operation.
+
+        QUEUED operations are immediately CANCELLED.
+        RUNNING operations transition to CANCELLING.
+        Already-CANCELLING operations are returned as-is (idempotent).
+        Terminal operations raise InvalidTransition.
+        """
+        async with self._lock:
+            return self._cancel_operation_impl(operation_id, project_id)
+
+    async def cleanup_terminal(self, project_id: str | None = None) -> int:
+        """Remove expired terminal operations. Returns count removed."""
+        async with self._lock:
+            return self._cleanup_terminal_impl(project_id)
+
     def _enforce_limit(self, project_id: str) -> None:
-        """Remove oldest terminal operations if over the limit."""
+        """Remove oldest terminal operations if over the limit.
+
+        Note: called while lock is already held; does not acquire the lock itself.
+        """
         ops = self._operations.get(project_id, {})
         if len(ops) <= self._max_per_project:
             return
@@ -172,8 +247,16 @@ class OperationRegistry:
             key=lambda x: x[1].created_at,
         )
         excess = len(ops) - self._max_per_project
+        removed = 0
         for op_id, _ in terminal_ops[:excess]:
             del ops[op_id]
+            removed += 1
+        if removed < excess:
+            logger.warning(
+                "Could not enforce limit for project %s: %d active operations exceed "
+                "max %d but only %d terminal ops were available to evict",
+                project_id, len(ops) + removed, self._max_per_project, removed,
+            )
 
     @property
     def total_count(self) -> int:

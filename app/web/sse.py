@@ -229,9 +229,9 @@ class ReplayBuffer:
     ) -> list[StreamEvent]:
         """Get events since a given event ID for replay.
 
-        If last_event_id is None or not found, returns all buffered events.
-        If the event is too old (evicted), returns empty list to signal
-        that a stream.reset is needed.
+        If last_event_id is None, returns all buffered events.
+        If last_event_id is not found (evicted or never existed), returns
+        an empty list to signal that a stream.reset is needed.
         """
         buf = self._buffers.get(project_id)
         if not buf:

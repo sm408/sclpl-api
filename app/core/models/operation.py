@@ -134,6 +134,7 @@ class ExecutionOperation:
             "type": self.type.value,
             "status": self.status.value,
             "progress": self.progress,
+            "createdAt": self.created_at,
             "startedAt": self.started_at,
             "finishedAt": self.finished_at,
             "result": self.result,

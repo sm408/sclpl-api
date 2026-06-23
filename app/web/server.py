@@ -161,12 +161,16 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     - Create and initialize the Database (runs migrations)
     - Build the ServiceContainer
     - Start the EventBus and MonitorRunner infrastructure
+    - Schedule periodic cleanup of terminal operations
     - Store everything on app.state
 
     Shutdown:
+    - Stop the cleanup task
     - Stop all monitor tasks
     - Close the database
     """
+    import asyncio
+
     db_path: str = app.state.db_path
     db = Database(db_path)
     await db.connect()
@@ -192,12 +196,30 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     app.state.services = services
     app.state.event_bus = event_bus
 
+    # Schedule periodic cleanup of expired terminal operations
+    async def _cleanup_loop() -> None:
+        while True:
+            await asyncio.sleep(300)  # every 5 minutes
+            try:
+                removed = await operation_registry.cleanup_terminal()
+                if removed:
+                    logger.info("Cleaned up %d expired terminal operations", removed)
+            except Exception:
+                logger.exception("Error during operation cleanup")
+
+    cleanup_task = asyncio.create_task(_cleanup_loop())
+
     logger.info("Web API started — database at %s", db_path)
 
     yield  # ── app is running ──
 
     # Shutdown
     logger.info("Web API shutting down")
+    cleanup_task.cancel()
+    try:
+        await cleanup_task
+    except asyncio.CancelledError:
+        pass
     await sse_manager.shutdown()
     await db.close()
 

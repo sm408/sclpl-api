@@ -51,7 +51,7 @@ async def list_operations(
             return {"items": [], "total": 0}
 
     if project_id:
-        ops = registry.list_operations(project_id, status=status_filter)
+        ops = await registry.list_operations(project_id, status=status_filter)
     else:
         return {"items": [], "total": 0}
 
@@ -68,9 +68,9 @@ async def get_operation(
     """Get a single operation by ID."""
     try:
         if project_id:
-            op = registry.get_operation(operation_id, project_id)
+            op = await registry.get_operation(operation_id, project_id)
         else:
-            op = registry.get_operation_any_project(operation_id)
+            op = await registry.get_operation_any_project(operation_id)
         return op.to_dict()
     except OperationNotFoundError as err:
         raise NotFoundError(
@@ -93,10 +93,10 @@ async def cancel_operation(
     """
     try:
         if project_id:
-            op = registry.cancel_operation(operation_id, project_id)
+            op = await registry.cancel_operation(operation_id, project_id)
         else:
-            op = registry.get_operation_any_project(operation_id)
-            op = registry.cancel_operation(operation_id, op.project_id)
+            op = await registry.get_operation_any_project(operation_id)
+            op = await registry.cancel_operation(operation_id, op.project_id)
 
         # Emit cancellation event
         event = StreamEvent.create(
