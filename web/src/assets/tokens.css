@@ -8,7 +8,8 @@
  * Usage:
  *   <html data-theme="dark" data-density="comfortable">
  *
- * Reduced motion and 200% zoom are handled via media queries.
+ * Reduced motion is handled via media query. All sizing uses rem units
+ * so zoom is handled naturally by the browser.
  */
 
 /* ── Base reset ──────────────────────────────────────────────────────── */
@@ -342,25 +343,13 @@ body {
   color: var(--text-primary);
 }
 
-/* ── 200% zoom support ──────────────────────────────────────────────── */
-
-@media (min-resolution: 192dpi) {
-  :root {
-    --density-font-xs: max(var(--density-font-xs), 0.625rem);
-    --density-font-sm: max(var(--density-font-sm), 0.6875rem);
-    --density-font-base: max(var(--density-font-base), 0.75rem);
-  }
-}
-
-/* Ensure minimum touch target sizes at high zoom */
-@media (min-resolution: 192dpi) {
-  button,
-  [role="button"],
-  a,
-  input,
-  select,
-  textarea {
-    min-height: 24px;
-    min-width: 24px;
-  }
+/* Minimum touch target sizes for accessibility */
+button,
+[role="button"],
+a,
+input,
+select,
+textarea {
+  min-height: 24px;
+  min-width: 24px;
 }

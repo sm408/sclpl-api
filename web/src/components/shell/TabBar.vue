@@ -6,7 +6,7 @@
  */
 
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useTabsStore } from '@/stores/tabs'
 import type { Tab } from '@/stores/tabs'
@@ -50,7 +50,11 @@ function closeTab(e: MouseEvent, id: string): void {
 
 function showContextMenu(e: MouseEvent, tabId: string): void {
   e.preventDefault()
-  contextMenu.value = { x: e.clientX, y: e.clientY, tabId }
+  const menuWidth = 160
+  const menuHeight = 120
+  const x = Math.min(e.clientX, window.innerWidth - menuWidth - 4)
+  const y = Math.min(e.clientY, window.innerHeight - menuHeight - 4)
+  contextMenu.value = { x: Math.max(0, x), y: Math.max(0, y), tabId }
 }
 
 function closeContextMenu(): void {
@@ -109,8 +113,6 @@ function handleGlobalKeydown(e: KeyboardEvent): void {
 function handleDocumentClick(): void {
   closeContextMenu()
 }
-
-import { onMounted, onUnmounted } from 'vue'
 
 onMounted(() => {
   document.addEventListener('keydown', handleGlobalKeydown)

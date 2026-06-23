@@ -10,6 +10,7 @@
 import { ref, onMounted, onUnmounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useCommandsStore } from '@/stores/commands'
+import { useThemeStore } from '@/stores/theme'
 import {
   FolderOpen,
   GitBranch,
@@ -35,6 +36,7 @@ interface RailItem {
 const router = useRouter()
 const route = useRoute()
 const commands = useCommandsStore()
+const themeStore = useThemeStore()
 
 const topItems: RailItem[] = [
   { id: 'home', icon: Home, label: 'Home', route: '/' },
@@ -58,11 +60,7 @@ function navigate(item: RailItem): void {
 }
 
 function toggleTheme(): void {
-  // Will be connected to theme store in AppShell
-  const html = document.documentElement
-  const current = html.getAttribute('data-theme') ?? 'dark'
-  const next = current === 'dark' ? 'light' : 'dark'
-  html.setAttribute('data-theme', next)
+  themeStore.cycleTheme()
 }
 
 function handleKeydown(e: KeyboardEvent): void {

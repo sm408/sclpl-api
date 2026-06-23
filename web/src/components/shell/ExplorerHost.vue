@@ -10,16 +10,8 @@ import { ref, computed, onMounted, watch } from 'vue'
 import { useProjectStore } from '@/stores/project'
 import { useTabsStore } from '@/stores/tabs'
 import type { Tab } from '@/stores/tabs'
-import {
-  ChevronRight,
-  ChevronDown,
-  FolderOpen,
-  GitBranch,
-  Radio,
-  Puzzle,
-  FileCode,
-  Loader2,
-} from 'lucide-vue-next'
+import TreeNode from './TreeNode.vue'
+import { FolderOpen, Loader2 } from 'lucide-vue-next'
 
 export interface TreeNode {
   id: string
@@ -48,16 +40,6 @@ const focusedId = ref<string | null>(null)
 const panelWidth = ref(240)
 const isResizing = ref(false)
 
-const iconMap: Record<Tab['kind'], typeof FolderOpen> = {
-  request: FileCode,
-  workflow: GitBranch,
-  monitor: Radio,
-  function: Puzzle,
-  environment: FolderOpen,
-  settings: FolderOpen,
-  home: FolderOpen,
-}
-
 function toggleExpand(id: string): void {
   if (expandedIds.value.has(id)) {
     expandedIds.value.delete(id)
@@ -82,32 +64,6 @@ function openNode(node: TreeNode): void {
       projectId: projectStore.activeProjectId ?? '',
       pinned: false,
     })
-  }
-}
-
-function isExpanded(id: string): boolean {
-  return expandedIds.value.has(id)
-}
-
-function handleNodeKeydown(e: KeyboardEvent, node: TreeNode): void {
-  switch (e.key) {
-    case 'Enter':
-    case ' ':
-      e.preventDefault()
-      openNode(node)
-      break
-    case 'ArrowRight':
-      if (node.expandable && !isExpanded(node.id)) {
-        e.preventDefault()
-        expandedIds.value.add(node.id)
-      }
-      break
-    case 'ArrowLeft':
-      if (node.expandable && isExpanded(node.id)) {
-        e.preventDefault()
-        expandedIds.value.delete(node.id)
-      }
-      break
   }
 }
 
@@ -159,112 +115,17 @@ function startResize(e: MouseEvent): void {
       </div>
 
       <template v-else>
-        <div
+        <TreeNode
           v-for="node in nodes"
           :key="node.id"
-          class="tree-node"
-        >
-          <button
-            class="node-row"
-            :class="{
-              expanded: isExpanded(node.id),
-              focused: focusedId === node.id,
-            }"
-            role="treeitem"
-            :aria-expanded="node.expandable ? isExpanded(node.id) : undefined"
-            :aria-selected="focusedId === node.id"
-            :style="{ paddingLeft: 'var(--density-space-2)' }"
-            @click="openNode(node)"
-            @keydown="handleNodeKeydown($event, node)"
-            @focus="focusedId = node.id"
-          >
-            <ChevronDown
-              v-if="node.expandable && isExpanded(node.id)"
-              :size="14"
-              class="expand-icon"
-            />
-            <ChevronRight
-              v-else-if="node.expandable"
-              :size="14"
-              class="expand-icon"
-            />
-            <span v-else class="expand-icon-spacer" />
-
-            <component
-              :is="node.icon ?? iconMap[node.kind]"
-              :size="14"
-              class="node-icon"
-            />
-            <span class="node-label">{{ node.label }}</span>
-          </button>
-
-          <!-- Children -->
-          <div
-            v-if="node.children && isExpanded(node.id)"
-            class="node-children"
-            role="group"
-          >
-            <div
-              v-for="child in node.children"
-              :key="child.id"
-              class="tree-node"
-            >
-              <button
-                class="node-row child"
-                role="treeitem"
-                :style="{ paddingLeft: `calc(var(--density-space-2) + var(--density-explorer-indent))` }"
-                @click="openNode(child)"
-                @keydown="handleNodeKeydown($event, child)"
-                @focus="focusedId = child.id"
-              >
-                <ChevronDown
-                  v-if="child.expandable && isExpanded(child.id)"
-                  :size="14"
-                  class="expand-icon"
-                />
-                <ChevronRight
-                  v-else-if="child.expandable"
-                  :size="14"
-                  class="expand-icon"
-                />
-                <span v-else class="expand-icon-spacer" />
-
-                <component
-                  :is="child.icon ?? iconMap[child.kind]"
-                  :size="14"
-                  class="node-icon"
-                />
-                <span class="node-label">{{ child.label }}</span>
-              </button>
-
-              <!-- Level 3 children -->
-              <div
-                v-if="child.children && isExpanded(child.id)"
-                class="node-children"
-                role="group"
-              >
-                <button
-                  v-for="grandchild in child.children"
-                  :key="grandchild.id"
-                  class="node-row grandchild"
-                  role="treeitem"
-                  :style="{ paddingLeft: `calc(var(--density-space-2) + var(--density-explorer-indent) * 2)` }"
-                  @click="openNode(grandchild)"
-                  @keydown="handleNodeKeydown($event, grandchild)"
-                  @focus="focusedId = grandchild.id"
-                >
-                  <span class="expand-icon-spacer" />
-                  <component
-                    :is="grandchild.icon ?? iconMap[grandchild.kind]"
-                    :size="14"
-                    class="node-icon"
-                  />
-                  <span class="node-label">{{ grandchild.label }}</span>
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
+          :node="node"
+          :depth="0"
+          :expanded-ids="expandedIds"
+          :focused-id="focusedId"
+          @toggle-expand="toggleExpand"
+          @open-node="openNode"
+          @focus="focusedId = $event"
+        />
       </template>
     </div>
 
@@ -343,63 +204,6 @@ function startResize(e: MouseEvent): void {
 @keyframes spin {
   from { transform: rotate(0deg); }
   to { transform: rotate(360deg); }
-}
-
-/* ── Tree nodes ───────────────────────────────────────────────────── */
-
-.node-row {
-  display: flex;
-  align-items: center;
-  gap: var(--density-space-1);
-  width: 100%;
-  padding: var(--density-space-1) var(--density-space-2);
-  border: none;
-  border-radius: 0;
-  background: transparent;
-  color: var(--text-primary);
-  font-size: var(--density-font-sm);
-  cursor: pointer;
-  text-align: left;
-  transition: background var(--transition-fast);
-}
-
-.node-row:hover {
-  background: var(--surface-raised);
-}
-
-.node-row:focus-visible {
-  box-shadow: inset var(--focus-ring);
-  outline: none;
-}
-
-.node-row.focused {
-  background: var(--surface-raised);
-}
-
-.expand-icon {
-  flex-shrink: 0;
-  color: var(--text-tertiary);
-}
-
-.expand-icon-spacer {
-  width: 14px;
-  flex-shrink: 0;
-}
-
-.node-icon {
-  flex-shrink: 0;
-  color: var(--text-secondary);
-}
-
-.node-label {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  min-width: 0;
-}
-
-.node-children {
-  /* Indentation is handled via padding on child rows */
 }
 
 /* ── Resize handle ────────────────────────────────────────────────── */

@@ -100,7 +100,7 @@ onUnmounted(() => {
         ref="dropdownRef"
         class="project-switcher"
         role="combobox"
-        aria-expanded="showProjectDropdown"
+        :aria-expanded="showProjectDropdown"
         aria-haspopup="listbox"
         aria-label="Switch project"
       >
