@@ -83,6 +83,57 @@ export async function apiFetch<T>(
 }
 
 /**
+ * Upload a file (or FormData) via multipart/form-data and return parsed JSON.
+ * Throws StudioError on non-2xx responses, matching apiFetch error handling.
+ */
+export async function apiUpload<T>(
+  baseUrl: string,
+  path: string,
+  formData: FormData,
+  opts: { signal?: AbortSignal; headers?: Record<string, string> } = {},
+): Promise<T> {
+  const url = new URL(path, baseUrl || window.location.origin)
+
+  const headers: Record<string, string> = {
+    ...opts.headers,
+    // Do NOT set Content-Type — the browser adds the multipart boundary
+  }
+
+  let response: Response
+  try {
+    response = await fetch(url.toString(), {
+      method: 'POST',
+      headers,
+      body: formData,
+      signal: opts.signal,
+    })
+  } catch (err: unknown) {
+    if (err instanceof DOMException && err.name === 'AbortError') {
+      throw new StudioError({
+        message: 'Request was cancelled',
+        code: 'ABORTED',
+        status: 0,
+      })
+    }
+    throw new StudioError({
+      message: err instanceof Error ? err.message : 'Network error',
+      code: 'NETWORK_ERROR',
+      status: 0,
+    })
+  }
+
+  if (!response.ok) {
+    await throwApiError(response)
+  }
+
+  if (response.status === 204) {
+    return undefined as T
+  }
+
+  return (await response.json()) as T
+}
+
+/**
  * Parse a non-2xx response and throw a StudioError.
  */
 async function throwApiError(response: Response): Promise<never> {

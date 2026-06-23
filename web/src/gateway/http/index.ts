@@ -58,7 +58,7 @@ import type {
   AppSettings,
   SseEventType,
 } from '@/types/api'
-import { apiFetch } from './client'
+import { apiFetch, apiUpload } from './client'
 import { connectSse } from './sse'
 
 // ── Health ──────────────────────────────────────────────────────────────
@@ -581,28 +581,12 @@ class HttpTransfersGateway implements TransfersGateway {
   async import(projectId: string, file: File, opts?: GatewayOptions): Promise<Operation> {
     const formData = new FormData()
     formData.append('file', file)
-
-    const url = new URL(
+    return apiUpload<Operation>(
+      this.base,
       `/api/v1/projects/${projectId}/import`,
-      this.base || window.location.origin,
+      formData,
+      { signal: opts?.signal },
     )
-
-    const response = await fetch(url.toString(), {
-      method: 'POST',
-      body: formData,
-      signal: opts?.signal,
-    })
-
-    if (!response.ok) {
-      const { StudioError } = await import('../error')
-      throw new StudioError({
-        message: `Import failed: ${response.statusText}`,
-        code: 'IMPORT_ERROR',
-        status: response.status,
-      })
-    }
-
-    return (await response.json()) as Operation
   }
 
   async presets(projectId: string, opts?: GatewayOptions): Promise<ExportPreset[]> {

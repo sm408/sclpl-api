@@ -499,3 +499,49 @@ async def test_lifespan_shutdown_closes_database(tmp_path):
 
     # After exit, the connection should be closed
     assert application.state.db._db is None
+
+
+# ── CSP ───────────────────────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_csp_connect_src_restricted(client):
+    """connect-src must not allow arbitrary origins."""
+    resp = await client.get("/health")
+    csp = resp.headers["Content-Security-Policy"]
+    assert "connect-src" in csp
+    # Must NOT contain the overly broad "http: https:"
+    assert "http: https:" not in csp
+    # Must allow self and localhost
+    assert "'self'" in csp
+    assert "http://127.0.0.1:" in csp
+    assert "http://localhost:" in csp
+
+
+# ── SPA fallback ──────────────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_spa_fallback_returns_no_cache_header(client):
+    """SPA fallback for index.html must set Cache-Control: no-cache."""
+    resp = await client.get("/some-client-route")
+    assert resp.status_code == 200
+    assert resp.headers.get("Cache-Control") == "no-cache"
+
+
+@pytest.mark.asyncio
+async def test_spa_fallback_returns_html(client):
+    """SPA fallback should return HTML content."""
+    resp = await client.get("/some-client-route")
+    assert resp.status_code == 200
+    assert "text/html" in resp.headers.get("content-type", "")
+
+
+@pytest.mark.asyncio
+async def test_api_unknown_route_returns_json_404(client):
+    """API routes that don't match should return JSON 404, not SPA HTML."""
+    resp = await client.get("/api/v1/nonexistent")
+    assert resp.status_code == 404
+    assert resp.headers["content-type"].startswith("application/json")
+    body = resp.json()
+    assert body["error"]["code"] == "NOT_FOUND"

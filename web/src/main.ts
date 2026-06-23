@@ -4,12 +4,17 @@ import App from './App.vue'
 import { router } from './router'
 import { initGateway } from './gateway'
 
-const app = createApp(App)
+async function bootstrap(): Promise<void> {
+  // Initialize the gateway based on environment configuration.
+  // Must complete before any component calls getGateway().
+  await initGateway()
 
-app.use(createPinia())
-app.use(router)
+  const app = createApp(App)
 
-// Initialize the gateway based on environment configuration
-initGateway()
+  app.use(createPinia())
+  app.use(router)
 
-app.mount('#app')
+  app.mount('#app')
+}
+
+bootstrap()

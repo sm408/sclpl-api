@@ -69,7 +69,7 @@ SECURITY_HEADERS = {
         "style-src 'self' 'unsafe-inline'; "
         "img-src 'self' data:; "
         "font-src 'self'; "
-        "connect-src 'self' http: https:; "
+        "connect-src 'self' http://127.0.0.1:* http://localhost:*; "
         "worker-src 'self' blob:"
     ),
 }
@@ -300,6 +300,9 @@ def create_app(
                     },
                 )
             index = static_dir / "index.html"
-            return FileResponse(str(index))
+            return FileResponse(
+                str(index),
+                headers={"Cache-Control": "no-cache"},
+            )
 
     return app
