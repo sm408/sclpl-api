@@ -7,8 +7,6 @@ All operations are scoped to a project.
 
 from __future__ import annotations
 
-from typing import Any
-
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import JSONResponse
 
@@ -27,6 +25,7 @@ from app.web.dto import (
     FunctionCreate,
     FunctionResponse,
     FunctionListItem,
+    FunctionUpdate,
     PaginatedResponse,
     TrustAckRequest,
     TrustAckResponse,
@@ -67,7 +66,7 @@ async def list_function_tree(
 ) -> dict:
     """List the function file tree for a project."""
     svc = await _get_function_service(project_id, request)
-    tree = svc._file_service.list_tree("")
+    tree = svc.list_tree()
     return {"tree": tree}
 
 
@@ -147,7 +146,7 @@ async def create_function(
 async def update_function(
     project_id: str,
     path: str,
-    body: dict[str, Any],
+    body: FunctionUpdate,
     request: Request,
 ) -> dict:
     """Update a function's source content."""
@@ -159,12 +158,9 @@ async def update_function(
     except Exception:
         raise NotFoundError(message=f"Function '{path}' not found.")
 
-    source = body.get("source")
-    expected_hash = body.get("expectedHash")
-
-    if source is not None:
+    if body.source is not None:
         try:
-            data = svc.save_function(path, source, expected_hash=expected_hash)
+            data = svc.save_function(path, body.source, expected_hash=body.expected_hash)
         except ValidationError:
             raise
         except Exception as exc:

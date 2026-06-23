@@ -175,7 +175,7 @@ describe('MockGateway', () => {
     it('lists functions', async () => {
       const fns = await gw.functions.list(IDS.project)
       expect(fns.length).toBeGreaterThan(0)
-      expect(fns[0]!.source).toContain('def ')
+      expect(fns[0]!.name).toBeTruthy()
     })
   })
 

@@ -53,6 +53,13 @@ class FunctionService:
 
     # ── Discovery ───────────────────────────────────────────────────────
 
+    def list_tree(self) -> list[dict]:
+        """Return the function file tree.
+
+        Delegates to the underlying FileService.
+        """
+        return self._file_service.list_tree("")
+
     def list_functions(self) -> list[dict]:
         """List all discovered functions with metadata.
 

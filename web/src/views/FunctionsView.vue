@@ -12,9 +12,11 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/vue-query'
 import { getGateway } from '@/gateway'
 import { useProjectStore } from '@/stores/project'
 import type { FunctionListItem, FunctionDetail, AstDiagnostic, FixtureResult, FileTreeEntry } from '@/types/api'
+import MonacoEditor from '@/components/common/MonacoEditor.vue'
+import FileTreeNode from '@/components/functions/FileTreeNode.vue'
 import {
   FileCode, Plus, Trash2, Play, Shield, ShieldOff, CheckCircle, AlertTriangle,
-  Loader2, ChevronRight, ChevronDown, Folder, FolderOpen, RefreshCw,
+  Loader2, RefreshCw,
 } from 'lucide-vue-next'
 
 const router = useRouter()
@@ -195,8 +197,8 @@ function selectFile(path: string): void {
   fixtureResult.value = null
 }
 
-function onSourceChange(e: Event): void {
-  sourceCode.value = (e.target as HTMLTextAreaElement).value
+function onSourceUpdate(val: string): void {
+  sourceCode.value = val
   isDirty.value = true
 }
 
@@ -240,38 +242,16 @@ function severityIcon(severity: string): string {
             Loading...
           </div>
           <template v-else-if="fileTree">
-            <div v-for="entry in fileTree" :key="entry.path">
-              <div
-                class="tree-item"
-                :class="{ selected: selectedPath === entry.path }"
-                @click="entry.type === 'dir' ? toggleDir(entry.path) : selectFile(entry.path)"
-              >
-                <template v-if="entry.type === 'dir'">
-                  <ChevronDown v-if="expandedDirs.has(entry.path)" :size="14" />
-                  <ChevronRight v-else :size="14" />
-                  <FolderOpen v-if="expandedDirs.has(entry.path)" :size="14" />
-                  <Folder v-else :size="14" />
-                </template>
-                <template v-else>
-                  <span class="indent"></span>
-                  <FileCode :size="14" />
-                </template>
-                <span class="tree-name">{{ entry.name }}</span>
-              </div>
-              <div v-if="entry.type === 'dir' && expandedDirs.has(entry.path) && entry.children" class="tree-children">
-                <div
-                  v-for="child in entry.children"
-                  :key="child.path"
-                  class="tree-item"
-                  :class="{ selected: selectedPath === child.path }"
-                  @click="selectFile(child.path)"
-                >
-                  <span class="indent"></span>
-                  <FileCode :size="14" />
-                  <span class="tree-name">{{ child.name }}</span>
-                </div>
-              </div>
-            </div>
+            <FileTreeNode
+              v-for="entry in fileTree"
+              :key="entry.path"
+              :entry="entry"
+              :depth="0"
+              :expanded-dirs="expandedDirs"
+              :selected-path="selectedPath"
+              @toggle-dir="toggleDir"
+              @select-file="selectFile"
+            />
           </template>
           <div v-else class="empty-tree">
             <FileCode :size="32" />
@@ -336,12 +316,10 @@ function severityIcon(severity: string): string {
 
           <!-- Code editor -->
           <div class="editor-body">
-            <textarea
-              class="code-editor"
-              :value="sourceCode"
-              @input="onSourceChange"
-              spellcheck="false"
-              placeholder="# Write your Python function here..."
+            <MonacoEditor
+              :model-value="sourceCode"
+              language="python"
+              @update:model-value="onSourceUpdate"
             />
           </div>
 
@@ -490,42 +468,6 @@ function severityIcon(severity: string): string {
   padding: var(--density-space-2);
 }
 
-.tree-item {
-  display: flex;
-  align-items: center;
-  gap: var(--density-space-1);
-  padding: 4px 8px;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 13px;
-  color: var(--text-primary);
-}
-
-.tree-item:hover {
-  background: var(--surface-hover);
-}
-
-.tree-item.selected {
-  background: var(--surface-active);
-  color: var(--text-accent);
-}
-
-.tree-name {
-  flex: 1;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.indent {
-  width: 14px;
-  flex-shrink: 0;
-}
-
-.tree-children {
-  padding-left: 16px;
-}
-
 .functions-editor {
   flex: 1;
   display: flex;
@@ -562,22 +504,6 @@ function severityIcon(severity: string): string {
 .editor-body {
   flex: 1;
   overflow: hidden;
-}
-
-.code-editor {
-  width: 100%;
-  height: 100%;
-  min-height: 200px;
-  padding: var(--density-space-3);
-  font-family: 'Cascadia Code', 'Fira Code', 'Consolas', monospace;
-  font-size: 13px;
-  line-height: 1.6;
-  background: var(--surface-primary);
-  color: var(--text-primary);
-  border: none;
-  resize: none;
-  outline: none;
-  tab-size: 4;
 }
 
 .diagnostics-panel,

@@ -8,10 +8,12 @@ to a project.
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 from typing import Any
 
 from fastapi import APIRouter, Depends, Request
+from fastapi.background import BackgroundTasks
 from fastapi.responses import FileResponse, JSONResponse
 
 from app.services.plugin_service import PluginService
@@ -298,6 +300,7 @@ async def export_plugin(
     project_id: str,
     name: str,
     request: Request,
+    background_tasks: BackgroundTasks,
 ) -> FileResponse:
     """Export a plugin as a zip archive."""
     svc = await _get_plugin_service(project_id, request)
@@ -308,9 +311,19 @@ async def export_plugin(
     except Exception as exc:
         raise BadRequestError(message=f"Failed to export plugin: {exc}")
 
+    background_tasks.add_task(_cleanup_temp, zip_path)
+
     return FileResponse(
         path=str(zip_path),
         filename=f"{name}.zip",
         media_type="application/zip",
         headers={"Content-Disposition": f'attachment; filename="{name}.zip"'},
     )
+
+
+def _cleanup_temp(path: Path) -> None:
+    """Remove a temporary file, ignoring errors."""
+    try:
+        os.unlink(path)
+    except OSError:
+        pass

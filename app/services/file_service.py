@@ -23,7 +23,7 @@ import re
 import tempfile
 from pathlib import Path
 
-from app.web.errors import BadRequestError, ValidationError
+from app.web.errors import BadRequestError, ConflictError, ValidationError
 
 logger = logging.getLogger(__name__)
 
@@ -338,11 +338,8 @@ class FileService:
 # ── Custom exceptions ────────────────────────────────────────────────────
 
 
-class ConflictHashError(BadRequestError):
+class ConflictHashError(ConflictError):
     """SHA-256 hash mismatch on write (stale content)."""
-
-    code = "CONFLICT"
-    status_code = 409
 
     def __init__(
         self,
