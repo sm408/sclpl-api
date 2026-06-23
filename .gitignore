@@ -57,3 +57,4 @@ web/dist/
 
 # Generated OpenAPI schema
 web/openapi.json
+data/projects/
