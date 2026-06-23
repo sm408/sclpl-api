@@ -84,6 +84,43 @@ class EnvironmentRepository:
         await self._db.commit()
         return cursor.rowcount > 0
 
+    async def update(self, env_id: str, data: dict) -> dict | None:
+        """Update environment name. Returns updated dict or None if not found."""
+        existing = await self._db.fetch_one(
+            "SELECT * FROM environments WHERE id = ?", (env_id,)
+        )
+        if not existing:
+            return None
+        now = datetime.now(timezone.utc).isoformat()
+        fields = []
+        values = []
+        if "name" in data and data["name"] is not None:
+            fields.append("name = ?")
+            values.append(data["name"])
+        if fields:
+            new_rev = (existing.get("revision", 1) or 1) + 1
+            fields.append("revision = ?")
+            values.append(new_rev)
+            fields.append("updated_at = ?")
+            values.append(now)
+            values.append(env_id)
+            sql = f"UPDATE environments SET {', '.join(fields)} WHERE id = ?"
+            await self._db.execute(sql, tuple(values))
+            await self._db.commit()
+        return await self.get(env_id)
+
+    async def set_variables(self, env_id: str, variables: list[dict]) -> None:
+        """Replace all variables for an environment."""
+        await self._db.execute(
+            "DELETE FROM variables WHERE environment_id = ?", (env_id,)
+        )
+        for var in variables:
+            await self._db.execute(
+                "INSERT INTO variables (environment_id, key, value, scope, is_secret) VALUES (?, ?, ?, 'environment', ?)",
+                (env_id, var["key"], var["value"], int(var.get("is_secret", False))),
+            )
+        await self._db.commit()
+
     async def set_variable(
         self, env_id: str, key: str, value: str, is_secret: bool = False
     ) -> None:

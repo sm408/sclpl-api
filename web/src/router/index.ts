@@ -41,7 +41,7 @@ const routes: RouteRecordRaw[] = [
   {
     path: '/collections',
     name: 'collections',
-    component: () => import('@/views/placeholder/CollectionsView.vue'),
+    component: () => import('@/views/CollectionsView.vue'),
     meta: {
       kind: 'request',
       section: 'collections',
@@ -63,7 +63,7 @@ const routes: RouteRecordRaw[] = [
   {
     path: '/requests/:requestId',
     name: 'request-detail',
-    component: () => import('@/views/placeholder/RequestView.vue'),
+    component: () => import('@/views/RequestEditorView.vue'),
     meta: {
       kind: 'request',
       section: 'collections',
@@ -140,7 +140,7 @@ const routes: RouteRecordRaw[] = [
   {
     path: '/history',
     name: 'history',
-    component: () => import('@/views/placeholder/HistoryView.vue'),
+    component: () => import('@/views/HistoryView.vue'),
     meta: {
       kind: 'request',
       title: 'History',

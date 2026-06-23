@@ -50,6 +50,55 @@ class HistoryRepository:
             (limit,),
         )
 
+    async def list_paginated(
+        self,
+        project_id: str,
+        *,
+        cursor: str | None = None,
+        limit: int = 50,
+        request_id: str | None = None,
+    ) -> tuple[list[dict], str | None]:
+        """Cursor-based pagination.
+
+        Returns (items, next_cursor).  Cursor is the created_at of the last
+        item in the previous page.
+        """
+        if request_id:
+            if cursor:
+                rows = await self._db.fetch_all(
+                    """SELECT * FROM history
+                    WHERE project_id = ? AND request_id = ? AND created_at < ?
+                    ORDER BY created_at DESC LIMIT ?""",
+                    (project_id, request_id, cursor, limit + 1),
+                )
+            else:
+                rows = await self._db.fetch_all(
+                    """SELECT * FROM history
+                    WHERE project_id = ? AND request_id = ?
+                    ORDER BY created_at DESC LIMIT ?""",
+                    (project_id, request_id, limit + 1),
+                )
+        else:
+            if cursor:
+                rows = await self._db.fetch_all(
+                    """SELECT * FROM history
+                    WHERE project_id = ? AND created_at < ?
+                    ORDER BY created_at DESC LIMIT ?""",
+                    (project_id, cursor, limit + 1),
+                )
+            else:
+                rows = await self._db.fetch_all(
+                    """SELECT * FROM history
+                    WHERE project_id = ?
+                    ORDER BY created_at DESC LIMIT ?""",
+                    (project_id, limit + 1),
+                )
+        next_cursor = None
+        if len(rows) > limit:
+            next_cursor = rows[limit - 1]["created_at"]
+            rows = rows[:limit]
+        return rows, next_cursor
+
     async def get(self, history_id: str) -> dict | None:
         return await self._db.fetch_one(
             "SELECT * FROM history WHERE id = ?", (history_id,)
@@ -60,6 +109,15 @@ class HistoryRepository:
             "SELECT * FROM history WHERE request_id = ? ORDER BY created_at DESC LIMIT ?",
             (request_id, limit),
         )
+
+    async def count(self, project_id: str | None = None) -> int:
+        if project_id:
+            row = await self._db.fetch_one(
+                "SELECT COUNT(*) as cnt FROM history WHERE project_id = ?", (project_id,)
+            )
+        else:
+            row = await self._db.fetch_one("SELECT COUNT(*) as cnt FROM history")
+        return row["cnt"] if row else 0
 
     async def clear(self, project_id: str | None = None) -> int:
         if project_id:
