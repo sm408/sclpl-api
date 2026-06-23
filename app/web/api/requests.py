@@ -11,16 +11,17 @@ import json
 from fastapi import APIRouter, Depends
 
 from app.core.models.context import ExecutionContext
+from app.core.models.environment import Environment, Variable, VariableScope
 from app.core.models.request import HttpMethod, RequestDef, RequestParam
 from app.services.collection_service import RequestRepository
+from app.services.environment_service import EnvironmentRepository
 from app.services.history_service import HistoryRepository
 from app.services.request_executor import HttpRequestExecutor
-from app.web.deps import _get_executor, _get_history_repo, _get_request_repo
+from app.web.converters import history_to_response, request_to_response
+from app.web.deps import _get_environment_repo, _get_executor, _get_history_repo, _get_request_repo
 from app.web.dto import (
     ExecuteRequest,
-    HistoryResponse,
     PaginatedResponse,
-    ParamDto,
     RequestCreate,
     RequestResponse,
     RequestUpdate,
@@ -32,79 +33,6 @@ router = APIRouter(
     prefix="/api/v1/projects/{project_id}/requests",
     tags=["requests"],
 )
-
-
-def _to_response(req: dict) -> dict:
-    """Convert a raw request dict from DB to a camelCase response dict."""
-    headers = req.get("headers", "[]")
-    if isinstance(headers, str):
-        try:
-            headers = json.loads(headers)
-        except (json.JSONDecodeError, TypeError):
-            headers = []
-    query_params = req.get("query_params", "[]")
-    if isinstance(query_params, str):
-        try:
-            query_params = json.loads(query_params)
-        except (json.JSONDecodeError, TypeError):
-            query_params = []
-    auth_config = req.get("auth_config", "{}")
-    if isinstance(auth_config, str):
-        try:
-            auth_config = json.loads(auth_config)
-        except (json.JSONDecodeError, TypeError):
-            auth_config = {}
-
-    return RequestResponse(
-        id=req["id"],
-        project_id=req.get("project_id", ""),
-        collection_id=req.get("collection_id"),
-        name=req["name"],
-        method=req.get("method", "GET"),
-        url=req.get("url", ""),
-        headers=[ParamDto(**h) for h in headers] if isinstance(headers, list) else [],
-        query_params=[ParamDto(**p) for p in query_params] if isinstance(query_params, list) else [],
-        body=req.get("body"),
-        body_type=req.get("body_type"),
-        auth_type=req.get("auth_type"),
-        auth_config=auth_config if isinstance(auth_config, dict) else {},
-        revision=req.get("revision", 1),
-        created_at=req.get("created_at"),
-        updated_at=req.get("updated_at"),
-    ).model_dump(by_alias=True)
-
-
-def _history_to_response(row: dict) -> dict:
-    """Convert a raw history dict from DB to a camelCase response dict."""
-    response_headers = row.get("response_headers", "{}")
-    if isinstance(response_headers, str):
-        try:
-            response_headers = json.loads(response_headers)
-        except (json.JSONDecodeError, TypeError):
-            response_headers = {}
-    variables_used = row.get("variables_used", "{}")
-    if isinstance(variables_used, str):
-        try:
-            variables_used = json.loads(variables_used)
-        except (json.JSONDecodeError, TypeError):
-            variables_used = {}
-    return HistoryResponse(
-        id=row["id"],
-        project_id=row.get("project_id", ""),
-        request_id=row.get("request_id"),
-        request_name=row.get("request_name", ""),
-        method=row.get("method", ""),
-        url=row.get("url", ""),
-        status=row.get("status", ""),
-        status_code=row.get("status_code"),
-        response_body=row.get("response_body"),
-        response_headers=response_headers if isinstance(response_headers, dict) else {},
-        duration_ms=row.get("duration_ms", 0),
-        error_message=row.get("error_message"),
-        environment_id=row.get("environment_id"),
-        variables_used=variables_used if isinstance(variables_used, dict) else {},
-        created_at=row.get("created_at"),
-    ).model_dump(by_alias=True)
 
 
 def _dto_to_request_def(data: dict, request_id: str = "", project_id: str = "") -> RequestDef:
@@ -168,7 +96,7 @@ async def list_requests(
 ) -> PaginatedResponse:
     """List requests, optionally filtered by collection."""
     reqs = await repo.list_all(collection_id=collection_id, project_id=project_id)
-    items = [_to_response(r) for r in reqs]
+    items = [request_to_response(r) for r in reqs]
     return PaginatedResponse(items=items, total=len(items))
 
 
@@ -198,7 +126,7 @@ async def create_request(
         "project_id": project_id,
     }
     created = await repo.create(data)
-    return RequestResponse.model_validate(_to_response(created))
+    return RequestResponse.model_validate(request_to_response(created))
 
 
 @router.get("/{request_id}", response_model=RequestResponse)
@@ -211,7 +139,7 @@ async def get_request(
     req = await repo.get(request_id)
     if not req or req.get("project_id") != project_id:
         raise NotFoundError(message=f"Request '{request_id}' not found.")
-    return RequestResponse.model_validate(_to_response(req))
+    return RequestResponse.model_validate(request_to_response(req))
 
 
 @router.patch("/{request_id}", response_model=RequestResponse)
@@ -252,7 +180,7 @@ async def update_request(
         raise ConflictError(
             message="Revision conflict — the request was modified by another client."
         )
-    return RequestResponse.model_validate(_to_response(updated))
+    return RequestResponse.model_validate(request_to_response(updated))
 
 
 @router.post("/{request_id}/move", response_model=RequestResponse)
@@ -269,7 +197,7 @@ async def move_request(
     moved = await repo.move(request_id, target_collection_id)
     if not moved:
         raise NotFoundError(message=f"Request '{request_id}' not found.")
-    return RequestResponse.model_validate(_to_response(moved))
+    return RequestResponse.model_validate(request_to_response(moved))
 
 
 @router.delete("/{request_id}", status_code=204)
@@ -298,10 +226,12 @@ async def execute_request(
     repo: RequestRepository = Depends(_get_request_repo),  # noqa: B008
     executor: HttpRequestExecutor = Depends(_get_executor),  # noqa: B008
     history_repo: HistoryRepository = Depends(_get_history_repo),  # noqa: B008
+    env_repo: EnvironmentRepository = Depends(_get_environment_repo),  # noqa: B008
 ) -> RunResultResponse:
     """Execute an HTTP request and return the result.
 
-    Also saves the result to history.
+    Also saves the result to history. Loads the active environment's
+    variables and merges them with explicitly-passed variables.
     """
     req_data = await repo.get(request_id)
     if not req_data or req_data.get("project_id") != project_id:
@@ -309,8 +239,36 @@ async def execute_request(
 
     request_def = _dto_to_request_def(req_data, request_id=request_id, project_id=project_id)
     ctx = ExecutionContext(request=request_def)
+
+    # Load active environment and build variable map
+    active_env = await env_repo.get_active(project_id=project_id)
+    env_variable_map: dict[str, str] = {}
+    if active_env:
+        variables = []
+        for v in active_env.get("variables", []):
+            variables.append(Variable(
+                key=v["key"],
+                value=v["value"],
+                scope=VariableScope(v.get("scope", "environment")),
+                is_secret=bool(v.get("is_secret", 0)),
+                enabled=bool(v.get("enabled", 1)),
+            ))
+        env_model = Environment(
+            id=active_env["id"],
+            name=active_env["name"],
+            variables=variables,
+            is_active=bool(active_env.get("is_active", 0)),
+        )
+        ctx.environment = env_model
+        for v in variables:
+            if v.enabled:
+                env_variable_map[v.key] = v.value
+
+    # Merge: env vars as base, explicit vars override
+    merged = {**env_variable_map}
     if body and body.variables:
-        ctx.variables = body.variables
+        merged.update(body.variables)
+    ctx.variables = merged
 
     result, entry = await executor.execute_with_history(request_def, ctx)
     await history_repo.save(entry, project_id=project_id)
@@ -340,5 +298,5 @@ async def list_request_history(
     if not existing or existing.get("project_id") != project_id:
         raise NotFoundError(message=f"Request '{request_id}' not found.")
     rows = await history_repo.list_by_request(request_id, limit=limit)
-    items = [_history_to_response(r) for r in rows]
+    items = [history_to_response(r) for r in rows]
     return PaginatedResponse(items=items, total=len(items))

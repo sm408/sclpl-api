@@ -15,6 +15,7 @@ import type {
   CollectionsGateway,
   RequestsGateway,
   EnvironmentsGateway,
+  HistoryGateway,
   WorkflowsGateway,
   FunctionsGateway,
   PluginsGateway,
@@ -29,6 +30,7 @@ import type {
 import { StudioError } from '../error'
 import type {
   HealthResponse,
+  PaginatedResponse,
   Project,
   ProjectCreate,
   ProjectUpdate,
@@ -44,6 +46,7 @@ import type {
   Environment,
   EnvironmentCreate,
   EnvironmentUpdate,
+  HistoryEntry,
   WorkflowDef,
   WorkflowCreate,
   WorkflowUpdate,
@@ -236,6 +239,24 @@ class MockCollectionsGateway implements CollectionsGateway {
     }
     this.collections.delete(id)
   }
+
+  async duplicate(_projectId: string, id: string, opts?: GatewayOptions): Promise<Collection> {
+    checkAbort(opts?.signal)
+    await delay()
+    const source = this.collections.get(id)
+    if (!source) {
+      throw new StudioError({ message: `Collection '${id}' not found.`, code: 'NOT_FOUND', status: 404 })
+    }
+    const col: Collection = {
+      id: nextId('col'),
+      projectId: source.projectId,
+      name: `${source.name} (copy)`,
+      description: source.description,
+      items: [],
+    }
+    this.collections.set(col.id, col)
+    return { ...col }
+  }
 }
 
 // ── Requests ────────────────────────────────────────────────────────────
@@ -295,6 +316,15 @@ class MockRequestsGateway implements RequestsGateway {
     this.requests.delete(id)
   }
 
+  async move(_projectId: string, id: string, targetCollectionId?: string, opts?: GatewayOptions): Promise<RequestDef> {
+    checkAbort(opts?.signal)
+    await delay()
+    const req = this.requests.get(id)
+    if (!req) throw new StudioError({ message: `Request '${id}' not found.`, code: 'NOT_FOUND', status: 404 })
+    req.collectionId = targetCollectionId
+    return { ...req }
+  }
+
   async execute(_projectId: string, _id: string, _context?: Record<string, unknown>, opts?: GatewayOptions): Promise<RunResult> {
     checkAbort(opts?.signal)
     await delay(200)
@@ -326,6 +356,14 @@ class MockEnvironmentsGateway implements EnvironmentsGateway {
     return { ...env }
   }
 
+  async getActive(_projectId: string, opts?: GatewayOptions): Promise<Environment | null> {
+    checkAbort(opts?.signal)
+    await delay()
+    // Mock: return first environment as "active" if any exist
+    const envs = Array.from(this.envs.values())
+    return envs.length > 0 ? { ...envs[0]! } : null
+  }
+
   async create(projectId: string, input: EnvironmentCreate, opts?: GatewayOptions): Promise<Environment> {
     checkAbort(opts?.signal)
     await delay()
@@ -349,6 +387,14 @@ class MockEnvironmentsGateway implements EnvironmentsGateway {
     await delay()
     if (!this.envs.has(id)) throw new StudioError({ message: `Environment '${id}' not found.`, code: 'NOT_FOUND', status: 404 })
     this.envs.delete(id)
+  }
+
+  async activate(_projectId: string, id: string, opts?: GatewayOptions): Promise<Environment> {
+    checkAbort(opts?.signal)
+    await delay()
+    const env = this.envs.get(id)
+    if (!env) throw new StudioError({ message: `Environment '${id}' not found.`, code: 'NOT_FOUND', status: 404 })
+    return { ...env }
   }
 }
 
@@ -610,6 +656,40 @@ class MockTransfersGateway implements TransfersGateway {
   }
 }
 
+// ── History ─────────────────────────────────────────────────────────────
+
+class MockHistoryGateway implements HistoryGateway {
+  private entries: HistoryEntry[] = [...fixtures.FIXTURE_HISTORY]
+
+  async list(
+    _projectId: string,
+    opts?: GatewayOptions & { cursor?: string; limit?: number; requestId?: string },
+  ): Promise<PaginatedResponse<HistoryEntry>> {
+    checkAbort(opts?.signal)
+    await delay()
+    let items = [...this.entries]
+    if (opts?.requestId) items = items.filter((e) => e.requestId === opts.requestId)
+    const limit = opts?.limit ?? 50
+    return { items: items.slice(0, limit), nextCursor: null, total: items.length }
+  }
+
+  async get(_projectId: string, id: string, opts?: GatewayOptions): Promise<HistoryEntry> {
+    checkAbort(opts?.signal)
+    await delay()
+    const entry = this.entries.find((e) => e.id === id)
+    if (!entry) throw new StudioError({ message: `History entry '${id}' not found.`, code: 'NOT_FOUND', status: 404 })
+    return { ...entry }
+  }
+
+  async clear(_projectId: string, opts?: GatewayOptions): Promise<{ deleted: number }> {
+    checkAbort(opts?.signal)
+    await delay()
+    const count = this.entries.length
+    this.entries = []
+    return { deleted: count }
+  }
+}
+
 // ── Settings ────────────────────────────────────────────────────────────
 
 class MockSettingsGateway implements SettingsGateway {
@@ -651,6 +731,7 @@ export function createMockGateway(): StudioGateway {
     collections: new MockCollectionsGateway(),
     requests: new MockRequestsGateway(),
     environments: new MockEnvironmentsGateway(),
+    history: new MockHistoryGateway(),
     workflows: new MockWorkflowsGateway(),
     functions: new MockFunctionsGateway(),
     plugins: new MockPluginsGateway(),

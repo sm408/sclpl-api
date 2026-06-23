@@ -104,6 +104,7 @@ class CollectionCreate(CamelModel):
 class CollectionUpdate(CamelModel):
     name: str | None = None
     description: str | None = None
+    revision: int | None = None
 
 
 class CollectionResponse(CamelModel):

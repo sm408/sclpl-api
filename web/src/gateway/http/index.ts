@@ -12,6 +12,7 @@ import type {
   CollectionsGateway,
   RequestsGateway,
   EnvironmentsGateway,
+  HistoryGateway,
   WorkflowsGateway,
   FunctionsGateway,
   PluginsGateway,
@@ -41,6 +42,7 @@ import type {
   Environment,
   EnvironmentCreate,
   EnvironmentUpdate,
+  HistoryEntry,
   WorkflowDef,
   WorkflowCreate,
   WorkflowUpdate,
@@ -165,6 +167,14 @@ class HttpCollectionsGateway implements CollectionsGateway {
       { method: 'DELETE', signal: opts?.signal },
     )
   }
+
+  duplicate(projectId: string, id: string, opts?: GatewayOptions): Promise<Collection> {
+    return apiFetch<Collection>(
+      this.base,
+      `/api/v1/projects/${projectId}/collections/${id}/duplicate`,
+      { method: 'POST', signal: opts?.signal },
+    )
+  }
 }
 
 // ── Requests ────────────────────────────────────────────────────────────
@@ -225,6 +235,19 @@ class HttpRequestsGateway implements RequestsGateway {
     )
   }
 
+  move(
+    projectId: string,
+    id: string,
+    targetCollectionId?: string,
+    opts?: GatewayOptions,
+  ): Promise<RequestDef> {
+    return apiFetch<RequestDef>(
+      this.base,
+      `/api/v1/projects/${projectId}/requests/${id}/move`,
+      { method: 'POST', signal: opts?.signal, query: targetCollectionId ? { target_collection_id: targetCollectionId } : undefined },
+    )
+  }
+
   execute(
     projectId: string,
     id: string,
@@ -261,6 +284,18 @@ class HttpEnvironmentsGateway implements EnvironmentsGateway {
     )
   }
 
+  async getActive(projectId: string, opts?: GatewayOptions): Promise<Environment | null> {
+    try {
+      return await apiFetch<Environment>(
+        this.base,
+        `/api/v1/projects/${projectId}/environments/active`,
+        { signal: opts?.signal },
+      )
+    } catch {
+      return null
+    }
+  }
+
   create(
     projectId: string,
     input: EnvironmentCreate,
@@ -290,6 +325,51 @@ class HttpEnvironmentsGateway implements EnvironmentsGateway {
     await apiFetch<void>(
       this.base,
       `/api/v1/projects/${projectId}/environments/${id}`,
+      { method: 'DELETE', signal: opts?.signal },
+    )
+  }
+
+  activate(projectId: string, id: string, opts?: GatewayOptions): Promise<Environment> {
+    return apiFetch<Environment>(
+      this.base,
+      `/api/v1/projects/${projectId}/environments/${id}/activate`,
+      { method: 'POST', signal: opts?.signal },
+    )
+  }
+}
+
+// ── History ─────────────────────────────────────────────────────────────
+
+class HttpHistoryGateway implements HistoryGateway {
+  constructor(private readonly base: string) {}
+
+  async list(
+    projectId: string,
+    opts?: GatewayOptions & { cursor?: string; limit?: number; requestId?: string },
+  ): Promise<PaginatedResponse<HistoryEntry>> {
+    const query: Record<string, unknown> = {}
+    if (opts?.cursor) query.cursor = opts.cursor
+    if (opts?.limit) query.limit = opts.limit
+    if (opts?.requestId) query.request_id = opts.requestId
+    return apiFetch<PaginatedResponse<HistoryEntry>>(
+      this.base,
+      `/api/v1/projects/${projectId}/history`,
+      { signal: opts?.signal, query },
+    )
+  }
+
+  get(projectId: string, id: string, opts?: GatewayOptions): Promise<HistoryEntry> {
+    return apiFetch<HistoryEntry>(
+      this.base,
+      `/api/v1/projects/${projectId}/history/${id}`,
+      { signal: opts?.signal },
+    )
+  }
+
+  async clear(projectId: string, opts?: GatewayOptions): Promise<{ deleted: number }> {
+    return apiFetch<{ deleted: number }>(
+      this.base,
+      `/api/v1/projects/${projectId}/history`,
       { method: 'DELETE', signal: opts?.signal },
     )
   }
@@ -645,6 +725,7 @@ export function createHttpGateway(baseUrl: string = ''): StudioGateway {
     collections: new HttpCollectionsGateway(base),
     requests: new HttpRequestsGateway(base),
     environments: new HttpEnvironmentsGateway(base),
+    history: new HttpHistoryGateway(base),
     workflows: new HttpWorkflowsGateway(base),
     functions: new HttpFunctionsGateway(base),
     plugins: new HttpPluginsGateway(base),

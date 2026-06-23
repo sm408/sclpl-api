@@ -370,13 +370,19 @@ export interface ExportCreate {
 export interface HistoryEntry {
   id: string
   projectId: string
-  requestId: string
+  requestId: string | null
+  requestName: string
   method: HttpMethod
   url: string
-  status: number
-  duration: number
-  timestamp: string
-  runStatus: RunStatus
+  status: RunStatus
+  statusCode: number | null
+  responseBody: string | null
+  responseHeaders: Record<string, unknown>
+  durationMs: number
+  errorMessage: string | null
+  environmentId: string | null
+  variablesUsed: Record<string, unknown>
+  createdAt: string | null
 }
 
 // ── Settings ────────────────────────────────────────────────────────────

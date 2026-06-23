@@ -22,7 +22,7 @@ from app.storage.db import Database
 from app.web.sse import SSEManager
 
 
-@dataclass
+@dataclass(frozen=True)
 class ServiceContainer:
     """Bundles every repository / service that the API needs."""
 

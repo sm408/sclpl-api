@@ -14,6 +14,8 @@ import type {
   HealthResponse,
   // Pagination
   PaginatedResponse,
+  // History
+  HistoryEntry,
   // Project
   Project,
   ProjectCreate,
@@ -52,8 +54,6 @@ import type {
   ExportJob,
   ExportCreate,
   ExportPreset,
-  // History
-  HistoryEntry,
   // Settings
   AppSettings,
   // Operations filter
@@ -95,6 +95,7 @@ export interface CollectionsGateway {
     opts?: GatewayOptions,
   ): Promise<Collection>
   delete(projectId: string, id: string, opts?: GatewayOptions): Promise<void>
+  duplicate(projectId: string, id: string, opts?: GatewayOptions): Promise<Collection>
 }
 
 export interface RequestsGateway {
@@ -112,6 +113,12 @@ export interface RequestsGateway {
     opts?: GatewayOptions,
   ): Promise<RequestDef>
   delete(projectId: string, id: string, opts?: GatewayOptions): Promise<void>
+  move(
+    projectId: string,
+    id: string,
+    targetCollectionId?: string,
+    opts?: GatewayOptions,
+  ): Promise<RequestDef>
   execute(
     projectId: string,
     id: string,
@@ -123,6 +130,7 @@ export interface RequestsGateway {
 export interface EnvironmentsGateway {
   list(projectId: string, opts?: GatewayOptions): Promise<Environment[]>
   get(projectId: string, id: string, opts?: GatewayOptions): Promise<Environment>
+  getActive(projectId: string, opts?: GatewayOptions): Promise<Environment | null>
   create(
     projectId: string,
     input: EnvironmentCreate,
@@ -135,6 +143,7 @@ export interface EnvironmentsGateway {
     opts?: GatewayOptions,
   ): Promise<Environment>
   delete(projectId: string, id: string, opts?: GatewayOptions): Promise<void>
+  activate(projectId: string, id: string, opts?: GatewayOptions): Promise<Environment>
 }
 
 export interface WorkflowsGateway {
@@ -229,6 +238,15 @@ export interface EventsGateway {
   ): () => void
 }
 
+export interface HistoryGateway {
+  list(
+    projectId: string,
+    opts?: GatewayOptions & { cursor?: string; limit?: number; requestId?: string },
+  ): Promise<PaginatedResponse<HistoryEntry>>
+  get(projectId: string, id: string, opts?: GatewayOptions): Promise<HistoryEntry>
+  clear(projectId: string, opts?: GatewayOptions): Promise<{ deleted: number }>
+}
+
 // ── Top-level gateway ───────────────────────────────────────────────────
 
 export interface StudioGateway {
@@ -237,6 +255,7 @@ export interface StudioGateway {
   readonly collections: CollectionsGateway
   readonly requests: RequestsGateway
   readonly environments: EnvironmentsGateway
+  readonly history: HistoryGateway
   readonly workflows: WorkflowsGateway
   readonly functions: FunctionsGateway
   readonly plugins: PluginsGateway

@@ -76,15 +76,7 @@ const deleteMutation = useMutation({
 // ── Duplicate ──────────────────────────────────────────────────────────
 
 const duplicateMutation = useMutation({
-  mutationFn: (id: string) => {
-    // The backend duplicate endpoint exists, but the gateway doesn't have a
-    // duplicate method. Use create with the same name + "(copy)".
-    const col = collections.value?.find((c) => c.id === id)
-    return gateway.collections.create(projectId.value!, {
-      name: col ? `${col.name} (copy)` : 'Copy',
-      description: col?.description,
-    })
-  },
+  mutationFn: (id: string) => gateway.collections.duplicate(projectId.value!, id),
   onSuccess: () => {
     queryClient.invalidateQueries({ queryKey: ['collections'] })
   },

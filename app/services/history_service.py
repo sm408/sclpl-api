@@ -63,36 +63,20 @@ class HistoryRepository:
         Returns (items, next_cursor).  Cursor is the created_at of the last
         item in the previous page.
         """
+        conditions = ["project_id = ?"]
+        params: list = [project_id]
         if request_id:
-            if cursor:
-                rows = await self._db.fetch_all(
-                    """SELECT * FROM history
-                    WHERE project_id = ? AND request_id = ? AND created_at < ?
-                    ORDER BY created_at DESC LIMIT ?""",
-                    (project_id, request_id, cursor, limit + 1),
-                )
-            else:
-                rows = await self._db.fetch_all(
-                    """SELECT * FROM history
-                    WHERE project_id = ? AND request_id = ?
-                    ORDER BY created_at DESC LIMIT ?""",
-                    (project_id, request_id, limit + 1),
-                )
-        else:
-            if cursor:
-                rows = await self._db.fetch_all(
-                    """SELECT * FROM history
-                    WHERE project_id = ? AND created_at < ?
-                    ORDER BY created_at DESC LIMIT ?""",
-                    (project_id, cursor, limit + 1),
-                )
-            else:
-                rows = await self._db.fetch_all(
-                    """SELECT * FROM history
-                    WHERE project_id = ?
-                    ORDER BY created_at DESC LIMIT ?""",
-                    (project_id, limit + 1),
-                )
+            conditions.append("request_id = ?")
+            params.append(request_id)
+        if cursor:
+            conditions.append("created_at < ?")
+            params.append(cursor)
+        where = " AND ".join(conditions)
+        params.append(limit + 1)
+        rows = await self._db.fetch_all(
+            f"SELECT * FROM history WHERE {where} ORDER BY created_at DESC LIMIT ?",
+            tuple(params),
+        )
         next_cursor = None
         if len(rows) > limit:
             next_cursor = rows[limit - 1]["created_at"]

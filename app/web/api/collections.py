@@ -9,14 +9,13 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends
 
 from app.services.collection_service import CollectionRepository, RequestRepository
+from app.web.converters import collection_to_response, request_to_response
 from app.web.deps import _get_collection_repo, _get_request_repo
 from app.web.dto import (
     CollectionCreate,
     CollectionResponse,
     CollectionUpdate,
     PaginatedResponse,
-    RequestResponse,
-    ParamDto,
 )
 from app.web.errors import ConflictError, NotFoundError, ValidationError
 
@@ -26,19 +25,6 @@ router = APIRouter(
 )
 
 
-def _to_response(col: dict) -> dict:
-    """Convert a raw collection dict to a camelCase response dict."""
-    return CollectionResponse(
-        id=col["id"],
-        project_id=col.get("project_id", ""),
-        name=col["name"],
-        description=col.get("description", ""),
-        revision=col.get("revision", 1),
-        created_at=col.get("created_at"),
-        updated_at=col.get("updated_at"),
-    ).model_dump(by_alias=True)
-
-
 @router.get("", response_model=PaginatedResponse)
 async def list_collections(
     project_id: str,
@@ -46,7 +32,7 @@ async def list_collections(
 ) -> PaginatedResponse:
     """List all collections for a project."""
     cols = await repo.list_all(project_id=project_id)
-    items = [_to_response(c) for c in cols]
+    items = [collection_to_response(c) for c in cols]
     return PaginatedResponse(items=items, total=len(items))
 
 
@@ -98,7 +84,8 @@ async def update_collection(
     existing = await repo.get(collection_id)
     if not existing or existing.get("project_id") != project_id:
         raise NotFoundError(message=f"Collection '{collection_id}' not found.")
-    updated = await repo.update(collection_id, data)
+    revision = data.pop("revision", None)
+    updated = await repo.update(collection_id, data, revision=revision)
     if not updated:
         raise ConflictError(message="Revision conflict — the collection was modified by another client.")
     return CollectionResponse.model_validate(updated)
@@ -152,45 +139,5 @@ async def list_collection_requests(
     if not col or col.get("project_id") != project_id:
         raise NotFoundError(message=f"Collection '{collection_id}' not found.")
     reqs = await req_repo.list_all(collection_id=collection_id)
-    items = [_request_to_response(r) for r in reqs]
+    items = [request_to_response(r) for r in reqs]
     return PaginatedResponse(items=items, total=len(items))
-
-
-def _request_to_response(req: dict) -> dict:
-    """Convert a raw request dict to a camelCase response dict."""
-    import json
-    headers = req.get("headers", "[]")
-    if isinstance(headers, str):
-        try:
-            headers = json.loads(headers)
-        except (json.JSONDecodeError, TypeError):
-            headers = []
-    query_params = req.get("query_params", "[]")
-    if isinstance(query_params, str):
-        try:
-            query_params = json.loads(query_params)
-        except (json.JSONDecodeError, TypeError):
-            query_params = []
-    auth_config = req.get("auth_config", "{}")
-    if isinstance(auth_config, str):
-        try:
-            auth_config = json.loads(auth_config)
-        except (json.JSONDecodeError, TypeError):
-            auth_config = {}
-    return RequestResponse(
-        id=req["id"],
-        project_id=req.get("project_id", ""),
-        collection_id=req.get("collection_id"),
-        name=req["name"],
-        method=req.get("method", "GET"),
-        url=req.get("url", ""),
-        headers=[ParamDto(**h) for h in headers] if isinstance(headers, list) else [],
-        query_params=[ParamDto(**p) for p in query_params] if isinstance(query_params, list) else [],
-        body=req.get("body"),
-        body_type=req.get("body_type"),
-        auth_type=req.get("auth_type"),
-        auth_config=auth_config if isinstance(auth_config, dict) else {},
-        revision=req.get("revision", 1),
-        created_at=req.get("created_at"),
-        updated_at=req.get("updated_at"),
-    ).model_dump(by_alias=True)

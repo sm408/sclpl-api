@@ -363,12 +363,18 @@ export const FIXTURE_HISTORY_ENTRY: HistoryEntry = {
   id: IDS.historyEntry,
   projectId: IDS.project,
   requestId: IDS.request,
+  requestName: 'Get Users',
   method: 'GET',
   url: 'https://jsonplaceholder.typicode.com/users',
-  status: 200,
-  duration: 245,
-  timestamp: '2025-06-20T10:00:00Z',
-  runStatus: 'success',
+  status: 'success',
+  statusCode: 200,
+  responseBody: '{"id": 1, "name": "Leanne Graham"}',
+  responseHeaders: { 'content-type': 'application/json' },
+  durationMs: 245,
+  errorMessage: null,
+  environmentId: null,
+  variablesUsed: {},
+  createdAt: '2025-06-20T10:00:00Z',
 }
 
 export const FIXTURE_HISTORY: HistoryEntry[] = [FIXTURE_HISTORY_ENTRY]

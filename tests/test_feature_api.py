@@ -8,10 +8,14 @@ and the standard error protocol.
 from __future__ import annotations
 
 import json
+import uuid
+from unittest.mock import AsyncMock
 
 import pytest
 from httpx import ASGITransport, AsyncClient
 
+from app.core.contracts.request_executor import ResponseResult
+from app.core.models.history import HistoryEntry, RunStatus
 from app.core.models.project import DEFAULT_PROJECT_ID
 from app.web.server import create_app
 
@@ -21,10 +25,52 @@ from app.web.server import create_app
 
 @pytest.fixture
 async def app(tmp_path):
-    """Create a fresh app with an in-memory database."""
+    """Create a fresh app with an in-memory database.
+
+    Replaces the real HttpRequestExecutor with a mock that returns a
+    canned response so tests never hit the network.
+    """
     db_path = str(tmp_path / "test.db")
     application = create_app(db_path)
     async with application.router.lifespan_context(application):
+        # Replace executor with a mock that returns a canned response
+        mock_result = ResponseResult(
+            status_code=200,
+            headers={"content-type": "application/json"},
+            body='{"origin": "127.0.0.1"}',
+            duration_ms=42,
+        )
+
+        async def _mock_execute_with_history(request_def, ctx):
+            """Return canned result with the actual request metadata."""
+            entry = HistoryEntry(
+                id=str(uuid.uuid4()),
+                request_id=request_def.id,
+                request_name=request_def.name,
+                method=request_def.method.value,
+                url=request_def.url,
+                status=RunStatus.SUCCESS,
+                status_code=200,
+                response_body='{"origin": "127.0.0.1"}',
+                response_headers={"content-type": "application/json"},
+                duration_ms=42,
+            )
+            return mock_result, entry
+
+        mock_executor = AsyncMock()
+        mock_executor.execute_with_history = AsyncMock(side_effect=_mock_execute_with_history)
+        mock_executor.execute = AsyncMock(return_value=mock_result)
+        application.state.services = type(application.state.services)(  # type: ignore[misc]
+            db=application.state.services.db,
+            projects=application.state.services.projects,
+            collections=application.state.services.collections,
+            requests=application.state.services.requests,
+            environments=application.state.services.environments,
+            history=application.state.services.history,
+            executor=mock_executor,
+            operations=application.state.services.operations,
+            sse=application.state.services.sse,
+        )
         yield application
 
 

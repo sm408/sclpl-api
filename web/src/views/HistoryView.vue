@@ -32,12 +32,7 @@ const cursor = ref<string | null>(null)
 
 const { data: historyData, isLoading } = useQuery({
   queryKey: ['history', projectId, cursor],
-  queryFn: async () => {
-    // The gateway doesn't have a direct history method yet.
-    // For now we use the runs gateway which lists operations.
-    // TODO: Add history gateway method
-    return { items: [] as HistoryEntry[], nextCursor: null as string | null, total: 0 }
-  },
+  queryFn: () => gateway.history.list(projectId.value!, { cursor: cursor.value ?? undefined, limit: 50 }),
   enabled: computed(() => !!projectId.value),
 })
 
@@ -48,9 +43,7 @@ const total = computed(() => historyData.value?.total ?? 0)
 // ── Clear history ──────────────────────────────────────────────────────
 
 const clearMutation = useMutation({
-  mutationFn: async () => {
-    // TODO: Add clear history gateway method
-  },
+  mutationFn: () => gateway.history.clear(projectId.value!),
   onSuccess: () => {
     queryClient.invalidateQueries({ queryKey: ['history'] })
   },
@@ -168,8 +161,8 @@ function loadMore(): void {
         :class="{ expanded: expandedId === entry.id }"
       >
         <div class="entry-row" @click="toggleExpand(entry.id)">
-          <div class="entry-status" :class="statusClass(entry.runStatus)">
-            <component :is="statusIcon(entry.runStatus)" :size="14" />
+          <div class="entry-status" :class="statusClass(entry.status)">
+            <component :is="statusIcon(entry.status)" :size="14" />
           </div>
 
           <div class="entry-method" :class="`method-${entry.method?.toLowerCase()}`">
@@ -182,9 +175,9 @@ function loadMore(): void {
           </div>
 
           <div class="entry-meta">
-            <span v-if="entry.status" class="entry-code">{{ entry.status }}</span>
-            <span class="entry-duration">{{ formatDuration(entry.duration) }}</span>
-            <span class="entry-time">{{ formatTime(entry.timestamp) }}</span>
+            <span v-if="entry.statusCode" class="entry-code">{{ entry.statusCode }}</span>
+            <span class="entry-duration">{{ formatDuration(entry.durationMs) }}</span>
+            <span class="entry-time">{{ formatTime(entry.createdAt ?? '') }}</span>
           </div>
 
           <ChevronRight :size="14" class="expand-icon" :class="{ rotated: expandedId === entry.id }" />
@@ -194,15 +187,15 @@ function loadMore(): void {
         <div v-if="expandedId === entry.id" class="entry-detail">
           <div class="detail-row">
             <span class="detail-label">Date</span>
-            <span class="detail-value">{{ formatDate(entry.timestamp) }}</span>
+            <span class="detail-value">{{ formatDate(entry.createdAt ?? '') }}</span>
           </div>
           <div class="detail-row">
             <span class="detail-label">Status</span>
-            <span class="detail-value">{{ entry.runStatus }} ({{ entry.status }})</span>
+            <span class="detail-value">{{ entry.status }} ({{ entry.statusCode }})</span>
           </div>
           <div class="detail-row">
             <span class="detail-label">Duration</span>
-            <span class="detail-value">{{ formatDuration(entry.duration) }}</span>
+            <span class="detail-value">{{ formatDuration(entry.durationMs) }}</span>
           </div>
           <div class="detail-actions">
             <button class="btn-rerun" @click.stop="rerun(entry)">

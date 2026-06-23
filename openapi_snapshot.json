@@ -97,6 +97,17 @@
               }
             ],
             "title": "Name"
+          },
+          "revision": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Revision"
           }
         },
         "title": "CollectionUpdate",
@@ -2781,7 +2792,7 @@
     },
     "/api/v1/projects/{project_id}/requests/{request_id}/execute": {
       "post": {
-        "description": "Execute an HTTP request and return the result.\n\nAlso saves the result to history.",
+        "description": "Execute an HTTP request and return the result.\n\nAlso saves the result to history. Loads the active environment's\nvariables and merges them with explicitly-passed variables.",
         "operationId": "execute_request_api_v1_projects__project_id__requests__request_id__execute_post",
         "parameters": [
           {
