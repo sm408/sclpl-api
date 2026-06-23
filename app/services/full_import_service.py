@@ -93,20 +93,22 @@ class FullImportService:
             variables = json.dumps(data.get("variables", {}))
             layout = json.dumps(data.get("layout", {}))
             sclpll_source = data.get("sclpll_source", "")
+            revision = data.get("revision", 1)
             now = datetime.now(timezone.utc).isoformat()
+            created_at = data.get("created_at", now)
 
             if existing:
                 await self._db.execute(
-                    """UPDATE workflows SET name=?, description=?, steps=?, variables=?, layout=?, sclpll_source=?, updated_at=?
+                    """UPDATE workflows SET name=?, description=?, steps=?, variables=?, layout=?, sclpll_source=?, revision=?, updated_at=?
                     WHERE id=?""",
-                    (data["name"], data.get("description", ""), steps, variables, layout, sclpll_source, now, wf_id),
+                    (data["name"], data.get("description", ""), steps, variables, layout, sclpll_source, revision, now, wf_id),
                 )
             else:
                 wf_project_id = data.get("project_id", DEFAULT_PROJECT_ID)
                 await self._db.execute(
-                    """INSERT INTO workflows (id, name, description, steps, variables, layout, sclpll_source, project_id, created_at, updated_at)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-                    (wf_id, data["name"], data.get("description", ""), steps, variables, layout, sclpll_source, wf_project_id, now, now),
+                    """INSERT INTO workflows (id, name, description, steps, variables, layout, sclpll_source, project_id, revision, created_at, updated_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                    (wf_id, data["name"], data.get("description", ""), steps, variables, layout, sclpll_source, wf_project_id, revision, created_at, now),
                 )
             count += 1
 

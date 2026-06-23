@@ -14,11 +14,23 @@ import json
 import pytest
 
 from app.core.engine.sclpll_compiler import SCLPLLCompiler
+from app.services.workflow_service import WorkflowRepository
+from app.storage.db import Database
 
 
 @pytest.fixture
 def compiler() -> SCLPLLCompiler:
     return SCLPLLCompiler()
+
+
+@pytest.fixture
+async def repo(tmp_path):
+    """Create a WorkflowRepository backed by an in-memory test database."""
+    db = Database(":memory:")
+    await db.connect()
+    await db.initialize()
+    yield WorkflowRepository(db)
+    await db.close()
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -596,7 +608,8 @@ class TestSourceDiagnostics:
 
 
 class TestPreflightValidation:
-    def test_valid_definition(self, compiler: SCLPLLCompiler) -> None:
+    @pytest.mark.asyncio
+    async def test_valid_definition(self, repo: WorkflowRepository) -> None:
         definition = {
             "id": "wf1",
             "steps": [
@@ -604,33 +617,36 @@ class TestPreflightValidation:
                 {"id": "s2", "type": "request", "config": {}, "depends_on": ["s1"]},
             ],
         }
-        result = compiler.validate_preflight(definition)
-        assert result["valid"] is True
-        assert result["issues"] == []
+        result = repo.validate_preflight(definition)
+        assert result.valid is True
+        assert result.issues == []
 
-    def test_missing_step_id(self, compiler: SCLPLLCompiler) -> None:
+    @pytest.mark.asyncio
+    async def test_missing_step_id(self, repo: WorkflowRepository) -> None:
         definition = {
             "id": "wf1",
             "steps": [
                 {"id": "", "type": "request", "config": {}},
             ],
         }
-        result = compiler.validate_preflight(definition)
-        assert result["valid"] is False
-        assert any("missing" in i["message"].lower() for i in result["issues"])
+        result = repo.validate_preflight(definition)
+        assert result.valid is False
+        assert any("missing" in i.message.lower() for i in result.issues)
 
-    def test_broken_dependency(self, compiler: SCLPLLCompiler) -> None:
+    @pytest.mark.asyncio
+    async def test_broken_dependency(self, repo: WorkflowRepository) -> None:
         definition = {
             "id": "wf1",
             "steps": [
                 {"id": "s1", "type": "request", "config": {}, "depends_on": ["nonexistent"]},
             ],
         }
-        result = compiler.validate_preflight(definition)
-        assert result["valid"] is False
-        assert any("nonexistent" in i["message"] for i in result["issues"])
+        result = repo.validate_preflight(definition)
+        assert result.valid is False
+        assert any("nonexistent" in i.message for i in result.issues)
 
-    def test_circular_dependency(self, compiler: SCLPLLCompiler) -> None:
+    @pytest.mark.asyncio
+    async def test_circular_dependency(self, repo: WorkflowRepository) -> None:
         definition = {
             "id": "wf1",
             "steps": [
@@ -638,11 +654,12 @@ class TestPreflightValidation:
                 {"id": "b", "type": "request", "config": {}, "depends_on": ["a"]},
             ],
         }
-        result = compiler.validate_preflight(definition)
-        assert result["valid"] is False
-        assert any("circular" in i["message"].lower() for i in result["issues"])
+        result = repo.validate_preflight(definition)
+        assert result.valid is False
+        assert any("circular" in i.message.lower() for i in result.issues)
 
-    def test_empty_steps_valid(self, compiler: SCLPLLCompiler) -> None:
+    @pytest.mark.asyncio
+    async def test_empty_steps_valid(self, repo: WorkflowRepository) -> None:
         definition = {"id": "wf1", "steps": []}
-        result = compiler.validate_preflight(definition)
-        assert result["valid"] is True
+        result = repo.validate_preflight(definition)
+        assert result.valid is True

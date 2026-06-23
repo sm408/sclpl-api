@@ -6,6 +6,7 @@ from pathlib import Path
 
 import pytest
 
+from app.core.models.project import DEFAULT_PROJECT_ID
 from app.services.full_export_service import FullExportService
 from app.services.full_import_service import FullImportService
 from app.storage.db import Database
@@ -229,7 +230,7 @@ async def workflow_doc_db(db):
     await db.execute(
         """INSERT INTO workflows (id, name, description, steps, variables, layout, sclpll_source, project_id, revision, created_at, updated_at)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-        ("wf-doc", "Doc Workflow", "A workflow with layout", steps, variables, layout, sclpll_source, "default", 3, now, now),
+        ("wf-doc", "Doc Workflow", "A workflow with layout", steps, variables, layout, sclpll_source, DEFAULT_PROJECT_ID, 3, now, now),
     )
     # Save two versions
     await db.execute(
@@ -342,6 +343,7 @@ async def test_import_preserves_workflow_versions(workflow_doc_db, tmp_path):
 async def test_import_old_format_workflow_without_layout(tmp_path):
     """Importing an old-format export (no layout/sclpll_source) still works."""
     old_export = tmp_path / "old_export"
+    old_export.mkdir(parents=True, exist_ok=True)
     (old_export / "manifest.json").write_text(json.dumps({
         "format": "sclplapi-full-export",
         "version": 1,
