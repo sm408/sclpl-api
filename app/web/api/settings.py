@@ -3,22 +3,29 @@
 Provides GET/PATCH for application settings. Settings that affect
 server behaviour (defaultTimeout, followRedirects, maxHistoryEntries)
 are flagged as requiring a restart to take full effect.
+
+Settings are persisted to the ``settings`` table in SQLite so they
+survive server restarts.
 """
 
 from __future__ import annotations
 
+import json
 import logging
 from typing import Any
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
 
+from app.storage.db import Database
+from app.web.deps import _get_db
 from app.web.dto import CamelModel
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1/settings", tags=["settings"])
 
+SETTINGS_KEY = "app_settings"
 
 # ── Settings model ────────────────────────────────────────────────────────
 
@@ -67,10 +74,37 @@ class SettingsUpdate(CamelModel):
     startup: StartupSettings | None = None
 
 
-# ── In-memory settings store ──────────────────────────────────────────────
+# ── Persistence helpers ───────────────────────────────────────────────────
 
-_settings = AppSettingsResponse()
 _restart_required = False
+
+
+async def _load_settings(db: Database) -> AppSettingsResponse:
+    """Load settings from the database, returning defaults if absent."""
+    row = await db.fetch_one(
+        "SELECT value FROM settings WHERE key = ?", (SETTINGS_KEY,)
+    )
+    if row:
+        try:
+            data = json.loads(row["value"])
+            data["restart_required"] = _restart_required
+            return AppSettingsResponse(**data)
+        except (json.JSONDecodeError, TypeError, KeyError):
+            logger.warning("Corrupt settings row; returning defaults")
+    return AppSettingsResponse(restart_required=_restart_required)
+
+
+async def _save_settings(db: Database, settings: AppSettingsResponse) -> None:
+    """Persist settings to the database."""
+    payload = settings.model_dump(mode="json")
+    # Don't persist the transient restart_required flag
+    payload.pop("restart_required", None)
+    blob = json.dumps(payload, separators=(",", ":"))
+    await db.execute(
+        "INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)",
+        (SETTINGS_KEY, blob),
+    )
+    await db.commit()
 
 
 def _apply_updates(current: AppSettingsResponse, updates: SettingsUpdate) -> AppSettingsResponse:
@@ -101,15 +135,21 @@ def _apply_updates(current: AppSettingsResponse, updates: SettingsUpdate) -> App
 
 
 @router.get("", response_model=AppSettingsResponse)
-async def get_settings() -> AppSettingsResponse:
+async def get_settings(
+    db: Database = Depends(_get_db),  # noqa: B008
+) -> AppSettingsResponse:
     """Get current application settings."""
-    return _settings
+    return await _load_settings(db)
 
 
 @router.patch("", response_model=AppSettingsResponse)
-async def update_settings(body: SettingsUpdate) -> AppSettingsResponse:
+async def update_settings(
+    body: SettingsUpdate,
+    db: Database = Depends(_get_db),  # noqa: B008
+) -> AppSettingsResponse:
     """Update application settings. Returns updated settings with restart flag."""
-    global _settings
-    _settings = _apply_updates(_settings, body)
-    logger.info("Settings updated (restart_required=%s)", _settings.restart_required)
-    return _settings
+    current = await _load_settings(db)
+    updated = _apply_updates(current, body)
+    await _save_settings(db, updated)
+    logger.info("Settings updated (restart_required=%s)", updated.restart_required)
+    return updated

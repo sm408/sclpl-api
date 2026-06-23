@@ -9,7 +9,7 @@ logger = logging.getLogger(__name__)
 
 DEFAULT_DB_PATH = Path("data") / "sclplapi.db"
 
-SCHEMA_VERSION = 6
+SCHEMA_VERSION = 7
 
 SCHEMA_SQL = """
 CREATE TABLE IF NOT EXISTS schema_version (
@@ -217,7 +217,8 @@ def get_all_migrations():
     from app.storage.migrations.m004_add_monitors import AddMonitors
     from app.storage.migrations.m005_add_projects import AddProjects
     from app.storage.migrations.m006_add_workflow_document_fields import AddWorkflowDocumentFields
-    return [AddPluginTables(), AddWorkflowVersioning(), AddExportPresets(), AddMonitors(), AddProjects(), AddWorkflowDocumentFields()]
+    from app.storage.migrations.m007_add_settings import AddSettings
+    return [AddPluginTables(), AddWorkflowVersioning(), AddExportPresets(), AddMonitors(), AddProjects(), AddWorkflowDocumentFields(), AddSettings()]
 
 
 class Database:

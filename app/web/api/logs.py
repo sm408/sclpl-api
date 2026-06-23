@@ -46,11 +46,13 @@ def _redact(text: str) -> str:
 
 
 class RingBufferHandler(logging.Handler):
-    """Logging handler that stores records in a bounded ring buffer."""
+    """Logging handler that stores records in a bounded ring buffer.
 
-    def __init__(self, maxlen: int = 2000) -> None:
-        super().__init__()
-        self._buffer: deque[dict[str, Any]] = deque(maxlen=maxlen)
+    All entries are written to the module-level ``_LOG_BUFFER`` deque so
+    that every instance (and the module-level ``_ring_handler`` singleton)
+    shares the same bounded store.  The handler intentionally has no
+    instance-level buffer.
+    """
 
     def emit(self, record: logging.LogRecord) -> None:
         if _PAUSED:
