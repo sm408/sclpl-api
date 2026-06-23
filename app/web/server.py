@@ -14,7 +14,8 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI, Request
-from fastapi.responses import JSONResponse
+from fastapi.responses import FileResponse, JSONResponse
+from fastapi.staticfiles import StaticFiles
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 from starlette.responses import Response
 
@@ -67,7 +68,9 @@ SECURITY_HEADERS = {
         "script-src 'self' 'unsafe-inline'; "
         "style-src 'self' 'unsafe-inline'; "
         "img-src 'self' data:; "
-        "connect-src 'self'"
+        "font-src 'self'; "
+        "connect-src 'self' http: https:; "
+        "worker-src 'self' blob:"
     ),
 }
 
@@ -258,5 +261,45 @@ def create_app(
     app.include_router(health_router)
     app.include_router(projects_router)
     app.include_router(operations_router)
+
+    # ── Static file serving for the Vue SPA ──────────────────────────
+    static_dir = Path(__file__).parent / "static"
+    if static_dir.is_dir():
+        # Hashed assets get immutable cache headers
+        assets_dir = static_dir / "assets"
+        if assets_dir.is_dir():
+            app.mount(
+                "/assets",
+                StaticFiles(directory=str(assets_dir)),
+                name="static-assets",
+            )
+
+        # SPA catch-all: serve index.html for all non-API, non-asset routes
+        @app.get("/{path:path}", include_in_schema=False, response_model=None)
+        async def spa_fallback(path: str) -> Response:
+            """Serve the SPA index.html for client-side routing.
+
+            Any path that is not matched by an API router or static file
+            mount falls through here. The Vue router handles the path
+            on the client side.
+
+            API routes (starting with /api/) that don't match any defined
+            endpoint return a proper 404 instead of the SPA.
+            """
+            if path.startswith("api/"):
+                cid = uuid.uuid4().hex[:12]
+                return JSONResponse(
+                    status_code=404,
+                    content={
+                        "error": {
+                            "code": "NOT_FOUND",
+                            "message": f"API route '/{path}' not found.",
+                            "fieldErrors": [],
+                            "correlationId": cid,
+                        }
+                    },
+                )
+            index = static_dir / "index.html"
+            return FileResponse(str(index))
 
     return app
