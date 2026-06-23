@@ -382,8 +382,22 @@ export const FIXTURE_HISTORY: HistoryEntry[] = [FIXTURE_HISTORY_ENTRY]
 // ── Settings ────────────────────────────────────────────────────────────
 
 export const FIXTURE_SETTINGS: AppSettings = {
-  theme: 'system',
-  defaultTimeout: 30000,
+  defaultTimeout: 30,
   followRedirects: true,
   maxHistoryEntries: 500,
+  editor: {
+    tabSize: 4,
+    wordWrap: 'off',
+    minimap: true,
+    fontSize: 14,
+  },
+  history: {
+    maxEntries: 500,
+    autoClearDays: 0,
+  },
+  startup: {
+    defaultProjectId: null,
+    reopenLastTabs: true,
+  },
+  restartRequired: false,
 }

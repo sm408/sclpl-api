@@ -157,10 +157,18 @@ const routes: RouteRecordRaw[] = [
   {
     path: '/settings',
     name: 'settings',
-    component: () => import('@/views/placeholder/SettingsView.vue'),
+    component: () => import('@/views/SettingsView.vue'),
     meta: {
       kind: 'settings',
       title: 'Settings',
+    } satisfies StudioRouteMeta,
+  },
+  {
+    path: '/logs',
+    name: 'logs',
+    component: () => import('@/views/LogsView.vue'),
+    meta: {
+      title: 'Logs',
     } satisfies StudioRouteMeta,
   },
   {

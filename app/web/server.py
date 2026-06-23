@@ -29,9 +29,13 @@ from app.services.request_executor import HttpRequestExecutor
 from app.services.workflow_service import WorkflowRepository
 from app.storage.db import Database
 from app.web.api.collections import router as collections_router
+from app.web.api.commands import router as commands_router
 from app.web.api.environments import router as environments_router
 from app.web.api.functions import router as functions_router
 from app.web.api.health import router as health_router
+from app.web.api.licenses import router as licenses_router
+from app.web.api.logs import router as logs_router
+from app.web.api.settings import router as settings_router
 from app.web.api.history import router as history_router
 from app.web.api.operations import router as operations_router
 from app.web.api.plugins import router as plugins_router
@@ -292,6 +296,10 @@ def create_app(
     app.include_router(functions_router)
     app.include_router(plugins_router)
     app.include_router(operations_router)
+    app.include_router(settings_router)
+    app.include_router(logs_router)
+    app.include_router(licenses_router)
+    app.include_router(commands_router)
 
     # ── Static file serving for the Vue SPA ──────────────────────────
     static_dir = Path(__file__).parent / "static"

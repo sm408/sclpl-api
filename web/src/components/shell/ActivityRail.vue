@@ -23,6 +23,7 @@ import {
   Monitor,
   Command,
   Home,
+  ScrollText,
 } from 'lucide-vue-next'
 
 interface RailItem {
@@ -45,6 +46,7 @@ const topItems: RailItem[] = [
   { id: 'monitors', icon: Radio, label: 'Monitors', route: '/monitors' },
   { id: 'history', icon: History, label: 'History', route: '/history' },
   { id: 'plugins', icon: Puzzle, label: 'Plugins', route: '/plugins' },
+  { id: 'logs', icon: ScrollText, label: 'Logs', route: '/logs' },
 ]
 
 const railRef = ref<HTMLElement | null>(null)

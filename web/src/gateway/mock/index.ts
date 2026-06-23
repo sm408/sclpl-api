@@ -24,6 +24,9 @@ import type {
   BatchesGateway,
   TransfersGateway,
   SettingsGateway,
+  LogsGateway,
+  LicensesGateway,
+  CommandsGateway,
   EventsGateway,
   GatewayOptions,
 } from '../types'
@@ -70,6 +73,10 @@ import type {
   ExportCreate,
   ExportPreset,
   AppSettings,
+  AppSettingsUpdate,
+  LogListResponse,
+  LicenseListResponse,
+  CommandListResponse,
   SseEventType,
 } from '@/types/api'
 import * as fixtures from './fixtures'
@@ -921,11 +928,63 @@ class MockSettingsGateway implements SettingsGateway {
     return { ...this.settings }
   }
 
-  async update(input: Partial<AppSettings>, opts?: GatewayOptions): Promise<AppSettings> {
+  async update(input: AppSettingsUpdate, opts?: GatewayOptions): Promise<AppSettings> {
     checkAbort(opts?.signal)
     await delay()
     Object.assign(this.settings, input)
     return { ...this.settings }
+  }
+}
+
+// ── Logs ────────────────────────────────────────────────────────────────
+
+class MockLogsGateway implements LogsGateway {
+  async list(opts?: GatewayOptions & { level?: string; search?: string }): Promise<LogListResponse> {
+    checkAbort(opts?.signal)
+    await delay()
+    return { items: [], total: 0, paused: false }
+  }
+
+  async pause(opts?: GatewayOptions): Promise<{ paused: boolean }> {
+    checkAbort(opts?.signal)
+    await delay()
+    return { paused: true }
+  }
+
+  async resume(opts?: GatewayOptions): Promise<{ paused: boolean }> {
+    checkAbort(opts?.signal)
+    await delay()
+    return { paused: false }
+  }
+
+  async clear(opts?: GatewayOptions): Promise<{ cleared: number }> {
+    checkAbort(opts?.signal)
+    await delay()
+    return { cleared: 0 }
+  }
+
+  exportUrl(): string {
+    return '/api/v1/logs/export'
+  }
+}
+
+// ── Licenses ────────────────────────────────────────────────────────────
+
+class MockLicensesGateway implements LicensesGateway {
+  async list(opts?: GatewayOptions): Promise<LicenseListResponse> {
+    checkAbort(opts?.signal)
+    await delay()
+    return { items: [], total: 0 }
+  }
+}
+
+// ── Commands ────────────────────────────────────────────────────────────
+
+class MockCommandsGateway implements CommandsGateway {
+  async list(opts?: GatewayOptions): Promise<CommandListResponse> {
+    checkAbort(opts?.signal)
+    await delay()
+    return { items: [], total: 0 }
   }
 }
 
@@ -960,6 +1019,9 @@ export function createMockGateway(): StudioGateway {
     batches: new MockBatchesGateway(),
     transfers: new MockTransfersGateway(),
     settings: new MockSettingsGateway(),
+    logs: new MockLogsGateway(),
+    licenses: new MockLicensesGateway(),
+    commands: new MockCommandsGateway(),
     events: new MockEventsGateway(),
   }
 }

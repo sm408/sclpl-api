@@ -471,11 +471,83 @@ export interface HistoryEntry {
 
 // ── Settings ────────────────────────────────────────────────────────────
 
+export interface EditorSettings {
+  tabSize: number
+  wordWrap: 'off' | 'on' | 'wordWrapColumn'
+  minimap: boolean
+  fontSize: number
+}
+
+export interface HistorySettings {
+  maxEntries: number
+  autoClearDays: number
+}
+
+export interface StartupSettings {
+  defaultProjectId: string | null
+  reopenLastTabs: boolean
+}
+
 export interface AppSettings {
-  theme: 'light' | 'dark' | 'system'
   defaultTimeout: number
   followRedirects: boolean
   maxHistoryEntries: number
+  editor: EditorSettings
+  history: HistorySettings
+  startup: StartupSettings
+  restartRequired: boolean
+}
+
+export interface AppSettingsUpdate {
+  defaultTimeout?: number
+  followRedirects?: boolean
+  maxHistoryEntries?: number
+  editor?: Partial<EditorSettings>
+  history?: Partial<HistorySettings>
+  startup?: Partial<StartupSettings>
+}
+
+// ── Logs ────────────────────────────────────────────────────────────────
+
+export interface LogEntry {
+  timestamp: string
+  level: string
+  source: string
+  message: string
+}
+
+export interface LogListResponse {
+  items: LogEntry[]
+  total: number
+  paused: boolean
+}
+
+// ── Licenses ────────────────────────────────────────────────────────────
+
+export interface LicenseEntry {
+  name: string
+  version: string
+  license: string
+  source: 'npm' | 'python'
+}
+
+export interface LicenseListResponse {
+  items: LicenseEntry[]
+  total: number
+}
+
+// ── Commands ────────────────────────────────────────────────────────────
+
+export interface CommandEntry {
+  id: string
+  label: string
+  shortcut: string
+  category: string
+}
+
+export interface CommandListResponse {
+  items: CommandEntry[]
+  total: number
 }
 
 // ── SSE Events ──────────────────────────────────────────────────────────

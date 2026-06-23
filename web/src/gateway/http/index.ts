@@ -21,6 +21,9 @@ import type {
   BatchesGateway,
   TransfersGateway,
   SettingsGateway,
+  LogsGateway,
+  LicensesGateway,
+  CommandsGateway,
   EventsGateway,
   GatewayOptions,
 } from '../types'
@@ -66,6 +69,10 @@ import type {
   ExportCreate,
   ExportPreset,
   AppSettings,
+  AppSettingsUpdate,
+  LogListResponse,
+  LicenseListResponse,
+  CommandListResponse,
   SseEventType,
 } from '@/types/api'
 import { apiFetch, apiUpload } from './client'
@@ -864,12 +871,68 @@ class HttpSettingsGateway implements SettingsGateway {
     return apiFetch<AppSettings>(this.base, '/api/v1/settings', { signal: opts?.signal })
   }
 
-  update(input: Partial<AppSettings>, opts?: GatewayOptions): Promise<AppSettings> {
+  update(input: AppSettingsUpdate, opts?: GatewayOptions): Promise<AppSettings> {
     return apiFetch<AppSettings>(this.base, '/api/v1/settings', {
       method: 'PATCH',
       body: input,
       signal: opts?.signal,
     })
+  }
+}
+
+// ── Logs ────────────────────────────────────────────────────────────────
+
+class HttpLogsGateway implements LogsGateway {
+  constructor(private readonly base: string) {}
+
+  list(opts?: GatewayOptions & { level?: string; source?: string; search?: string; limit?: number }): Promise<LogListResponse> {
+    const query: Record<string, unknown> = {}
+    if (opts?.level) query.level = opts.level
+    if (opts?.source) query.source = opts.source
+    if (opts?.search) query.search = opts.search
+    if (opts?.limit) query.limit = opts.limit
+    return apiFetch<LogListResponse>(this.base, '/api/v1/logs', { signal: opts?.signal, query })
+  }
+
+  pause(opts?: GatewayOptions): Promise<{ paused: boolean }> {
+    return apiFetch<{ paused: boolean }>(this.base, '/api/v1/logs/pause', { method: 'POST', signal: opts?.signal })
+  }
+
+  resume(opts?: GatewayOptions): Promise<{ paused: boolean }> {
+    return apiFetch<{ paused: boolean }>(this.base, '/api/v1/logs/resume', { method: 'POST', signal: opts?.signal })
+  }
+
+  clear(opts?: GatewayOptions): Promise<{ cleared: number }> {
+    return apiFetch<{ cleared: number }>(this.base, '/api/v1/logs', { method: 'DELETE', signal: opts?.signal })
+  }
+
+  exportUrl(level?: string, source?: string, search?: string, redact?: boolean): string {
+    const url = new URL('/api/v1/logs/export', this.base || window.location.origin)
+    if (level) url.searchParams.set('level', level)
+    if (source) url.searchParams.set('source', source)
+    if (search) url.searchParams.set('search', search)
+    if (redact !== undefined) url.searchParams.set('redact', String(redact))
+    return url.toString()
+  }
+}
+
+// ── Licenses ────────────────────────────────────────────────────────────
+
+class HttpLicensesGateway implements LicensesGateway {
+  constructor(private readonly base: string) {}
+
+  list(opts?: GatewayOptions): Promise<LicenseListResponse> {
+    return apiFetch<LicenseListResponse>(this.base, '/api/v1/licenses', { signal: opts?.signal })
+  }
+}
+
+// ── Commands ────────────────────────────────────────────────────────────
+
+class HttpCommandsGateway implements CommandsGateway {
+  constructor(private readonly base: string) {}
+
+  list(opts?: GatewayOptions): Promise<CommandListResponse> {
+    return apiFetch<CommandListResponse>(this.base, '/api/v1/commands', { signal: opts?.signal })
   }
 }
 
@@ -910,6 +973,9 @@ export function createHttpGateway(baseUrl: string = ''): StudioGateway {
     batches: new HttpBatchesGateway(base),
     transfers: new HttpTransfersGateway(base),
     settings: new HttpSettingsGateway(base),
+    logs: new HttpLogsGateway(base),
+    licenses: new HttpLicensesGateway(base),
+    commands: new HttpCommandsGateway(base),
     events: new HttpEventsGateway(base),
   }
 }

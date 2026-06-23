@@ -64,6 +64,16 @@ import type {
   ExportPreset,
   // Settings
   AppSettings,
+  AppSettingsUpdate,
+  // Logs
+  LogEntry,
+  LogListResponse,
+  // Licenses
+  LicenseEntry,
+  LicenseListResponse,
+  // Commands
+  CommandEntry,
+  CommandListResponse,
   // Operations filter
   OperationStatus,
   // SSE
@@ -272,7 +282,23 @@ export interface TransfersGateway {
 
 export interface SettingsGateway {
   get(opts?: GatewayOptions): Promise<AppSettings>
-  update(input: Partial<AppSettings>, opts?: GatewayOptions): Promise<AppSettings>
+  update(input: AppSettingsUpdate, opts?: GatewayOptions): Promise<AppSettings>
+}
+
+export interface LogsGateway {
+  list(opts?: GatewayOptions & { level?: string; source?: string; search?: string; limit?: number }): Promise<LogListResponse>
+  pause(opts?: GatewayOptions): Promise<{ paused: boolean }>
+  resume(opts?: GatewayOptions): Promise<{ paused: boolean }>
+  clear(opts?: GatewayOptions): Promise<{ cleared: number }>
+  exportUrl(level?: string, source?: string, search?: string, redact?: boolean): string
+}
+
+export interface LicensesGateway {
+  list(opts?: GatewayOptions): Promise<LicenseListResponse>
+}
+
+export interface CommandsGateway {
+  list(opts?: GatewayOptions): Promise<CommandListResponse>
 }
 
 export interface EventsGateway {
@@ -316,5 +342,8 @@ export interface StudioGateway {
   readonly batches: BatchesGateway
   readonly transfers: TransfersGateway
   readonly settings: SettingsGateway
+  readonly logs: LogsGateway
+  readonly licenses: LicensesGateway
+  readonly commands: CommandsGateway
   readonly events: EventsGateway
 }

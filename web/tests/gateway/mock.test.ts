@@ -290,13 +290,15 @@ describe('MockGateway', () => {
   describe('settings', () => {
     it('gets settings', async () => {
       const settings = await gw.settings.get()
-      expect(settings.theme).toBe('system')
-      expect(settings.defaultTimeout).toBe(30000)
+      expect(settings.defaultTimeout).toBe(30)
+      expect(settings.followRedirects).toBe(true)
+      expect(settings.editor.tabSize).toBe(4)
+      expect(settings.startup.reopenLastTabs).toBe(true)
     })
 
     it('updates settings', async () => {
-      const settings = await gw.settings.update({ theme: 'dark' })
-      expect(settings.theme).toBe('dark')
+      const settings = await gw.settings.update({ defaultTimeout: 60 })
+      expect(settings.defaultTimeout).toBe(60)
     })
   })
 
