@@ -23,6 +23,7 @@ from app.web.converters import (
 )
 from app.web.deps import _get_workflow_repo
 from app.web.dto import (
+    GenerateSclpllResponse,
     PaginatedResponse,
     PreflightResultDto,
     SclpllApplyRequest,
@@ -232,7 +233,7 @@ async def apply_sclpll(
     return workflow_to_response(result)
 
 
-@router.post("/{workflow_id}/sclpll/generate")
+@router.post("/{workflow_id}/sclpll/generate", response_model=GenerateSclpllResponse)
 async def generate_sclpll(
     project_id: str,
     workflow_id: str,
@@ -243,7 +244,7 @@ async def generate_sclpll(
     if not doc or doc.project_id != project_id:
         raise NotFoundError(message=f"Workflow '{workflow_id}' not found.")
     source = repo.generate_sclpll(doc.definition)
-    return {"sclpll_source": source}
+    return GenerateSclpllResponse(sclpll_source=source).model_dump(by_alias=True)
 
 
 # ── Preflight Validation ──────────────────────────────────────────────

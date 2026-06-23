@@ -16,17 +16,13 @@ from typing import Any
 from app.core.engine.sclpll_compiler import SCLPLLCompiler
 from app.core.models.project import DEFAULT_PROJECT_ID
 from app.core.models.workflow_document import (
-    DiffAction,
     DiffEntry,
-    ExecutionSnapshot,
     GraphLayout,
     ParseResult,
-    ParseResult as _PR,
     PreflightResult,
     PreviewResult,
     RevisionConflict,
     SourceDiagnostic,
-    StepEvent,
     ValidationIssue,
     WorkflowDocument,
     WorkflowVersion,
@@ -514,73 +510,19 @@ class WorkflowRepository:
     def validate_preflight(self, definition: dict[str, Any]) -> PreflightResult:
         """Validate a workflow definition before execution.
 
-        Checks for:
-        - Missing step IDs
-        - Circular dependencies
-        - Broken dependency references
-        - Missing required fields
+        Delegates to ``SCLPLLCompiler.validate_preflight`` and wraps
+        the raw dict result in a ``PreflightResult`` dataclass.
         """
-        issues: list[ValidationIssue] = []
-        steps = definition.get("steps", [])
-        step_ids = {s.get("id") for s in steps}
-
-        # Check for missing step IDs
-        for i, step in enumerate(steps):
-            if not step.get("id"):
-                issues.append(ValidationIssue(
-                    severity="error",
-                    message=f"Step at index {i} is missing an 'id' field",
-                    path=f"steps[{i}].id",
-                ))
-
-        # Check for broken dependency references
-        for step in steps:
-            step_id = step.get("id", "")
-            for dep in step.get("depends_on", []):
-                if dep not in step_ids:
-                    issues.append(ValidationIssue(
-                        severity="error",
-                        message=f"Step '{step_id}' depends on unknown step '{dep}'",
-                        path=f"steps.{step_id}.depends_on",
-                    ))
-
-        # Check for circular dependencies
-        if step_ids:
-            visited: set[str] = set()
-            in_stack: set[str] = set()
-            step_map = {s.get("id", ""): s for s in steps}
-
-            def _detect_cycle(sid: str) -> bool:
-                if sid in in_stack:
-                    return True
-                if sid in visited:
-                    return False
-                visited.add(sid)
-                in_stack.add(sid)
-                for dep in step_map.get(sid, {}).get("depends_on", []):
-                    if _detect_cycle(dep):
-                        return True
-                in_stack.discard(sid)
-                return False
-
-            for sid in step_ids:
-                if sid and sid not in visited:
-                    if _detect_cycle(sid):
-                        issues.append(ValidationIssue(
-                            severity="error",
-                            message=f"Circular dependency detected involving step '{sid}'",
-                            path=f"steps.{sid}",
-                        ))
-
-        # Check for missing workflow ID
-        if not definition.get("id"):
-            issues.append(ValidationIssue(
-                severity="warning",
-                message="Workflow definition is missing an 'id' field",
-                path="id",
-            ))
-
+        raw = self._compiler.validate_preflight(definition)
+        issues = [
+            ValidationIssue(
+                severity=i["severity"],
+                message=i["message"],
+                path=i.get("path", ""),
+            )
+            for i in raw.get("issues", [])
+        ]
         return PreflightResult(
-            valid=not any(i.severity == "error" for i in issues),
+            valid=raw.get("valid", False),
             issues=issues,
         )

@@ -57,13 +57,17 @@ class FullExportService:
             if sclpll:
                 (out / f"{name}.sclpll").write_text(sclpll, encoding="utf-8")
 
+            layout = wf.get("layout", "{}")
             json_data = {
                 "id": wf["id"],
                 "name": name,
                 "description": wf.get("description", ""),
                 "steps": json.loads(steps) if isinstance(steps, str) else steps,
                 "variables": json.loads(variables) if isinstance(variables, str) else variables,
+                "layout": json.loads(layout) if isinstance(layout, str) else layout,
+                "sclpll_source": wf.get("sclpll_source", ""),
                 "project_id": wf.get("project_id", ""),
+                "revision": wf.get("revision", 1),
                 "created_at": wf.get("created_at", ""),
                 "updated_at": wf.get("updated_at", ""),
             }

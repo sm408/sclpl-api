@@ -9,7 +9,7 @@ logger = logging.getLogger(__name__)
 
 DEFAULT_DB_PATH = Path("data") / "sclplapi.db"
 
-SCHEMA_VERSION = 5
+SCHEMA_VERSION = 6
 
 SCHEMA_SQL = """
 CREATE TABLE IF NOT EXISTS schema_version (
@@ -105,6 +105,8 @@ CREATE TABLE IF NOT EXISTS workflows (
     description TEXT DEFAULT '',
     steps TEXT DEFAULT '[]',
     variables TEXT DEFAULT '{}',
+    layout TEXT DEFAULT '{}',
+    sclpll_source TEXT DEFAULT '',
     project_id TEXT DEFAULT '00000000-0000-0000-0000-000000000001',
     revision INTEGER DEFAULT 1,
     created_at TEXT NOT NULL,
@@ -193,6 +195,8 @@ CREATE TABLE IF NOT EXISTS workflow_versions (
     version INTEGER NOT NULL,
     sclpll_source TEXT DEFAULT '',
     json_source TEXT DEFAULT '{}',
+    metadata TEXT DEFAULT '{}',
+    author TEXT DEFAULT '',
     created_at TEXT NOT NULL,
     FOREIGN KEY (workflow_id) REFERENCES workflows(id) ON DELETE CASCADE
 );
@@ -212,7 +216,8 @@ def get_all_migrations():
     from app.storage.migrations.m003_add_export_presets import AddExportPresets
     from app.storage.migrations.m004_add_monitors import AddMonitors
     from app.storage.migrations.m005_add_projects import AddProjects
-    return [AddPluginTables(), AddWorkflowVersioning(), AddExportPresets(), AddMonitors(), AddProjects()]
+    from app.storage.migrations.m006_add_workflow_document_fields import AddWorkflowDocumentFields
+    return [AddPluginTables(), AddWorkflowVersioning(), AddExportPresets(), AddMonitors(), AddProjects(), AddWorkflowDocumentFields()]
 
 
 class Database:

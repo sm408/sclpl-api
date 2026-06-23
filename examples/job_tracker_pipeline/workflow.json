@@ -1,0 +1,61 @@
+{
+  "id": "job-tracker-pipeline",
+  "name": "Job Application Tracker",
+  "description": "Track job applications, check status, and generate a summary",
+  "variables": {
+    "tracker_url": "https://api.example.com/jobs"
+  },
+  "steps": [
+    {
+      "id": "fetch_applications",
+      "name": "1. Fetch All Applications",
+      "type": "request",
+      "config": {
+        "inline_request": {
+          "method": "GET",
+          "url": "{{tracker_url}}/applications"
+        }
+      },
+      "output_variable": "applications_raw"
+    },
+    {
+      "id": "check_statuses",
+      "name": "2. Check Application Statuses",
+      "type": "request",
+      "config": {
+        "inline_request": {
+          "method": "GET",
+          "url": "{{tracker_url}}/statuses"
+        }
+      },
+      "output_variable": "statuses_raw"
+    },
+    {
+      "id": "merge_data",
+      "name": "3. Merge Application & Status Data",
+      "type": "function",
+      "depends_on": ["fetch_applications", "check_statuses"],
+      "config": {
+        "function_name": "Merge Job Data"
+      }
+    },
+    {
+      "id": "filter_active",
+      "name": "4. Filter Active Applications",
+      "type": "function",
+      "depends_on": ["merge_data"],
+      "config": {
+        "function_name": "Filter Active Jobs"
+      }
+    },
+    {
+      "id": "generate_summary",
+      "name": "5. Generate Summary Report",
+      "type": "function",
+      "depends_on": ["filter_active"],
+      "config": {
+        "function_name": "Generate Job Summary"
+      }
+    }
+  ]
+}

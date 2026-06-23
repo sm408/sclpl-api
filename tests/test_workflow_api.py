@@ -334,9 +334,9 @@ class TestSCLPLLOperations:
         resp = await client.post(f"/api/v1/projects/{PID}/workflows/{wf_id}/sclpll/generate")
         assert resp.status_code == 200
         body = resp.json()
-        # The endpoint returns a raw dict with sclpll_source key
-        source = body.get("sclpllSource") or body.get("sclpll_source", "")
-        assert "@workflow" in source
+        assert "sclpllSource" in body
+        assert "sclpll_source" not in body
+        assert "@workflow" in body["sclpllSource"]
 
     async def test_generate_not_found(self, client):
         resp = await client.post(f"/api/v1/projects/{PID}/workflows/nonexistent/sclpll/generate")

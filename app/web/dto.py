@@ -268,3 +268,131 @@ class RunResultResponse(CamelModel):
     body: str = ""
     duration_ms: int = 0
     error: str | None = None
+
+
+# ── Workflow DTOs ─────────────────────────────────────────────────────
+
+
+class GraphLayoutDto(CamelModel):
+    """Visual layout metadata for workflow graph nodes."""
+    nodes: dict[str, dict[str, float]] = Field(default_factory=dict)
+    viewport: dict[str, float] = Field(default_factory=dict)
+
+
+class WorkflowCreate(CamelModel):
+    name: str
+    description: str = ""
+    definition: dict[str, Any] | None = None
+    layout: GraphLayoutDto | None = None
+    sclpll_source: str = ""
+
+
+class WorkflowUpdate(CamelModel):
+    name: str | None = None
+    description: str | None = None
+    definition: dict[str, Any] | None = None
+    layout: GraphLayoutDto | None = None
+    sclpll_source: str | None = None
+    revision: int | None = None
+
+
+class WorkflowResponse(CamelModel):
+    model_config = ConfigDict(
+        alias_generator=_to_camel,
+        populate_by_name=True,
+        from_attributes=True,
+    )
+
+    id: str
+    project_id: str
+    name: str
+    description: str = ""
+    definition: dict[str, Any] = Field(default_factory=dict)
+    layout: GraphLayoutDto = Field(default_factory=GraphLayoutDto)
+    sclpll_source: str = ""
+    revision: int = 1
+    created_at: str | None = None
+    updated_at: str | None = None
+
+
+class WorkflowVersionResponse(CamelModel):
+    model_config = ConfigDict(
+        alias_generator=_to_camel,
+        populate_by_name=True,
+        from_attributes=True,
+    )
+
+    id: str
+    workflow_id: str
+    version: int
+    definition: dict[str, Any] = Field(default_factory=dict)
+    sclpll_source: str = ""
+    description: str = ""
+    author: str = ""
+    metadata: dict[str, Any] = Field(default_factory=dict)
+    created_at: str | None = None
+
+
+class DiffEntryDto(CamelModel):
+    path: str
+    action: str
+    old_value: Any = None
+    new_value: Any = None
+
+
+class SourceDiagnosticDto(CamelModel):
+    line: int
+    column: int
+    severity: str
+    message: str
+
+
+class ParseResultDto(CamelModel):
+    success: bool
+    definition: dict[str, Any] | None = None
+    diagnostics: list[SourceDiagnosticDto] = Field(default_factory=list)
+    source_hash: str = ""
+
+
+class PreviewResultDto(CamelModel):
+    definition: dict[str, Any]
+    sclpll_source: str
+    diff: list[DiffEntryDto] = Field(default_factory=list)
+    warnings: list[str] = Field(default_factory=list)
+    losses: list[str] = Field(default_factory=list)
+
+
+class PreflightResultDto(CamelModel):
+    valid: bool
+    issues: list[dict[str, Any]] = Field(default_factory=list)
+
+
+class RevisionConflictDto(CamelModel):
+    current_revision: int
+    attempted_revision: int
+    current_definition: dict[str, Any]
+    server_diff: list[DiffEntryDto] = Field(default_factory=list)
+
+
+class SclpllApplyRequest(CamelModel):
+    source: str
+    revision: int | None = None
+
+
+class VersionCreateRequest(CamelModel):
+    description: str = ""
+    author: str = ""
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class VersionRestoreRequest(CamelModel):
+    version: int
+
+
+class VersionCompareRequest(CamelModel):
+    version_a: int
+    version_b: int
+
+
+class GenerateSclpllResponse(CamelModel):
+    sclpll_source: str

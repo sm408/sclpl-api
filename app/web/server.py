@@ -26,6 +26,7 @@ from app.services.history_service import HistoryRepository
 from app.services.operation_registry import OperationRegistry
 from app.services.project_service import ProjectRepository
 from app.services.request_executor import HttpRequestExecutor
+from app.services.workflow_service import WorkflowRepository
 from app.storage.db import Database
 from app.web.api.collections import router as collections_router
 from app.web.api.environments import router as environments_router
@@ -34,6 +35,7 @@ from app.web.api.history import router as history_router
 from app.web.api.operations import router as operations_router
 from app.web.api.projects import router as projects_router
 from app.web.api.requests import router as requests_router
+from app.web.api.workflows import router as workflows_router
 from app.web.deps import ServiceContainer
 from app.web.errors import register_error_handlers
 from app.web.sse import SSEManager
@@ -197,6 +199,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     request_repo = RequestRepository(db)
     environment_repo = EnvironmentRepository(db)
     history_repo = HistoryRepository(db)
+    workflow_repo = WorkflowRepository(db)
     executor = HttpRequestExecutor()
     operation_registry = OperationRegistry()
     sse_manager = SSEManager()
@@ -208,6 +211,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         requests=request_repo,
         environments=environment_repo,
         history=history_repo,
+        workflows=workflow_repo,
         executor=executor,
         operations=operation_registry,
         sse=sse_manager,
@@ -282,6 +286,7 @@ def create_app(
     app.include_router(requests_router)
     app.include_router(environments_router)
     app.include_router(history_router)
+    app.include_router(workflows_router)
     app.include_router(operations_router)
 
     # ── Static file serving for the Vue SPA ──────────────────────────

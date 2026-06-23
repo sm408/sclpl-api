@@ -18,6 +18,7 @@ from app.services.history_service import HistoryRepository
 from app.services.operation_registry import OperationRegistry
 from app.services.project_service import ProjectRepository
 from app.services.request_executor import HttpRequestExecutor
+from app.services.workflow_service import WorkflowRepository
 from app.storage.db import Database
 from app.web.sse import SSEManager
 
@@ -32,6 +33,7 @@ class ServiceContainer:
     requests: RequestRepository
     environments: EnvironmentRepository
     history: HistoryRepository
+    workflows: WorkflowRepository
     executor: HttpRequestExecutor
     operations: OperationRegistry
     sse: SSEManager
@@ -60,6 +62,10 @@ async def _get_environment_repo(request: Request) -> EnvironmentRepository:
 
 async def _get_history_repo(request: Request) -> HistoryRepository:
     return request.app.state.services.history
+
+
+async def _get_workflow_repo(request: Request) -> WorkflowRepository:
+    return request.app.state.services.workflows
 
 
 async def _get_executor(request: Request) -> HttpRequestExecutor:

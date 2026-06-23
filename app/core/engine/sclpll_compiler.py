@@ -358,6 +358,14 @@ class SCLPLLCompiler:
                         "path": f"steps.{sid}",
                     })
 
+        # Check for missing workflow ID
+        if not definition.get("id"):
+            issues.append({
+                "severity": "warning",
+                "message": "Workflow definition is missing an 'id' field",
+                "path": "id",
+            })
+
         return {
             "valid": not any(i["severity"] == "error" for i in issues),
             "issues": issues,

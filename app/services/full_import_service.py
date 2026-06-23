@@ -91,20 +91,22 @@ class FullImportService:
 
             steps = json.dumps(data.get("steps", []))
             variables = json.dumps(data.get("variables", {}))
+            layout = json.dumps(data.get("layout", {}))
+            sclpll_source = data.get("sclpll_source", "")
             now = datetime.now(timezone.utc).isoformat()
 
             if existing:
                 await self._db.execute(
-                    """UPDATE workflows SET name=?, description=?, steps=?, variables=?, updated_at=?
+                    """UPDATE workflows SET name=?, description=?, steps=?, variables=?, layout=?, sclpll_source=?, updated_at=?
                     WHERE id=?""",
-                    (data["name"], data.get("description", ""), steps, variables, now, wf_id),
+                    (data["name"], data.get("description", ""), steps, variables, layout, sclpll_source, now, wf_id),
                 )
             else:
                 wf_project_id = data.get("project_id", DEFAULT_PROJECT_ID)
                 await self._db.execute(
-                    """INSERT INTO workflows (id, name, description, steps, variables, project_id, created_at, updated_at)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
-                    (wf_id, data["name"], data.get("description", ""), steps, variables, wf_project_id, now, now),
+                    """INSERT INTO workflows (id, name, description, steps, variables, layout, sclpll_source, project_id, created_at, updated_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                    (wf_id, data["name"], data.get("description", ""), steps, variables, layout, sclpll_source, wf_project_id, now, now),
                 )
             count += 1
 
@@ -118,10 +120,11 @@ class FullImportService:
                 )
                 if not existing:
                     await self._db.execute(
-                        """INSERT INTO workflow_versions (id, workflow_id, version, sclpll_source, json_source, created_at)
-                        VALUES (?, ?, ?, ?, ?, ?)""",
+                        """INSERT INTO workflow_versions (id, workflow_id, version, sclpll_source, json_source, metadata, author, created_at)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
                         (vid, ver["workflow_id"], ver["version"],
                          ver.get("sclpll_source", ""), ver.get("json_source", "{}"),
+                         ver.get("metadata", "{}"), ver.get("author", ""),
                          ver.get("created_at", now)),
                     )
 
