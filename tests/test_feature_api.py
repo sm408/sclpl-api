@@ -67,6 +67,7 @@ async def app(tmp_path):
             requests=application.state.services.requests,
             environments=application.state.services.environments,
             history=application.state.services.history,
+            workflows=application.state.services.workflows,
             executor=mock_executor,
             operations=application.state.services.operations,
             sse=application.state.services.sse,

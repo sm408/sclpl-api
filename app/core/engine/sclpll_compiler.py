@@ -25,10 +25,10 @@ class SCLPLLCompiler:
     _WORKFLOW_RE = re.compile(r'^@workflow\s+(\S+)\s*(?:"([^"]*)")?')
     _BASE_URL_RE = re.compile(r"^@base_url\s+(\S+)$")
     _VAR_RE = re.compile(r"^@var\s+(\S+)\s*=\s*(.+)$")
-    _WHEN_RE = re.compile(r"^@when\s+(.+?)\s*(==|!=|>=|<=|>|<)\s*(.+)$")
-    _FOREACH_RE = re.compile(r"^@foreach\s+(\{\{.+\}\})\s+as\s+(\w+)$")
-    _REPEAT_RE = re.compile(r"^@repeat\s+(\d+)$")
-    _SEMAPHORE_RE = re.compile(r"^@semaphore\s+(\d+)$")
+    _WHEN_RE = re.compile(r"^when\s+(.+?)\s*(==|!=|>=|<=|>|<)\s*(.+)$")
+    _FOREACH_RE = re.compile(r"^foreach\s+(\{\{.+\}\})\s+as\s+(\w+)$")
+    _REPEAT_RE = re.compile(r"^repeat\s+(\d+)$")
+    _SEMAPHORE_RE = re.compile(r"^semaphore\s+(\d+)$")
 
     def parse(self, source: str) -> dict[str, Any]:
         lines = source.splitlines()
@@ -127,6 +127,10 @@ class SCLPLLCompiler:
 
             raise SCLPLLParseError("Unexpected line (not inside a step body or unknown directive)", line_num, line)
 
+        # Flush any trailing description collected after @workflow
+        if expect_workflow_desc and desc_parts:
+            workflow["description"] = " ".join(desc_parts)
+
         if not workflow["id"]:
             raise SCLPLLParseError("Missing @workflow directive", 0, "")
 
@@ -135,6 +139,10 @@ class SCLPLLCompiler:
     def _parse_step_body(
         self, step: dict[str, Any], content: str, line_num: int, raw_line: str,
     ) -> None:
+        # Strip leading '@' so both '@when' and 'when' syntaxes are accepted
+        if content.startswith("@"):
+            content = content[1:]
+
         req_match = self._REQUEST_RE.match(content)
         if req_match:
             method = req_match.group(1).upper()
@@ -232,6 +240,129 @@ class SCLPLLCompiler:
                 asyncio.run(main())
         """)
 
+    def parse_source_diagnostics(self, source: str) -> dict[str, Any]:
+        """Parse SCLPLL source with structured diagnostics.
+
+        Returns a dict with:
+        - success: bool
+        - definition: dict | None
+        - diagnostics: list of {line, column, severity, message}
+        - source_hash: str
+        """
+        import hashlib
+
+        source_hash = hashlib.sha256(source.encode("utf-8")).hexdigest()[:16]
+        diagnostics: list[dict[str, Any]] = []
+
+        try:
+            definition = self.parse(source)
+            # Additional warnings
+            for step in definition.get("steps", []):
+                if step.get("type") == "request":
+                    inline = step.get("config", {}).get("inline_request", {})
+                    if not inline.get("url"):
+                        diagnostics.append({
+                            "line": 0,
+                            "column": 0,
+                            "severity": "warning",
+                            "message": f"Step '{step.get('id', '?')}': request step has no URL",
+                        })
+            return {
+                "success": True,
+                "definition": definition,
+                "diagnostics": diagnostics,
+                "source_hash": source_hash,
+            }
+        except SCLPLLParseError as exc:
+            diagnostics.append({
+                "line": exc.line_number,
+                "column": 0,
+                "severity": "error",
+                "message": str(exc),
+            })
+            return {
+                "success": False,
+                "definition": None,
+                "diagnostics": diagnostics,
+                "source_hash": source_hash,
+            }
+        except Exception as exc:
+            diagnostics.append({
+                "line": 0,
+                "column": 0,
+                "severity": "error",
+                "message": str(exc),
+            })
+            return {
+                "success": False,
+                "definition": None,
+                "diagnostics": diagnostics,
+                "source_hash": source_hash,
+            }
+
+    def validate_preflight(self, definition: dict[str, Any]) -> dict[str, Any]:
+        """Validate a workflow definition for execution readiness.
+
+        Returns a dict with:
+        - valid: bool
+        - issues: list of {severity, message, path}
+        """
+        issues: list[dict[str, Any]] = []
+        steps = definition.get("steps", [])
+        step_ids = {s.get("id") for s in steps}
+
+        # Missing step IDs
+        for i, step in enumerate(steps):
+            if not step.get("id"):
+                issues.append({
+                    "severity": "error",
+                    "message": f"Step at index {i} is missing an 'id' field",
+                    "path": f"steps[{i}].id",
+                })
+
+        # Broken dependency references
+        for step in steps:
+            sid = step.get("id", "")
+            for dep in step.get("depends_on", []):
+                if dep not in step_ids:
+                    issues.append({
+                        "severity": "error",
+                        "message": f"Step '{sid}' depends on unknown step '{dep}'",
+                        "path": f"steps.{sid}.depends_on",
+                    })
+
+        # Circular dependencies
+        visited: set[str] = set()
+        in_stack: set[str] = set()
+        step_map = {s.get("id", ""): s for s in steps}
+
+        def _detect_cycle(sid: str) -> bool:
+            if sid in in_stack:
+                return True
+            if sid in visited:
+                return False
+            visited.add(sid)
+            in_stack.add(sid)
+            for dep in step_map.get(sid, {}).get("depends_on", []):
+                if _detect_cycle(dep):
+                    return True
+            in_stack.discard(sid)
+            return False
+
+        for sid in step_ids:
+            if sid and sid not in visited:
+                if _detect_cycle(sid):
+                    issues.append({
+                        "severity": "error",
+                        "message": f"Circular dependency detected involving step '{sid}'",
+                        "path": f"steps.{sid}",
+                    })
+
+        return {
+            "valid": not any(i["severity"] == "error" for i in issues),
+            "issues": issues,
+        }
+
     def decompile_json_to_sclpll(self, json_str: str) -> str:
         data = json.loads(json_str)
         return self.decompile_dict_to_sclpll(data)
@@ -253,7 +384,7 @@ class SCLPLLCompiler:
             parts.append("")
             parts.append(f"@base_url {base_url}")
 
-        for var_name, var_value in variables.items():
+        for var_name, var_value in sorted(variables.items()):
             if var_name == "base_url":
                 continue
             parts.append(f"@var {var_name} = {var_value}")
@@ -299,7 +430,7 @@ class SCLPLLCompiler:
                 parts.append(f"    request {method} {url}")
 
                 headers = inline.get("headers", {})
-                for hdr_name, hdr_value in headers.items():
+                for hdr_name, hdr_value in sorted(headers.items()):
                     parts.append(f"    header {hdr_name}: {hdr_value}")
 
                 body = inline.get("body")
