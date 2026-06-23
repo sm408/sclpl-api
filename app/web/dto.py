@@ -396,3 +396,165 @@ class VersionCompareRequest(CamelModel):
 
 class GenerateSclpllResponse(CamelModel):
     sclpll_source: str
+
+
+# ── Function DTOs ──────────────────────────────────────────────────────
+
+
+class FunctionCreate(CamelModel):
+    name: str
+    source: str
+    description: str = ""
+
+
+class FunctionUpdate(CamelModel):
+    name: str | None = None
+    source: str | None = None
+    description: str | None = None
+    expected_hash: str | None = None
+
+
+class FunctionResponse(CamelModel):
+    model_config = ConfigDict(
+        alias_generator=_to_camel,
+        populate_by_name=True,
+        from_attributes=True,
+    )
+
+    path: str
+    name: str
+    description: str = ""
+    type: str = "utility"
+    category: str = "uncategorized"
+    content: str = ""
+    hash: str = ""
+    size: int = 0
+    valid: bool = True
+    diagnostics: list[dict] = Field(default_factory=list)
+    trusted: bool = False
+
+
+class FunctionListItem(CamelModel):
+    model_config = ConfigDict(
+        alias_generator=_to_camel,
+        populate_by_name=True,
+        from_attributes=True,
+    )
+
+    path: str
+    name: str
+    description: str = ""
+    type: str = "utility"
+    category: str = "uncategorized"
+    hash: str = ""
+    size: int = 0
+
+
+class FileTreeEntry(CamelModel):
+    model_config = ConfigDict(
+        alias_generator=_to_camel,
+        populate_by_name=True,
+    )
+
+    path: str
+    name: str
+    type: str
+    size: int | None = None
+    children: list[dict] = Field(default_factory=list)
+
+
+class AstValidationResult(CamelModel):
+    model_config = ConfigDict(
+        alias_generator=_to_camel,
+        populate_by_name=True,
+    )
+
+    valid: bool
+    diagnostics: list[dict] = Field(default_factory=list)
+
+
+class FixtureResult(CamelModel):
+    model_config = ConfigDict(
+        alias_generator=_to_camel,
+        populate_by_name=True,
+    )
+
+    success: bool
+    output: Any = None
+    error: str | None = None
+    duration_ms: int = 0
+    stdout: str = ""
+    stderr: str = ""
+
+
+class TrustAckRequest(CamelModel):
+    path: str
+    content_hash: str
+
+
+class TrustAckResponse(CamelModel):
+    model_config = ConfigDict(
+        alias_generator=_to_camel,
+        populate_by_name=True,
+    )
+
+    path: str
+    hash: str
+    trusted: bool
+
+
+class FixtureRunRequest(CamelModel):
+    fixture_input: dict[str, Any] = Field(default_factory=dict)
+    trusted: bool = False
+
+
+# ── Plugin DTOs ─────────────────────────────────────────────────────────
+
+
+class PluginResponse(CamelModel):
+    model_config = ConfigDict(
+        alias_generator=_to_camel,
+        populate_by_name=True,
+    )
+
+    id: str
+    name: str
+    version: str
+    description: str = ""
+    author: str = ""
+    category: str = ""
+    status: str = "discovered"
+    function_count: int = 0
+    workflow_count: int = 0
+    variable_names: list[str] = Field(default_factory=list)
+    error: str | None = None
+    dependencies: list[str] = Field(default_factory=list)
+
+
+class PluginScaffoldRequest(CamelModel):
+    name: str
+    description: str = ""
+
+
+class PluginManifestUpdate(CamelModel):
+    data: dict[str, Any] = Field(default_factory=dict)
+
+
+class PluginDiagnostics(CamelModel):
+    model_config = ConfigDict(
+        alias_generator=_to_camel,
+        populate_by_name=True,
+    )
+
+    name: str
+    status: str
+    function_count: int = 0
+    workflow_count: int = 0
+    variable_names: list[str] = Field(default_factory=list)
+    error: str | None = None
+    dependencies: list[str] = Field(default_factory=list)
+
+
+class PluginFileWrite(CamelModel):
+    content: str
+    expected_hash: str | None = None

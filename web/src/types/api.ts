@@ -274,6 +274,65 @@ export interface FunctionUpdate {
   source?: string
 }
 
+export interface FunctionListItem {
+  path: string
+  name: string
+  description: string
+  type: string
+  category: string
+  hash: string
+  size: number
+}
+
+export interface FunctionDetail {
+  path: string
+  name: string
+  description: string
+  type: string
+  category: string
+  content: string
+  hash: string
+  size: number
+  valid: boolean
+  diagnostics: AstDiagnostic[]
+  trusted: boolean
+}
+
+export interface AstDiagnostic {
+  line: number
+  column: number
+  severity: 'error' | 'warning' | 'info'
+  message: string
+}
+
+export interface AstValidationResult {
+  valid: boolean
+  diagnostics: AstDiagnostic[]
+}
+
+export interface FixtureResult {
+  success: boolean
+  output: unknown
+  error: string | null
+  durationMs: number
+  stdout: string
+  stderr: string
+}
+
+export interface TrustAck {
+  path: string
+  hash: string
+  trusted: boolean
+}
+
+export interface FileTreeEntry {
+  path: string
+  name: string
+  type: 'file' | 'dir'
+  size?: number
+  children?: FileTreeEntry[]
+}
+
 // ── Plugin ──────────────────────────────────────────────────────────────
 
 export interface PluginManifest {
@@ -291,6 +350,31 @@ export interface PluginInfo {
   status: PluginStatus
   description: string
   manifest?: PluginManifest
+}
+
+export interface PluginDetail {
+  id: string
+  name: string
+  version: string
+  description: string
+  author: string
+  category: string
+  status: PluginStatus
+  functionCount: number
+  workflowCount: number
+  variableNames: string[]
+  error: string | null
+  dependencies: string[]
+}
+
+export interface PluginDiagnostics {
+  name: string
+  status: string
+  functionCount: number
+  workflowCount: number
+  variableNames: string[]
+  error: string | null
+  dependencies: string[]
 }
 
 // ── Monitor ─────────────────────────────────────────────────────────────

@@ -209,3 +209,93 @@ def conflict_to_response(conflict: RevisionConflict) -> dict:
         current_definition=conflict.current_definition,
         server_diff=[_to_diff_dto(d) for d in conflict.server_diff],
     ).model_dump(by_alias=True)
+
+
+# ── Function / Plugin converters ───────────────────────────────────────
+
+
+def function_to_response(data: dict) -> dict:
+    """Convert function data to a camelCase response dict."""
+    from app.web.dto import FunctionResponse
+    return FunctionResponse(
+        path=data.get("path", ""),
+        name=data.get("name", ""),
+        description=data.get("description", ""),
+        type=data.get("type", "utility"),
+        category=data.get("category", "uncategorized"),
+        content=data.get("content", ""),
+        hash=data.get("hash", ""),
+        size=data.get("size", 0),
+        valid=data.get("valid", True),
+        diagnostics=data.get("diagnostics", []),
+        trusted=data.get("trusted", False),
+    ).model_dump(by_alias=True)
+
+
+def function_list_item_to_response(data: dict) -> dict:
+    """Convert a function list item to a camelCase response dict."""
+    from app.web.dto import FunctionListItem
+    return FunctionListItem(
+        path=data.get("path", ""),
+        name=data.get("name", ""),
+        description=data.get("description", ""),
+        type=data.get("type", "utility"),
+        category=data.get("category", "uncategorized"),
+        hash=data.get("hash", ""),
+        size=data.get("size", 0),
+    ).model_dump(by_alias=True)
+
+
+def plugin_to_response(data: dict) -> dict:
+    """Convert plugin data to a camelCase response dict."""
+    from app.web.dto import PluginResponse
+    return PluginResponse(
+        id=data.get("id", ""),
+        name=data.get("name", ""),
+        version=data.get("version", ""),
+        description=data.get("description", ""),
+        author=data.get("author", ""),
+        category=data.get("category", ""),
+        status=data.get("status", "discovered"),
+        function_count=data.get("functionCount", 0),
+        workflow_count=data.get("workflowCount", 0),
+        variable_names=data.get("variableNames", []),
+        error=data.get("error"),
+        dependencies=data.get("dependencies", []),
+    ).model_dump(by_alias=True)
+
+
+def plugin_diagnostics_to_response(data: dict) -> dict:
+    """Convert plugin diagnostics to a camelCase response dict (secrets excluded)."""
+    from app.web.dto import PluginDiagnostics
+    return PluginDiagnostics(
+        name=data.get("name", ""),
+        status=data.get("status", "discovered"),
+        function_count=data.get("functionCount", 0),
+        workflow_count=data.get("workflowCount", 0),
+        variable_names=data.get("variableNames", []),
+        error=data.get("error"),
+        dependencies=data.get("dependencies", []),
+    ).model_dump(by_alias=True)
+
+
+def ast_result_to_response(data: dict) -> dict:
+    """Convert AST validation result to a camelCase response dict."""
+    from app.web.dto import AstValidationResult
+    return AstValidationResult(
+        valid=data.get("valid", False),
+        diagnostics=data.get("diagnostics", []),
+    ).model_dump(by_alias=True)
+
+
+def fixture_result_to_response(data: dict) -> dict:
+    """Convert fixture execution result to a camelCase response dict."""
+    from app.web.dto import FixtureResult
+    return FixtureResult(
+        success=data.get("success", False),
+        output=data.get("output"),
+        error=data.get("error"),
+        duration_ms=data.get("durationMs", 0),
+        stdout=data.get("stdout", ""),
+        stderr=data.get("stderr", ""),
+    ).model_dump(by_alias=True)

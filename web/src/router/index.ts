@@ -118,7 +118,7 @@ const routes: RouteRecordRaw[] = [
   {
     path: '/functions',
     name: 'functions',
-    component: () => import('@/views/placeholder/FunctionsView.vue'),
+    component: () => import('@/views/FunctionsView.vue'),
     meta: {
       kind: 'function',
       section: 'functions',
@@ -129,7 +129,7 @@ const routes: RouteRecordRaw[] = [
   {
     path: '/functions/:functionId',
     name: 'function-detail',
-    component: () => import('@/views/placeholder/FunctionView.vue'),
+    component: () => import('@/views/FunctionsView.vue'),
     meta: {
       kind: 'function',
       section: 'functions',
@@ -149,7 +149,7 @@ const routes: RouteRecordRaw[] = [
   {
     path: '/plugins',
     name: 'plugins',
-    component: () => import('@/views/placeholder/PluginsView.vue'),
+    component: () => import('@/views/PluginsView.vue'),
     meta: {
       title: 'Plugins',
     } satisfies StudioRouteMeta,

@@ -43,8 +43,16 @@ import type {
   FunctionDef,
   FunctionCreate,
   FunctionUpdate,
+  FunctionListItem,
+  FunctionDetail,
+  AstValidationResult,
+  FixtureResult,
+  TrustAck,
+  FileTreeEntry,
   // Plugin
   PluginInfo,
+  PluginDetail,
+  PluginDiagnostics,
   // Monitor
   Monitor,
   MonitorCreate,
@@ -161,21 +169,65 @@ export interface WorkflowsGateway {
 }
 
 export interface FunctionsGateway {
-  list(projectId: string, opts?: GatewayOptions): Promise<FunctionDef[]>
-  get(projectId: string, id: string, opts?: GatewayOptions): Promise<FunctionDef>
-  create(projectId: string, input: FunctionCreate, opts?: GatewayOptions): Promise<FunctionDef>
+  list(projectId: string, opts?: GatewayOptions): Promise<FunctionListItem[]>
+  get(projectId: string, path: string, opts?: GatewayOptions): Promise<FunctionDetail>
+  create(projectId: string, input: FunctionCreate, opts?: GatewayOptions): Promise<FunctionDetail>
   update(
     projectId: string,
-    id: string,
-    input: FunctionUpdate,
+    path: string,
+    input: { source?: string; expectedHash?: string },
     opts?: GatewayOptions,
-  ): Promise<FunctionDef>
-  delete(projectId: string, id: string, opts?: GatewayOptions): Promise<void>
+  ): Promise<FunctionDetail>
+  delete(projectId: string, path: string, opts?: GatewayOptions): Promise<void>
+  tree(projectId: string, opts?: GatewayOptions): Promise<FileTreeEntry[]>
+  validate(projectId: string, source: string, opts?: GatewayOptions): Promise<AstValidationResult>
+  runFixture(
+    projectId: string,
+    path: string,
+    input?: Record<string, unknown>,
+    trusted?: boolean,
+    opts?: GatewayOptions,
+  ): Promise<FixtureResult>
+  acknowledgeTrust(
+    projectId: string,
+    path: string,
+    contentHash: string,
+    opts?: GatewayOptions,
+  ): Promise<TrustAck>
+  revokeTrust(projectId: string, path: string, opts?: GatewayOptions): Promise<void>
 }
 
 export interface PluginsGateway {
-  list(projectId: string, opts?: GatewayOptions): Promise<PluginInfo[]>
-  get(projectId: string, id: string, opts?: GatewayOptions): Promise<PluginInfo>
+  list(projectId: string, opts?: GatewayOptions): Promise<PluginDetail[]>
+  get(projectId: string, name: string, opts?: GatewayOptions): Promise<PluginDetail>
+  scaffold(
+    projectId: string,
+    name: string,
+    description?: string,
+    opts?: GatewayOptions,
+  ): Promise<PluginDetail>
+  enable(projectId: string, name: string, opts?: GatewayOptions): Promise<PluginDetail>
+  disable(projectId: string, name: string, opts?: GatewayOptions): Promise<PluginDetail>
+  reload(projectId: string, opts?: GatewayOptions): Promise<PluginDetail[]>
+  getManifest(projectId: string, name: string, opts?: GatewayOptions): Promise<Record<string, unknown>>
+  updateManifest(
+    projectId: string,
+    name: string,
+    data: Record<string, unknown>,
+    opts?: GatewayOptions,
+  ): Promise<PluginDetail>
+  getTree(projectId: string, name: string, opts?: GatewayOptions): Promise<FileTreeEntry[]>
+  readFile(projectId: string, name: string, path: string, opts?: GatewayOptions): Promise<{ content: string; hash: string; size: number }>
+  writeFile(
+    projectId: string,
+    name: string,
+    path: string,
+    content: string,
+    expectedHash?: string,
+    opts?: GatewayOptions,
+  ): Promise<{ path: string; hash: string; size: number }>
+  getDiagnostics(projectId: string, name: string, opts?: GatewayOptions): Promise<PluginDiagnostics>
+  export(projectId: string, name: string, opts?: GatewayOptions): Promise<Blob>
 }
 
 export interface MonitorsGateway {

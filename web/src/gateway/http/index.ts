@@ -49,7 +49,15 @@ import type {
   FunctionDef,
   FunctionCreate,
   FunctionUpdate,
+  FunctionListItem,
+  FunctionDetail,
+  AstValidationResult,
+  FixtureResult,
+  TrustAck,
+  FileTreeEntry,
   PluginInfo,
+  PluginDetail,
+  PluginDiagnostics,
   Monitor,
   MonitorCreate,
   MonitorUpdate,
@@ -440,8 +448,8 @@ class HttpWorkflowsGateway implements WorkflowsGateway {
 class HttpFunctionsGateway implements FunctionsGateway {
   constructor(private readonly base: string) {}
 
-  async list(projectId: string, opts?: GatewayOptions): Promise<FunctionDef[]> {
-    const res = await apiFetch<PaginatedResponse<FunctionDef>>(
+  async list(projectId: string, opts?: GatewayOptions): Promise<FunctionListItem[]> {
+    const res = await apiFetch<PaginatedResponse<FunctionListItem>>(
       this.base,
       `/api/v1/projects/${projectId}/functions`,
       { signal: opts?.signal },
@@ -449,16 +457,16 @@ class HttpFunctionsGateway implements FunctionsGateway {
     return res.items
   }
 
-  get(projectId: string, id: string, opts?: GatewayOptions): Promise<FunctionDef> {
-    return apiFetch<FunctionDef>(
+  get(projectId: string, path: string, opts?: GatewayOptions): Promise<FunctionDetail> {
+    return apiFetch<FunctionDetail>(
       this.base,
-      `/api/v1/projects/${projectId}/functions/${id}`,
+      `/api/v1/projects/${projectId}/functions/${encodeURIComponent(path)}`,
       { signal: opts?.signal },
     )
   }
 
-  create(projectId: string, input: FunctionCreate, opts?: GatewayOptions): Promise<FunctionDef> {
-    return apiFetch<FunctionDef>(
+  create(projectId: string, input: FunctionCreate, opts?: GatewayOptions): Promise<FunctionDetail> {
+    return apiFetch<FunctionDetail>(
       this.base,
       `/api/v1/projects/${projectId}/functions`,
       { method: 'POST', body: input, signal: opts?.signal },
@@ -467,21 +475,73 @@ class HttpFunctionsGateway implements FunctionsGateway {
 
   update(
     projectId: string,
-    id: string,
-    input: FunctionUpdate,
+    path: string,
+    input: { source?: string; expectedHash?: string },
     opts?: GatewayOptions,
-  ): Promise<FunctionDef> {
-    return apiFetch<FunctionDef>(
+  ): Promise<FunctionDetail> {
+    return apiFetch<FunctionDetail>(
       this.base,
-      `/api/v1/projects/${projectId}/functions/${id}`,
+      `/api/v1/projects/${projectId}/functions/${encodeURIComponent(path)}`,
       { method: 'PATCH', body: input, signal: opts?.signal },
     )
   }
 
-  async delete(projectId: string, id: string, opts?: GatewayOptions): Promise<void> {
+  async delete(projectId: string, path: string, opts?: GatewayOptions): Promise<void> {
     await apiFetch<void>(
       this.base,
-      `/api/v1/projects/${projectId}/functions/${id}`,
+      `/api/v1/projects/${projectId}/functions/${encodeURIComponent(path)}`,
+      { method: 'DELETE', signal: opts?.signal },
+    )
+  }
+
+  async tree(projectId: string, opts?: GatewayOptions): Promise<FileTreeEntry[]> {
+    const res = await apiFetch<{ tree: FileTreeEntry[] }>(
+      this.base,
+      `/api/v1/projects/${projectId}/functions/tree`,
+      { signal: opts?.signal },
+    )
+    return res.tree
+  }
+
+  validate(projectId: string, source: string, opts?: GatewayOptions): Promise<AstValidationResult> {
+    return apiFetch<AstValidationResult>(
+      this.base,
+      `/api/v1/projects/${projectId}/functions/validate`,
+      { method: 'POST', body: { source }, signal: opts?.signal },
+    )
+  }
+
+  runFixture(
+    projectId: string,
+    path: string,
+    input?: Record<string, unknown>,
+    trusted?: boolean,
+    opts?: GatewayOptions,
+  ): Promise<FixtureResult> {
+    return apiFetch<FixtureResult>(
+      this.base,
+      `/api/v1/projects/${projectId}/functions/${encodeURIComponent(path)}/run`,
+      { method: 'POST', body: { fixtureInput: input ?? {}, trusted: trusted ?? false }, signal: opts?.signal },
+    )
+  }
+
+  acknowledgeTrust(
+    projectId: string,
+    path: string,
+    contentHash: string,
+    opts?: GatewayOptions,
+  ): Promise<TrustAck> {
+    return apiFetch<TrustAck>(
+      this.base,
+      `/api/v1/projects/${projectId}/functions/${encodeURIComponent(path)}/trust`,
+      { method: 'POST', body: { path, contentHash }, signal: opts?.signal },
+    )
+  }
+
+  async revokeTrust(projectId: string, path: string, opts?: GatewayOptions): Promise<void> {
+    await apiFetch<void>(
+      this.base,
+      `/api/v1/projects/${projectId}/functions/${encodeURIComponent(path)}/trust`,
       { method: 'DELETE', signal: opts?.signal },
     )
   }
@@ -492,8 +552,8 @@ class HttpFunctionsGateway implements FunctionsGateway {
 class HttpPluginsGateway implements PluginsGateway {
   constructor(private readonly base: string) {}
 
-  async list(projectId: string, opts?: GatewayOptions): Promise<PluginInfo[]> {
-    const res = await apiFetch<PaginatedResponse<PluginInfo>>(
+  async list(projectId: string, opts?: GatewayOptions): Promise<PluginDetail[]> {
+    const res = await apiFetch<PaginatedResponse<PluginDetail>>(
       this.base,
       `/api/v1/projects/${projectId}/plugins`,
       { signal: opts?.signal },
@@ -501,12 +561,128 @@ class HttpPluginsGateway implements PluginsGateway {
     return res.items
   }
 
-  get(projectId: string, id: string, opts?: GatewayOptions): Promise<PluginInfo> {
-    return apiFetch<PluginInfo>(
+  get(projectId: string, name: string, opts?: GatewayOptions): Promise<PluginDetail> {
+    return apiFetch<PluginDetail>(
       this.base,
-      `/api/v1/projects/${projectId}/plugins/${id}`,
+      `/api/v1/projects/${projectId}/plugins/${encodeURIComponent(name)}`,
       { signal: opts?.signal },
     )
+  }
+
+  scaffold(
+    projectId: string,
+    name: string,
+    description?: string,
+    opts?: GatewayOptions,
+  ): Promise<PluginDetail> {
+    return apiFetch<PluginDetail>(
+      this.base,
+      `/api/v1/projects/${projectId}/plugins`,
+      { method: 'POST', body: { name, description: description ?? '' }, signal: opts?.signal },
+    )
+  }
+
+  enable(projectId: string, name: string, opts?: GatewayOptions): Promise<PluginDetail> {
+    return apiFetch<PluginDetail>(
+      this.base,
+      `/api/v1/projects/${projectId}/plugins/${encodeURIComponent(name)}/enable`,
+      { method: 'POST', signal: opts?.signal },
+    )
+  }
+
+  disable(projectId: string, name: string, opts?: GatewayOptions): Promise<PluginDetail> {
+    return apiFetch<PluginDetail>(
+      this.base,
+      `/api/v1/projects/${projectId}/plugins/${encodeURIComponent(name)}/disable`,
+      { method: 'POST', signal: opts?.signal },
+    )
+  }
+
+  async reload(projectId: string, opts?: GatewayOptions): Promise<PluginDetail[]> {
+    const res = await apiFetch<PaginatedResponse<PluginDetail>>(
+      this.base,
+      `/api/v1/projects/${projectId}/plugins/reload`,
+      { method: 'POST', signal: opts?.signal },
+    )
+    return res.items
+  }
+
+  getManifest(projectId: string, name: string, opts?: GatewayOptions): Promise<Record<string, unknown>> {
+    return apiFetch<Record<string, unknown>>(
+      this.base,
+      `/api/v1/projects/${projectId}/plugins/${encodeURIComponent(name)}/manifest`,
+      { signal: opts?.signal },
+    )
+  }
+
+  updateManifest(
+    projectId: string,
+    name: string,
+    data: Record<string, unknown>,
+    opts?: GatewayOptions,
+  ): Promise<PluginDetail> {
+    return apiFetch<PluginDetail>(
+      this.base,
+      `/api/v1/projects/${projectId}/plugins/${encodeURIComponent(name)}/manifest`,
+      { method: 'PATCH', body: { data }, signal: opts?.signal },
+    )
+  }
+
+  async getTree(projectId: string, name: string, opts?: GatewayOptions): Promise<FileTreeEntry[]> {
+    const res = await apiFetch<{ tree: FileTreeEntry[] }>(
+      this.base,
+      `/api/v1/projects/${projectId}/plugins/${encodeURIComponent(name)}/tree`,
+      { signal: opts?.signal },
+    )
+    return res.tree
+  }
+
+  readFile(
+    projectId: string,
+    name: string,
+    path: string,
+    opts?: GatewayOptions,
+  ): Promise<{ content: string; hash: string; size: number }> {
+    return apiFetch<{ content: string; hash: string; size: number }>(
+      this.base,
+      `/api/v1/projects/${projectId}/plugins/${encodeURIComponent(name)}/files/${encodeURIComponent(path)}`,
+      { signal: opts?.signal },
+    )
+  }
+
+  writeFile(
+    projectId: string,
+    name: string,
+    path: string,
+    content: string,
+    expectedHash?: string,
+    opts?: GatewayOptions,
+  ): Promise<{ path: string; hash: string; size: number }> {
+    return apiFetch<{ path: string; hash: string; size: number }>(
+      this.base,
+      `/api/v1/projects/${projectId}/plugins/${encodeURIComponent(name)}/files/${encodeURIComponent(path)}`,
+      { method: 'PUT', body: { content, expectedHash }, signal: opts?.signal },
+    )
+  }
+
+  getDiagnostics(projectId: string, name: string, opts?: GatewayOptions): Promise<PluginDiagnostics> {
+    return apiFetch<PluginDiagnostics>(
+      this.base,
+      `/api/v1/projects/${projectId}/plugins/${encodeURIComponent(name)}/diagnostics`,
+      { signal: opts?.signal },
+    )
+  }
+
+  async export(projectId: string, name: string, opts?: GatewayOptions): Promise<Blob> {
+    const url = new URL(
+      `/api/v1/projects/${projectId}/plugins/${encodeURIComponent(name)}/export`,
+      this.base || window.location.origin,
+    )
+    const response = await fetch(url.toString(), { signal: opts?.signal })
+    if (!response.ok) {
+      throw new Error(`Export failed: ${response.status}`)
+    }
+    return response.blob()
   }
 }
 

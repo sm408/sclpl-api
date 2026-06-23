@@ -53,7 +53,15 @@ import type {
   FunctionDef,
   FunctionCreate,
   FunctionUpdate,
+  FunctionListItem,
+  FunctionDetail,
+  AstValidationResult,
+  FixtureResult,
+  TrustAck,
+  FileTreeEntry,
   PluginInfo,
+  PluginDetail,
+  PluginDiagnostics,
   Monitor,
   MonitorCreate,
   MonitorUpdate,
@@ -453,64 +461,276 @@ class MockWorkflowsGateway implements WorkflowsGateway {
 // ── Functions ───────────────────────────────────────────────────────────
 
 class MockFunctionsGateway implements FunctionsGateway {
-  private functions = new Map([[fixtures.FIXTURE_FUNCTION.id, { ...fixtures.FIXTURE_FUNCTION }]])
+  private functions = new Map<string, FunctionDetail>()
 
-  async list(projectId: string, opts?: GatewayOptions): Promise<FunctionDef[]> {
-    checkAbort(opts?.signal)
-    await delay()
-    return Array.from(this.functions.values()).filter((f) => f.projectId === projectId)
+  constructor() {
+    // Seed with fixture data
+    const fn: FunctionDetail = {
+      path: 'parse_json.py',
+      name: 'parse_json',
+      description: 'Parse JSON response body',
+      type: 'utility',
+      category: 'uncategorized',
+      content: '"""\n@name: parse_json\n@description: Parse JSON response body\n"""\n\ndef run(ctx):\n    return {"parsed": True}',
+      hash: 'abc123',
+      size: 100,
+      valid: true,
+      diagnostics: [],
+      trusted: true,
+    }
+    this.functions.set(fn.path, fn)
   }
 
-  async get(_projectId: string, id: string, opts?: GatewayOptions): Promise<FunctionDef> {
+  async list(_projectId: string, opts?: GatewayOptions): Promise<FunctionListItem[]> {
     checkAbort(opts?.signal)
     await delay()
-    const fn = this.functions.get(id)
-    if (!fn) throw new StudioError({ message: `Function '${id}' not found.`, code: 'NOT_FOUND', status: 404 })
+    return Array.from(this.functions.values()).map((f) => ({
+      path: f.path,
+      name: f.name,
+      description: f.description,
+      type: f.type,
+      category: f.category,
+      hash: f.hash,
+      size: f.size,
+    }))
+  }
+
+  async get(_projectId: string, path: string, opts?: GatewayOptions): Promise<FunctionDetail> {
+    checkAbort(opts?.signal)
+    await delay()
+    const fn = this.functions.get(path)
+    if (!fn) throw new StudioError({ message: `Function '${path}' not found.`, code: 'NOT_FOUND', status: 404 })
     return { ...fn }
   }
 
-  async create(projectId: string, input: FunctionCreate, opts?: GatewayOptions): Promise<FunctionDef> {
+  async create(_projectId: string, input: FunctionCreate, opts?: GatewayOptions): Promise<FunctionDetail> {
     checkAbort(opts?.signal)
     await delay()
-    const fn: FunctionDef = { id: nextId('fn'), projectId, name: input.name, description: input.description ?? '', source: input.source }
-    this.functions.set(fn.id, fn)
+    const fn: FunctionDetail = {
+      path: input.name.endsWith('.py') ? input.name : `${input.name}.py`,
+      name: input.name,
+      description: input.description ?? '',
+      type: 'utility',
+      category: 'uncategorized',
+      content: input.source,
+      hash: nextId('hash'),
+      size: input.source.length,
+      valid: true,
+      diagnostics: [],
+      trusted: false,
+    }
+    this.functions.set(fn.path, fn)
     return { ...fn }
   }
 
-  async update(_projectId: string, id: string, input: FunctionUpdate, opts?: GatewayOptions): Promise<FunctionDef> {
+  async update(_projectId: string, path: string, input: { source?: string; expectedHash?: string }, opts?: GatewayOptions): Promise<FunctionDetail> {
     checkAbort(opts?.signal)
     await delay()
-    const fn = this.functions.get(id)
-    if (!fn) throw new StudioError({ message: `Function '${id}' not found.`, code: 'NOT_FOUND', status: 404 })
-    if (input.name !== undefined) fn.name = input.name
-    if (input.description !== undefined) fn.description = input.description
-    if (input.source !== undefined) fn.source = input.source
+    const fn = this.functions.get(path)
+    if (!fn) throw new StudioError({ message: `Function '${path}' not found.`, code: 'NOT_FOUND', status: 404 })
+    if (input.source !== undefined) {
+      fn.content = input.source
+      fn.size = input.source.length
+      fn.hash = nextId('hash')
+      fn.trusted = false
+    }
     return { ...fn }
   }
 
-  async delete(_projectId: string, id: string, opts?: GatewayOptions): Promise<void> {
+  async delete(_projectId: string, path: string, opts?: GatewayOptions): Promise<void> {
     checkAbort(opts?.signal)
     await delay()
-    if (!this.functions.has(id)) throw new StudioError({ message: `Function '${id}' not found.`, code: 'NOT_FOUND', status: 404 })
-    this.functions.delete(id)
+    if (!this.functions.has(path)) throw new StudioError({ message: `Function '${path}' not found.`, code: 'NOT_FOUND', status: 404 })
+    this.functions.delete(path)
+  }
+
+  async tree(_projectId: string, opts?: GatewayOptions): Promise<FileTreeEntry[]> {
+    checkAbort(opts?.signal)
+    await delay()
+    return [
+      {
+        path: 'parse_json.py',
+        name: 'parse_json.py',
+        type: 'file',
+        size: 100,
+      },
+    ]
+  }
+
+  async validate(_projectId: string, source: string, opts?: GatewayOptions): Promise<AstValidationResult> {
+    checkAbort(opts?.signal)
+    await delay()
+    return { valid: true, diagnostics: [] }
+  }
+
+  async runFixture(_projectId: string, _path: string, input?: Record<string, unknown>, trusted?: boolean, opts?: GatewayOptions): Promise<FixtureResult> {
+    checkAbort(opts?.signal)
+    await delay(200)
+    return {
+      success: true,
+      output: { parsed: true, input },
+      error: null,
+      durationMs: 42,
+      stdout: '',
+      stderr: '',
+    }
+  }
+
+  async acknowledgeTrust(_projectId: string, path: string, contentHash: string, opts?: GatewayOptions): Promise<TrustAck> {
+    checkAbort(opts?.signal)
+    await delay()
+    return { path, hash: contentHash, trusted: true }
+  }
+
+  async revokeTrust(_projectId: string, _path: string, opts?: GatewayOptions): Promise<void> {
+    checkAbort(opts?.signal)
+    await delay()
   }
 }
 
 // ── Plugins ─────────────────────────────────────────────────────────────
 
 class MockPluginsGateway implements PluginsGateway {
-  async list(_projectId: string, opts?: GatewayOptions): Promise<PluginInfo[]> {
-    checkAbort(opts?.signal)
-    await delay()
-    return [...fixtures.FIXTURE_PLUGINS]
+  private plugins = new Map<string, PluginDetail>()
+
+  constructor() {
+    const plugin: PluginDetail = {
+      id: 'jsonpath',
+      name: 'jsonpath',
+      version: '1.0.0',
+      description: 'JSONPath query support',
+      author: 'SCLPLAPI',
+      category: 'utility',
+      status: 'active',
+      functionCount: 2,
+      workflowCount: 0,
+      variableNames: ['jsonpath_engine'],
+      error: null,
+      dependencies: [],
+    }
+    this.plugins.set(plugin.name, plugin)
   }
 
-  async get(_projectId: string, id: string, opts?: GatewayOptions): Promise<PluginInfo> {
+  async list(_projectId: string, opts?: GatewayOptions): Promise<PluginDetail[]> {
     checkAbort(opts?.signal)
     await delay()
-    const plugin = fixtures.FIXTURE_PLUGINS.find((p) => p.id === id)
-    if (!plugin) throw new StudioError({ message: `Plugin '${id}' not found.`, code: 'NOT_FOUND', status: 404 })
+    return Array.from(this.plugins.values())
+  }
+
+  async get(_projectId: string, name: string, opts?: GatewayOptions): Promise<PluginDetail> {
+    checkAbort(opts?.signal)
+    await delay()
+    const plugin = this.plugins.get(name)
+    if (!plugin) throw new StudioError({ message: `Plugin '${name}' not found.`, code: 'NOT_FOUND', status: 404 })
     return { ...plugin }
+  }
+
+  async scaffold(_projectId: string, name: string, description?: string, opts?: GatewayOptions): Promise<PluginDetail> {
+    checkAbort(opts?.signal)
+    await delay()
+    if (this.plugins.has(name)) {
+      throw new StudioError({ message: `Plugin '${name}' already exists.`, code: 'CONFLICT', status: 409 })
+    }
+    const plugin: PluginDetail = {
+      id: name,
+      name,
+      version: '0.1.0',
+      description: description ?? `${name} plugin`,
+      author: '',
+      category: '',
+      status: 'discovered',
+      functionCount: 1,
+      workflowCount: 0,
+      variableNames: [],
+      error: null,
+      dependencies: [],
+    }
+    this.plugins.set(name, plugin)
+    return { ...plugin }
+  }
+
+  async enable(_projectId: string, name: string, opts?: GatewayOptions): Promise<PluginDetail> {
+    checkAbort(opts?.signal)
+    await delay()
+    const plugin = this.plugins.get(name)
+    if (!plugin) throw new StudioError({ message: `Plugin '${name}' not found.`, code: 'NOT_FOUND', status: 404 })
+    plugin.status = 'active'
+    return { ...plugin }
+  }
+
+  async disable(_projectId: string, name: string, opts?: GatewayOptions): Promise<PluginDetail> {
+    checkAbort(opts?.signal)
+    await delay()
+    const plugin = this.plugins.get(name)
+    if (!plugin) throw new StudioError({ message: `Plugin '${name}' not found.`, code: 'NOT_FOUND', status: 404 })
+    plugin.status = 'discovered'
+    return { ...plugin }
+  }
+
+  async reload(_projectId: string, opts?: GatewayOptions): Promise<PluginDetail[]> {
+    checkAbort(opts?.signal)
+    await delay()
+    return Array.from(this.plugins.values())
+  }
+
+  async getManifest(_projectId: string, name: string, opts?: GatewayOptions): Promise<Record<string, unknown>> {
+    checkAbort(opts?.signal)
+    await delay()
+    return { name, version: '1.0.0', description: 'Mock plugin' }
+  }
+
+  async updateManifest(_projectId: string, name: string, data: Record<string, unknown>, opts?: GatewayOptions): Promise<PluginDetail> {
+    checkAbort(opts?.signal)
+    await delay()
+    const plugin = this.plugins.get(name)
+    if (!plugin) throw new StudioError({ message: `Plugin '${name}' not found.`, code: 'NOT_FOUND', status: 404 })
+    if (data.description) plugin.description = data.description as string
+    return { ...plugin }
+  }
+
+  async getTree(_projectId: string, _name: string, opts?: GatewayOptions): Promise<FileTreeEntry[]> {
+    checkAbort(opts?.signal)
+    await delay()
+    return [
+      { path: 'plugin.json', name: 'plugin.json', type: 'file', size: 200 },
+      { path: 'functions', name: 'functions', type: 'dir', children: [
+        { path: 'functions/example.py', name: 'example.py', type: 'file', size: 150 },
+      ]},
+    ]
+  }
+
+  async readFile(_projectId: string, _name: string, _path: string, opts?: GatewayOptions): Promise<{ content: string; hash: string; size: number }> {
+    checkAbort(opts?.signal)
+    await delay()
+    return { content: '# Mock file content', hash: 'mock-hash', size: 20 }
+  }
+
+  async writeFile(_projectId: string, _name: string, path: string, content: string, _expectedHash?: string, opts?: GatewayOptions): Promise<{ path: string; hash: string; size: number }> {
+    checkAbort(opts?.signal)
+    await delay()
+    return { path, hash: nextId('hash'), size: content.length }
+  }
+
+  async getDiagnostics(_projectId: string, name: string, opts?: GatewayOptions): Promise<PluginDiagnostics> {
+    checkAbort(opts?.signal)
+    await delay()
+    const plugin = this.plugins.get(name)
+    if (!plugin) throw new StudioError({ message: `Plugin '${name}' not found.`, code: 'NOT_FOUND', status: 404 })
+    return {
+      name: plugin.name,
+      status: plugin.status,
+      functionCount: plugin.functionCount,
+      workflowCount: plugin.workflowCount,
+      variableNames: plugin.variableNames,
+      error: plugin.error,
+      dependencies: plugin.dependencies,
+    }
+  }
+
+  async export(_projectId: string, _name: string, opts?: GatewayOptions): Promise<Blob> {
+    checkAbort(opts?.signal)
+    await delay()
+    return new Blob(['mock zip content'], { type: 'application/zip' })
   }
 }
 

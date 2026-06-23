@@ -8,6 +8,10 @@
 import { StudioError } from '../error'
 import type { ErrorResponse } from '@/types/api'
 
+// Size limits matching backend
+export const MAX_SOURCE_BYTES = 2 * 1024 * 1024 // 2 MB
+export const MAX_PREVIEW_BYTES = 10 * 1024 * 1024 // 10 MB
+
 export interface FetchOptions {
   method?: string
   body?: unknown
