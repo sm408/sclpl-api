@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import csv
 import json
-import uuid
 from pathlib import Path
 
 from app.core.contracts.export_pipeline import ExportPipeline, ExportResult
@@ -50,7 +49,7 @@ class DefaultExportPipeline(ExportPipeline):
 
         try:
             import openpyxl
-            from openpyxl.styles import Font, PatternFill, Alignment
+            from openpyxl.styles import Alignment, Font, PatternFill
         except ImportError:
             return ExportResult(
                 path=str(path),

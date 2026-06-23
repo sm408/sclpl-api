@@ -7,8 +7,6 @@ preservation of workflow/version data.
 
 from __future__ import annotations
 
-import json
-
 import pytest
 
 from app.core.models.project import DEFAULT_PROJECT_ID
@@ -19,7 +17,6 @@ from app.core.models.workflow_document import (
 )
 from app.services.workflow_service import WorkflowRepository
 from app.storage.db import Database
-
 
 # ── Fixtures ────────────────────────────────────────────────────────────
 

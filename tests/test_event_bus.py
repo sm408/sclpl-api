@@ -1,4 +1,3 @@
-import pytest
 
 from app.core.contracts.event_bus import Event
 from app.core.engine.event_bus import SimpleEventBus

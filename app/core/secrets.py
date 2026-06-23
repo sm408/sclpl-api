@@ -7,11 +7,8 @@ Falls back to base64 encoding if cryptography is not installed.
 from __future__ import annotations
 
 import base64
-import hashlib
-import json
 import os
 from pathlib import Path
-
 
 _SECRETS_KEY_FILE = Path.home() / ".sclplapi" / ".secrets_key"
 

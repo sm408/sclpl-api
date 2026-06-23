@@ -1,6 +1,7 @@
 """Comprehensive TUI feature tests using Textual's pilot framework."""
 
 import pytest
+
 from app.ui.textual_app import SCLPLTextualApp
 
 

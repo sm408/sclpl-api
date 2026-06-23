@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from app.core.models.monitor import Monitor, MonitorEvent, MonitorStatus, NotificationMode
@@ -31,7 +31,7 @@ class MonitorService:
         project_id: str | None = None,
     ) -> Monitor:
         """Create a new monitor."""
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(UTC).isoformat()
         monitor_id = str(uuid.uuid4())
         pid = project_id or DEFAULT_PROJECT_ID
 
@@ -86,7 +86,7 @@ class MonitorService:
 
     async def update(self, monitor_id: str, data: dict[str, Any]) -> bool:
         """Update a monitor."""
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(UTC).isoformat()
         fields = []
         values = []
 
@@ -133,7 +133,7 @@ class MonitorService:
         error: str | None = None,
     ) -> None:
         """Record a monitor run."""
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(UTC).isoformat()
         await self._db.execute(
             """UPDATE monitors SET
             last_run = ?, last_status_code = ?, last_body = ?, last_error = ?,
@@ -145,7 +145,7 @@ class MonitorService:
 
     async def record_trigger(self, monitor_id: str) -> None:
         """Record a monitor trigger."""
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(UTC).isoformat()
         await self._db.execute(
             """UPDATE monitors SET
             last_changed = ?, trigger_count = trigger_count + 1, updated_at = ?

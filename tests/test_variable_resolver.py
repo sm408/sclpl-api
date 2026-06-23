@@ -1,6 +1,6 @@
 from app.core.engine.variable_resolver import DefaultVariableResolver
 from app.core.models.context import ExecutionContext
-from app.core.models.environment import Environment, Variable, VariableScope
+from app.core.models.environment import Environment, Variable
 
 
 def test_resolve_simple_variable():

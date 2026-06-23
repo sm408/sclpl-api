@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 
-from app.core.contracts.function_runner import FunctionRunner, FunctionResult
+from app.core.contracts.function_runner import FunctionRunner
 from app.core.engine.function_runner import FilesystemFunctionRunner
 from app.core.models.context import ExecutionContext
 

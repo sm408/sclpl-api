@@ -7,9 +7,10 @@ This ensures the service layer is never coupled to a specific UI framework.
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from collections.abc import Callable
 from enum import Enum
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 
 class LogLevel(Enum):

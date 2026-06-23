@@ -2,11 +2,10 @@
 
 from __future__ import annotations
 
-from textual import on
 from textual.app import ComposeResult
-from textual.containers import Vertical, VerticalScroll
-from textual.widgets import Static, Tree
+from textual.containers import VerticalScroll
 from textual.reactive import reactive
+from textual.widgets import Static, Tree
 
 
 class SidebarTree(Tree):

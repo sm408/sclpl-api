@@ -6,15 +6,14 @@ import asyncio
 import operator
 import time
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 import httpx
 
-from app.core.contracts.event_bus import EventBus, Event
+from app.core.contracts.event_bus import Event, EventBus
 from app.core.models.monitor import Monitor, MonitorEvent, MonitorStatus, NotificationMode
 from app.services.monitor_service import MonitorService
-
 
 # ── Condition evaluator ──────────────────────────────────────────────────────
 
@@ -60,9 +59,7 @@ def evaluate_condition(condition: str, status_code: int, body: Any, headers: dic
             return False
 
         # Parse right value
-        if right.startswith('"') and right.endswith('"'):
-            right_val = right[1:-1]
-        elif right.startswith("'") and right.endswith("'"):
+        if right.startswith('"') and right.endswith('"') or right.startswith("'") and right.endswith("'"):
             right_val = right[1:-1]
         elif right == "null":
             right_val = None
@@ -238,11 +235,7 @@ class MonitorRunner:
 
                 # Determine if should notify
                 should_notify = False
-                if monitor.notification_on == NotificationMode.ALWAYS:
-                    should_notify = True
-                elif monitor.notification_on == NotificationMode.CHANGE and changed:
-                    should_notify = True
-                elif monitor.notification_on == NotificationMode.CONDITION and condition_met:
+                if monitor.notification_on == NotificationMode.ALWAYS or monitor.notification_on == NotificationMode.CHANGE and changed or monitor.notification_on == NotificationMode.CONDITION and condition_met:
                     should_notify = True
 
                 # Save event and notify
@@ -308,6 +301,6 @@ class MonitorRunner:
             changed=changed,
             error=error,
             duration_ms=duration_ms,
-            created_at=datetime.now(timezone.utc).isoformat(),
+            created_at=datetime.now(UTC).isoformat(),
         )
         await self._service.save_event(event)

@@ -1,9 +1,8 @@
 """Advanced TUI feature tests for authentication, batch, history cleanup, event bus."""
 
+
 import pytest
-import tempfile
-import csv
-from pathlib import Path
+
 from app.ui.textual_app import SCLPLTextualApp
 
 

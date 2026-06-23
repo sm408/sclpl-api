@@ -3,9 +3,8 @@
 from __future__ import annotations
 
 import json
+from dataclasses import asdict, dataclass
 from pathlib import Path
-from dataclasses import dataclass, asdict
-
 
 DEFAULT_SETTINGS_PATH = Path.home() / ".sclplapi" / "settings.json"
 

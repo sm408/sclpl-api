@@ -9,9 +9,6 @@ acknowledgement invalidation on content hash change.
 from __future__ import annotations
 
 import hashlib
-import json
-import os
-import sys
 from pathlib import Path
 
 import pytest
@@ -23,9 +20,8 @@ from app.services.file_service import (
     MAX_SOURCE_BYTES,
     ConflictHashError,
     FileService,
-    NotFoundFileError,
 )
-from app.services.function_service import FunctionService, TrustRequiredError
+from app.services.function_service import FunctionService
 from app.web.errors import BadRequestError, ValidationError
 from app.web.server import create_app
 

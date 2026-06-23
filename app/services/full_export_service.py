@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import shutil
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 from app.storage.db import Database
@@ -202,7 +202,7 @@ class FullExportService:
         manifest = {
             "format": "sclplapi-full-export",
             "version": 1,
-            "created_at": datetime.now(timezone.utc).isoformat(),
+            "created_at": datetime.now(UTC).isoformat(),
             "export_id": str(uuid.uuid4()),
             "sections": [
                 "projects",

@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 from collections import defaultdict
 
-from app.core.contracts.event_bus import Event, EventHandler, EventBus
+from app.core.contracts.event_bus import Event, EventBus, EventHandler
 
 logger = logging.getLogger(__name__)
 

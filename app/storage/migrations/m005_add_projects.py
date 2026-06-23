@@ -9,13 +9,11 @@ CLI / TUI workflow continues to work without changes.
 from __future__ import annotations
 
 import shutil
-import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 from app.core.models.project import DEFAULT_PROJECT_ID, PROJECT_SUBDIRS
 from app.storage.migrations.base import Migration
-
 
 # Tables that receive project_id and revision columns.
 _TOP_LEVEL_TABLES = (
@@ -48,7 +46,7 @@ class AddProjects(Migration):
         return "Add project-scoped workspace model"
 
     async def up(self, db) -> None:
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(UTC).isoformat()
 
         # ── 1. Create projects table ─────────────────────────────────
         await db.execute("""
@@ -131,7 +129,7 @@ def backup_database(db_path: Path) -> Path | None:
         return None
 
     _BACKUP_DIR.mkdir(parents=True, exist_ok=True)
-    stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    stamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
     backup = _BACKUP_DIR / f"{db_path.stem}_{stamp}{db_path.suffix}"
     shutil.copy2(db_path, backup)
     return backup

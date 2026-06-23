@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from textual.widgets import Static
 
-
 METHOD_COLORS = {
     "GET": "green",
     "POST": "yellow",

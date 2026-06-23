@@ -6,7 +6,7 @@ from textual import on
 from textual.app import ComposeResult
 from textual.containers import Horizontal, Vertical
 from textual.message import Message
-from textual.widgets import Button, DataTable, Input, Select, Static
+from textual.widgets import Button, DataTable, Input, Static
 
 
 class MonitorList(Vertical):

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from app.core.models.project import DEFAULT_PROJECT_ID
 from app.storage.db import Database
@@ -13,7 +13,7 @@ class CollectionRepository:
         self._db = db
 
     async def create(self, name: str, description: str = "", project_id: str | None = None) -> dict:
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(UTC).isoformat()
         cid = str(uuid.uuid4())
         pid = project_id or DEFAULT_PROJECT_ID
         await self._db.execute(
@@ -43,7 +43,7 @@ class CollectionRepository:
             return None
         if revision is not None and existing.get("revision", 1) != revision:
             return None  # Revision mismatch — caller should raise ConflictError
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(UTC).isoformat()
         fields = []
         values = []
         if "name" in data and data["name"] is not None:
@@ -78,7 +78,7 @@ class CollectionRepository:
         requests = await self._db.fetch_all(
             "SELECT * FROM requests WHERE collection_id = ?", (collection_id,)
         )
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(UTC).isoformat()
         for req in requests:
             new_rid = str(uuid.uuid4())
             await self._db.execute(
@@ -108,7 +108,7 @@ class RequestRepository:
         self._db = db
 
     async def create(self, data: dict) -> dict:
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(UTC).isoformat()
         rid = data.get("id", str(uuid.uuid4()))
         project_id = data.get("project_id") or DEFAULT_PROJECT_ID
         await self._db.execute(
@@ -160,7 +160,7 @@ class RequestRepository:
             return None
         if revision is not None and existing.get("revision", 1) != revision:
             return None  # Revision mismatch
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(UTC).isoformat()
         fields = []
         values = []
         for key in ("name", "method", "url", "body", "body_type", "auth_type", "collection_id"):

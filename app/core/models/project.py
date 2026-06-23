@@ -2,9 +2,8 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
-
 
 # Well-known UUID for the Default project.  Every existing row in the
 # database is assigned to this project during migration.  The Default

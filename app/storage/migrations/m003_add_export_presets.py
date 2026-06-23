@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from app.storage.migrations.base import Migration
 
@@ -27,7 +27,7 @@ class AddExportPresets(Migration):
             )"""
         )
 
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(UTC).isoformat()
         presets = [
             {
                 "id": str(uuid.uuid4()),

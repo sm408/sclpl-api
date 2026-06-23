@@ -2,18 +2,17 @@ from __future__ import annotations
 
 import logging
 import time
-import uuid
 from dataclasses import dataclass, field
 from typing import Any
 
-from app.core.contracts.event_bus import EventBus, Event
+from app.core.contracts.event_bus import Event, EventBus
 from app.core.engine.event_bus import SimpleEventBus
 from app.core.engine.hooks import FunctionHookRunner
 from app.core.engine.variable_resolver import DefaultVariableResolver
 from app.core.models.context import ExecutionContext
-from app.core.models.history import HistoryEntry, RunStatus
+from app.core.models.history import HistoryEntry
 from app.core.models.request import HttpMethod, RequestDef
-from app.core.models.workflow import WorkflowDef, WorkflowStep, StepType
+from app.core.models.workflow import StepType, WorkflowDef, WorkflowStep
 from app.services.request_executor import HttpRequestExecutor
 
 logger = logging.getLogger(__name__)

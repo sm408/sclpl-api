@@ -1,12 +1,15 @@
 """Tests for app.utils module."""
 
 import json
-import pytest
-from pathlib import Path
 
-from app.utils.workflow_runner import load_workflow, run_workflow, print_result
-from app.utils.response_parser import parse_step_output, parse_body, get_nested, parse_workflow_variable
 from app.core.models.context import ExecutionContext
+from app.utils.response_parser import (
+    get_nested,
+    parse_body,
+    parse_step_output,
+    parse_workflow_variable,
+)
+from app.utils.workflow_runner import load_workflow
 
 
 class TestLoadWorkflow:

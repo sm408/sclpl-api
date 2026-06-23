@@ -6,7 +6,6 @@ from pathlib import Path
 
 from app.core.contracts.plugin_registry import PluginRegistry
 from app.core.engine.function_runner import FilesystemFunctionRunner
-from app.core.models.context import ExecutionContext
 from app.core.models.plugin import PluginInfo, PluginManifest, PluginStatus
 
 logger = logging.getLogger(__name__)
@@ -145,7 +144,6 @@ class FilesystemPluginRegistry(PluginRegistry):
             if full_path.exists():
                 try:
                     import importlib.util
-                    import time
 
                     spec = importlib.util.spec_from_file_location(f"plugin_hook_{info.manifest.name}_{hook_type}", full_path)
                     module = importlib.util.module_from_spec(spec)

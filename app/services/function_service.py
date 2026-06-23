@@ -8,7 +8,6 @@ and safe fixture execution in a sandboxed context.
 from __future__ import annotations
 
 import ast
-import hashlib
 import importlib.util
 import io
 import logging
@@ -16,12 +15,10 @@ import sys
 import time
 import traceback
 from pathlib import Path
-from typing import Any
 
-from app.core.contracts.function_runner import FunctionResult
 from app.core.models.context import ExecutionContext
-from app.services.file_service import FileService, create_function_file_service
-from app.web.errors import BadRequestError, NotFoundError, ValidationError
+from app.services.file_service import create_function_file_service
+from app.web.errors import ValidationError
 
 logger = logging.getLogger(__name__)
 

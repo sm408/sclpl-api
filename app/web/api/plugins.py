@@ -7,19 +7,16 @@ to a project.
 
 from __future__ import annotations
 
-import json
 import os
 from pathlib import Path
-from typing import Any
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Request
 from fastapi.background import BackgroundTasks
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse
 
 from app.services.plugin_service import PluginService
 from app.services.project_service import ProjectRepository
 from app.web.converters import (
-    function_to_response,
     plugin_diagnostics_to_response,
     plugin_to_response,
 )
@@ -86,7 +83,7 @@ async def get_plugin(
         data = svc.get_plugin(name)
     except NotFoundError:
         raise
-    except Exception as exc:
+    except Exception:
         raise NotFoundError(message=f"Plugin '{name}' not found.")
     return plugin_to_response(data)
 

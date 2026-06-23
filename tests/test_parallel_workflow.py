@@ -4,15 +4,12 @@ import asyncio
 import time
 from unittest.mock import AsyncMock
 
-import pytest
-
 from app.core.contracts.event_bus import Event
 from app.core.contracts.request_executor import ResponseResult
 from app.core.engine.event_bus import SimpleEventBus
-from app.core.engine.parallel_workflow import ParallelWorkflowEngine, WorkflowResult
+from app.core.engine.parallel_workflow import ParallelWorkflowEngine
 from app.core.models.context import ExecutionContext
 from app.core.models.history import HistoryEntry, RunStatus
-from app.core.models.request import HttpMethod, RequestDef, RequestParam
 from app.core.models.workflow import StepType, WorkflowDef, WorkflowStep
 
 

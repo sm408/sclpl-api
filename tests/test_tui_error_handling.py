@@ -1,6 +1,7 @@
 """Error handling and persistence tests for TUI."""
 
 import pytest
+
 from app.ui.textual_app import SCLPLTextualApp
 
 

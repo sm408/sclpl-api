@@ -2,10 +2,9 @@
 
 from __future__ import annotations
 
-from textual import on
 from textual.app import ComposeResult
 from textual.containers import Horizontal, Vertical
-from textual.widgets import Button, DataTable, Input, Static, TextArea
+from textual.widgets import DataTable, Input, Static, TextArea
 
 
 class FunctionBrowser(Vertical):

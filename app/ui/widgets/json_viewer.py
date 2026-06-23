@@ -5,7 +5,6 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from rich.text import Text
 from textual.widgets import Tree
 
 

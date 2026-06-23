@@ -120,7 +120,7 @@ class BatchView(Vertical):
             return
 
         try:
-            with open(csv_path, "r", encoding="utf-8") as f:
+            with open(csv_path, encoding="utf-8") as f:
                 reader = csv.DictReader(f)
                 self._csv_rows = list(reader)
 

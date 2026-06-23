@@ -10,7 +10,7 @@ from __future__ import annotations
 import hashlib
 import json
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from app.core.engine.sclpll_compiler import SCLPLLCompiler
@@ -32,7 +32,7 @@ from app.storage.db import Database
 
 
 def _now_iso() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 def _hash_source(source: str) -> str:

@@ -12,16 +12,15 @@ import logging
 import shutil
 import tempfile
 from pathlib import Path
-from typing import Any
 
 from app.core.engine.plugin_registry import FilesystemPluginRegistry
-from app.core.models.plugin import PluginInfo, PluginManifest, PluginStatus
+from app.core.models.plugin import PluginInfo, PluginStatus
 from app.services.file_service import (
-    FileService,
     PLUGIN_ALLOWED_EXTENSIONS,
+    FileService,
     create_plugin_file_service,
 )
-from app.web.errors import BadRequestError, NotFoundError, ValidationError
+from app.web.errors import BadRequestError, NotFoundError
 
 logger = logging.getLogger(__name__)
 

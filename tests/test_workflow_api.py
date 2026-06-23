@@ -12,7 +12,6 @@ from httpx import ASGITransport, AsyncClient
 from app.core.models.project import DEFAULT_PROJECT_ID
 from app.web.server import create_app
 
-
 # ── Fixtures ────────────────────────────────────────────────────────────
 
 

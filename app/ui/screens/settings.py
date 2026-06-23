@@ -5,7 +5,7 @@ from __future__ import annotations
 from textual import on
 from textual.app import ComposeResult
 from textual.containers import Horizontal, Vertical
-from textual.widgets import Button, Input, Select, Static
+from textual.widgets import Button, Input, Static
 
 
 class SettingsView(Vertical):

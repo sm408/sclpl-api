@@ -9,8 +9,6 @@ These tests verify:
 
 from __future__ import annotations
 
-import json
-
 import pytest
 
 from app.core.engine.sclpll_compiler import SCLPLLCompiler
@@ -462,8 +460,6 @@ class TestLossDetection:
 
     def test_preview_detects_retry_loss(self, compiler: SCLPLLCompiler) -> None:
         """preview_sclpll detects when retry config will be lost."""
-        from app.services.workflow_service import WorkflowRepository
-        from app.storage.db import Database
 
         # We test the preview logic directly using the compiler
         current_definition = {

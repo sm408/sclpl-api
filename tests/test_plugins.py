@@ -8,7 +8,7 @@ import pytest
 
 from app.core.engine.plugin_registry import FilesystemPluginRegistry
 from app.core.models.context import ExecutionContext
-from app.core.models.plugin import PluginInfo, PluginManifest, PluginStatus
+from app.core.models.plugin import PluginStatus
 
 
 @pytest.fixture

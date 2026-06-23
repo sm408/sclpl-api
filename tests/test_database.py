@@ -1,6 +1,6 @@
 import pytest
 
-from app.storage.db import Database
+from app.storage.db import SCHEMA_VERSION, Database
 
 
 @pytest.fixture
@@ -35,7 +35,7 @@ async def test_initialize_creates_tables(db):
 @pytest.mark.asyncio
 async def test_schema_version(db):
     row = await db.fetch_one("SELECT MAX(version) as version FROM schema_version")
-    assert row["version"] == 5
+    assert row["version"] == SCHEMA_VERSION
 
 
 @pytest.mark.asyncio

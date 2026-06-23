@@ -1,16 +1,13 @@
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, MagicMock, patch
-
-import pytest
+from unittest.mock import AsyncMock
 
 from app.core.contracts.event_bus import Event
 from app.core.contracts.request_executor import ResponseResult
 from app.core.engine.event_bus import SimpleEventBus
-from app.core.engine.workflow import WorkflowEngine, WorkflowResult
+from app.core.engine.workflow import WorkflowEngine
 from app.core.models.context import ExecutionContext
 from app.core.models.history import HistoryEntry, RunStatus
-from app.core.models.request import HttpMethod, RequestDef, RequestParam
 from app.core.models.workflow import (
     RetryConfig,
     RetryStrategy,

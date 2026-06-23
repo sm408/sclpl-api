@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
-from app.core.models.history import HistoryEntry, RunStatus
+from app.core.models.history import HistoryEntry
 from app.core.models.project import DEFAULT_PROJECT_ID
 from app.storage.db import Database
 
@@ -34,7 +34,7 @@ class HistoryRepository:
                 entry.environment_id,
                 str(entry.variables_used),
                 pid,
-                entry.created_at or datetime.now(timezone.utc).isoformat(),
+                entry.created_at or datetime.now(UTC).isoformat(),
             ),
         )
         await self._db.commit()

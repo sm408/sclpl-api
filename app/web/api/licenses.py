@@ -9,10 +9,9 @@ from __future__ import annotations
 
 import logging
 import re
-from pathlib import Path
-from typing import Any
-
 import tomllib
+from pathlib import Path
+
 from fastapi import APIRouter
 
 from app.web.dto import CamelModel

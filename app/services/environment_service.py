@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from app.core.models.project import DEFAULT_PROJECT_ID
 from app.storage.db import Database
@@ -12,7 +12,7 @@ class EnvironmentRepository:
         self._db = db
 
     async def create(self, name: str, project_id: str | None = None) -> dict:
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(UTC).isoformat()
         eid = str(uuid.uuid4())
         pid = project_id or DEFAULT_PROJECT_ID
         await self._db.execute(
@@ -91,7 +91,7 @@ class EnvironmentRepository:
         )
         if not existing:
             return None
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(UTC).isoformat()
         fields = []
         values = []
         if "name" in data and data["name"] is not None:

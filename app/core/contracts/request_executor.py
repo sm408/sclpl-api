@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Any
 
 from app.core.models.context import ExecutionContext
 from app.core.models.history import HistoryEntry

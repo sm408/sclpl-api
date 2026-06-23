@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 from app.core.models.project import DEFAULT_PROJECT_ID, Project, ensure_project_dirs
@@ -26,7 +26,7 @@ class ProjectRepository:
         project_id: str | None = None,
     ) -> Project:
         """Create a new project.  Returns the created Project."""
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(UTC).isoformat()
         pid = project_id or str(uuid.uuid4())
         root_path = f"data/projects/{pid}"
 
@@ -86,7 +86,7 @@ class ProjectRepository:
             return self._row_to_project(row)
 
         # First-run on an existing DB before m005 ran — create it now.
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(UTC).isoformat()
         await self._db.execute(
             """INSERT OR IGNORE INTO projects
             (id, name, description, root_path, is_default, created_at, updated_at)
@@ -106,7 +106,7 @@ class ProjectRepository:
 
     async def update(self, project_id: str, data: dict) -> bool:
         """Update project name and/or description.  Cannot change is_default."""
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(UTC).isoformat()
         fields = []
         values = []
         for key in ("name", "description"):

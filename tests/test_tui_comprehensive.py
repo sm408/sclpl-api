@@ -1,6 +1,7 @@
 """Comprehensive TUI feature validation tests."""
 
 import pytest
+
 from app.ui.textual_app import SCLPLTextualApp
 
 
@@ -538,7 +539,7 @@ async def test_f2_theme(app):
         initial = app.THEME
         await pilot.press("f2")
         await pilot.pause()
-        assert app.THEME != initial
+        assert initial != app.THEME
 
 
 # ── Error Handling ────────────────────────────────────────────────────────────

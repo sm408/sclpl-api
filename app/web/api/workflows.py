@@ -6,7 +6,6 @@ version management, preflight validation, and execution snapshots.
 
 from __future__ import annotations
 
-import json
 from typing import Any
 
 from fastapi import APIRouter, Depends
@@ -25,7 +24,6 @@ from app.web.deps import _get_workflow_repo
 from app.web.dto import (
     GenerateSclpllResponse,
     PaginatedResponse,
-    PreflightResultDto,
     SclpllApplyRequest,
     VersionCompareRequest,
     VersionCreateRequest,

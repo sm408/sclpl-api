@@ -8,8 +8,6 @@ Covers:
 
 from __future__ import annotations
 
-import uuid
-
 import pytest
 
 from app.core.models.project import DEFAULT_PROJECT_ID, Project
@@ -19,7 +17,6 @@ from app.services.history_service import HistoryRepository
 from app.services.monitor_service import MonitorService
 from app.services.project_service import ProjectRepository
 from app.storage.db import Database
-
 
 # ── Fixtures ───────────────────────────────────────────────────────────
 
@@ -198,8 +195,8 @@ class TestMigrationRollback:
     (SQLite < 3.35 does not support DROP COLUMN)."""
 
     async def test_rollback_removes_projects_table(self):
-        from app.storage.migrations.runner import MigrationRunner
         from app.storage.migrations.m005_add_projects import AddProjects
+        from app.storage.migrations.runner import MigrationRunner
 
         database = Database(":memory:")
         await database.connect()
@@ -216,8 +213,8 @@ class TestMigrationRollback:
         await database.close()
 
     async def test_rollback_then_reapply(self):
-        from app.storage.migrations.runner import MigrationRunner
         from app.storage.migrations.m005_add_projects import AddProjects
+        from app.storage.migrations.runner import MigrationRunner
 
         database = Database(":memory:")
         await database.connect()

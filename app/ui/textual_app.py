@@ -9,6 +9,7 @@ import asyncio
 import csv
 import json
 import time
+from datetime import UTC
 from pathlib import Path
 from typing import Any
 
@@ -16,27 +17,35 @@ from textual import on, work
 from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal, Vertical
-from textual.widgets import Button, DataTable, Footer, Header, Input, Select, Static, TabbedContent, TabPane
+from textual.widgets import (
+    Button,
+    DataTable,
+    Footer,
+    Header,
+    Input,
+    Select,
+    Static,
+    TabbedContent,
+    TabPane,
+)
 
 from app.ui.app import App as SCLPLApp
-from app.ui.adapter import UIAdapter, LogLevel
-from app.ui.commands import COMMANDS, CommandDef
-from app.ui.widgets.sidebar import Sidebar
-from app.ui.widgets.command_palette import CommandPalette, Command
-from app.ui.screens.request_editor import RequestEditor
-from app.ui.screens.response_viewer import ResponseViewer
-from app.ui.screens.collections import CollectionList, RequestList, NewCollectionDialog
-from app.ui.screens.history import HistoryView
-from app.ui.screens.workflows import WorkflowList, WorkflowExecution
+from app.ui.commands import COMMANDS
+from app.ui.screens.batch import BatchView
+from app.ui.screens.collections import CollectionList
+from app.ui.screens.diff_viewer import DiffViewer
 from app.ui.screens.environments import EnvironmentView
 from app.ui.screens.functions import FunctionBrowser
-from app.ui.screens.plugins import PluginBrowser
-from app.ui.screens.settings import SettingsView
+from app.ui.screens.history import HistoryView
 from app.ui.screens.import_export import ImportExportView
-from app.ui.screens.batch import BatchView
-from app.ui.screens.diff_viewer import DiffViewer
 from app.ui.screens.log_viewer import LogViewer
-from app.ui.screens.monitors import MonitorList, MonitorDetail
+from app.ui.screens.monitors import MonitorList
+from app.ui.screens.plugins import PluginBrowser
+from app.ui.screens.request_editor import RequestEditor
+from app.ui.screens.settings import SettingsView
+from app.ui.screens.workflows import WorkflowExecution, WorkflowList
+from app.ui.widgets.command_palette import Command, CommandPalette
+from app.ui.widgets.sidebar import Sidebar
 
 
 class SCLPLTextualApp(App):
@@ -918,8 +927,8 @@ class SCLPLTextualApp(App):
                     continue
 
                 # Build request from CSV row
-                from app.core.models.request import HttpMethod, RequestDef
                 from app.core.models.context import ExecutionContext
+                from app.core.models.request import HttpMethod, RequestDef
 
                 method = row.get("method", "GET").upper()
                 try:
@@ -974,8 +983,8 @@ class SCLPLTextualApp(App):
 
             # Get all entries and delete old ones
             entries = await self._app.history.list_recent(10000)
-            from datetime import datetime, timedelta, timezone
-            cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+            from datetime import datetime, timedelta
+            cutoff = datetime.now(UTC) - timedelta(days=days)
 
             deleted = 0
             for entry in entries:
@@ -1277,7 +1286,7 @@ class SCLPLTextualApp(App):
         if not self._app:
             return
         try:
-            with open("data/collections_export.json", "r", encoding="utf-8") as f:
+            with open("data/collections_export.json", encoding="utf-8") as f:
                 data = json.load(f)
             count = 0
             for item in data:
@@ -1318,7 +1327,7 @@ class SCLPLTextualApp(App):
         if not self._app:
             return
         try:
-            with open("data/environments_export.json", "r", encoding="utf-8") as f:
+            with open("data/environments_export.json", encoding="utf-8") as f:
                 envs = json.load(f)
             count = 0
             for env in envs:
@@ -1339,7 +1348,7 @@ class SCLPLTextualApp(App):
         if not file_path:
             return
         try:
-            with open(file_path, "r", encoding="utf-8") as f:
+            with open(file_path, encoding="utf-8") as f:
                 spec = json.load(f)
 
             paths = spec.get("paths", {})
@@ -1391,8 +1400,7 @@ class SCLPLTextualApp(App):
     async def prompt(self, message: str, default: str = "") -> str | None:
         """Show a text input prompt using Textual's built-in."""
         from textual.screen import ModalScreen
-        from textual.containers import Vertical
-        from textual.widgets import Input, Button, Static
+        from textual.widgets import Button, Static
 
         class PromptScreen(ModalScreen[str | None]):
             CSS = """
@@ -1440,7 +1448,6 @@ class SCLPLTextualApp(App):
     async def confirm(self, message: str) -> bool:
         """Show a confirmation dialog."""
         from textual.screen import ModalScreen
-        from textual.containers import Vertical
 
         class ConfirmScreen(ModalScreen[bool]):
             CSS = """

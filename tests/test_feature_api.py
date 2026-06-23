@@ -7,7 +7,6 @@ and the standard error protocol.
 
 from __future__ import annotations
 
-import json
 import uuid
 from unittest.mock import AsyncMock
 
@@ -18,7 +17,6 @@ from app.core.contracts.request_executor import ResponseResult
 from app.core.models.history import HistoryEntry, RunStatus
 from app.core.models.project import DEFAULT_PROJECT_ID
 from app.web.server import create_app
-
 
 # ── Fixtures ────────────────────────────────────────────────────────────
 

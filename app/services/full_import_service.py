@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import shutil
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 from app.core.models.project import DEFAULT_PROJECT_ID
@@ -36,7 +36,7 @@ class FullImportService:
 
         projects = json.loads(proj_path.read_text(encoding="utf-8"))
         count = 0
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(UTC).isoformat()
 
         for proj in projects:
             existing = await self._db.fetch_one(
@@ -94,7 +94,7 @@ class FullImportService:
             layout = json.dumps(data.get("layout", {}))
             sclpll_source = data.get("sclpll_source", "")
             revision = data.get("revision", 1)
-            now = datetime.now(timezone.utc).isoformat()
+            now = datetime.now(UTC).isoformat()
             created_at = data.get("created_at", now)
 
             if existing:
@@ -156,7 +156,7 @@ class FullImportService:
 
         entries = json.loads(hist_path.read_text(encoding="utf-8"))
         count = 0
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(UTC).isoformat()
 
         for entry in entries:
             existing = await self._db.fetch_one(
@@ -200,7 +200,7 @@ class FullImportService:
 
         envs = json.loads(env_path.read_text(encoding="utf-8"))
         count = 0
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(UTC).isoformat()
 
         for env in envs:
             existing = await self._db.fetch_one(
@@ -245,7 +245,7 @@ class FullImportService:
 
         collections = json.loads(col_path.read_text(encoding="utf-8"))
         count = 0
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(UTC).isoformat()
 
         for col in collections:
             existing = await self._db.fetch_one(

@@ -7,7 +7,7 @@ All operations are scoped to a project.
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
 
 from app.services.function_service import FunctionService, TrustRequiredError
@@ -19,12 +19,10 @@ from app.web.converters import (
     function_to_response,
 )
 from app.web.dto import (
-    AstValidationResult,
     FixtureResult,
     FixtureRunRequest,
     FunctionCreate,
     FunctionResponse,
-    FunctionListItem,
     FunctionUpdate,
     PaginatedResponse,
     TrustAckRequest,
@@ -98,7 +96,7 @@ async def get_function(
     svc = await _get_function_service(project_id, request)
     try:
         data = svc.get_function(path)
-    except Exception as exc:
+    except Exception:
         raise NotFoundError(message=f"Function '{path}' not found.")
     return function_to_response(data)
 

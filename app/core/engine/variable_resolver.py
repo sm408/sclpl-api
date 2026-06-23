@@ -5,7 +5,6 @@ from typing import Any
 
 from app.core.contracts.variable_resolver import VariableResolver
 from app.core.models.context import ExecutionContext, ResolvedVariable
-from app.core.models.environment import VariableScope
 
 _VARIABLE_PATTERN = re.compile(r"\{\{([\w.]+)\}\}")
 

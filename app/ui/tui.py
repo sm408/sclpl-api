@@ -297,8 +297,8 @@ class TUI:
         while True:
             self.console.print(f"  [bold]Database:[/bold]         {self.db_path}")
             self.console.print(f"  [bold]Environment:[/bold]      {self._current_env}")
-            self.console.print(f"  [bold]Export dir:[/bold]        data/exports")
-            self.console.print(f"  [bold]Request timeout:[/bold]   30s")
+            self.console.print("  [bold]Export dir:[/bold]        data/exports")
+            self.console.print("  [bold]Request timeout:[/bold]   30s")
             self.console.print()
             self.console.print("  [bold cyan][[1]][/bold cyan] Change database path")
             self.console.print("  [dim][[0]] Back[/dim]")
@@ -718,7 +718,7 @@ class TUI:
                             live.update(build_display())
                             if workflow_result:
                                 break
-                        except asyncio.TimeoutError:
+                        except TimeoutError:
                             live.update(build_display())
                             if workflow_result:
                                 break
@@ -1991,8 +1991,8 @@ class TUI:
             self.console.print(f"[red]Export failed: {e}[/red]")
 
     async def _do_export_all(self, output_dir: str) -> None:
-        from app.ui.app import App
         from app.services.full_export_service import FullExportService
+        from app.ui.app import App
 
         async with App(self.db_path) as application:
             svc = FullExportService(application)
@@ -2014,13 +2014,13 @@ class TUI:
             self.console.print(f"[red]Import failed: {e}[/red]")
 
     async def _do_import_all(self, import_dir: str) -> None:
-        from app.ui.app import App
         from app.services.full_import_service import FullImportService
+        from app.ui.app import App
 
         async with App(self.db_path) as application:
             svc = FullImportService(application)
             result = await svc.import_all(import_dir)
-            self.console.print(f"[green]Import complete:[/green]")
+            self.console.print("[green]Import complete:[/green]")
             for key, count in result.items():
                 self.console.print(f"  {key}: {count}")
 
@@ -2066,7 +2066,7 @@ class TUI:
     async def _do_import_collections(self, input_file: str) -> None:
         from app.ui.app import App
 
-        with open(input_file, "r", encoding="utf-8") as f:
+        with open(input_file, encoding="utf-8") as f:
             data = json.load(f)
 
         async with App(self.db_path) as application:
@@ -2131,7 +2131,7 @@ class TUI:
     async def _do_import_environments(self, input_file: str) -> None:
         from app.ui.app import App
 
-        with open(input_file, "r", encoding="utf-8") as f:
+        with open(input_file, encoding="utf-8") as f:
             envs = json.load(f)
 
         async with App(self.db_path) as application:
@@ -2159,7 +2159,7 @@ class TUI:
             return
 
         try:
-            with open(path, "r", encoding="utf-8") as f:
+            with open(path, encoding="utf-8") as f:
                 spec = json.load(f)
         except (json.JSONDecodeError, OSError) as e:
             self.console.print(f"[red]Invalid JSON: {e}[/red]")

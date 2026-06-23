@@ -1,7 +1,6 @@
 """Tests for app.core.secrets module."""
 
-import pytest
-from app.core.secrets import encrypt_secret, decrypt_secret, is_encrypted, mask_secret
+from app.core.secrets import decrypt_secret, encrypt_secret, is_encrypted, mask_secret
 
 
 class TestEncryptDecrypt:

@@ -12,10 +12,9 @@ from __future__ import annotations
 
 import json
 import logging
-from typing import Any
 
 from fastapi import APIRouter, Depends
-from pydantic import BaseModel, Field
+from pydantic import Field
 
 from app.storage.db import Database
 from app.web.deps import _get_db

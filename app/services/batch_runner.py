@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import csv
-import uuid
 from io import StringIO
 
 from app.core.models.context import ExecutionContext
