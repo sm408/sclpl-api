@@ -1,17 +1,14 @@
+/**
+ * Root application component.
+ *
+ * Loads the design tokens and renders the AppShell.
+ */
+
 <script setup lang="ts">
-import { RouterView } from 'vue-router'
+import '@/assets/tokens.css'
+import AppShell from '@/components/shell/AppShell.vue'
 </script>
 
 <template>
-  <div class="app-shell">
-    <RouterView />
-  </div>
+  <AppShell />
 </template>
-
-<style scoped>
-.app-shell {
-  min-height: 100vh;
-  display: flex;
-  flex-direction: column;
-}
-</style>

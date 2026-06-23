@@ -1,5 +1,13 @@
+/**
+ * Application entry point.
+ *
+ * Initializes the gateway, creates the Vue app with Pinia and Vue Router,
+ * registers PrimeVue (unstyled), and mounts the application.
+ */
+
 import { createApp } from 'vue'
 import { createPinia } from 'pinia'
+import PrimeVue from 'primevue/config'
 import App from './App.vue'
 import { router } from './router'
 import { initGateway } from './gateway'
@@ -11,7 +19,14 @@ async function bootstrap(): Promise<void> {
 
   const app = createApp(App)
 
-  app.use(createPinia())
+  const pinia = createPinia()
+  app.use(pinia)
+
+  // PrimeVue with unstyled mode (we use our own design tokens)
+  app.use(PrimeVue, {
+    unstyled: true,
+  })
+
   app.use(router)
 
   app.mount('#app')
