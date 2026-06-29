@@ -1,0 +1,17 @@
+INFO:     Started server process [20844]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://127.0.0.1:8000 (Press CTRL+C to quit)
+
+ =============================================
+   SCLPLAPI Web Studio
+ =============================================
+
+  Starting web server at http://127.0.0.1:8000
+  API docs at      http://127.0.0.1:8000/docs
+  Press Ctrl+C to stop the server
+
+INFO:     127.0.0.1:58540 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58542 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58544 - "GET /api/v1/projects HTTP/1.1" 200 OK
+^C

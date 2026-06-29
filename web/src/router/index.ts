@@ -74,7 +74,7 @@ const routes: RouteRecordRaw[] = [
   {
     path: '/workflows',
     name: 'workflows',
-    component: () => import('@/views/placeholder/WorkflowsView.vue'),
+    component: () => import('@/views/WorkflowsView.vue'),
     meta: {
       kind: 'workflow',
       section: 'workflows',
@@ -85,7 +85,7 @@ const routes: RouteRecordRaw[] = [
   {
     path: '/workflows/:workflowId',
     name: 'workflow-detail',
-    component: () => import('@/views/placeholder/WorkflowView.vue'),
+    component: () => import('@/views/WorkflowView.vue'),
     meta: {
       kind: 'workflow',
       section: 'workflows',

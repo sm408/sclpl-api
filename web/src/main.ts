@@ -8,6 +8,7 @@
 import { createApp } from 'vue'
 import { createPinia } from 'pinia'
 import PrimeVue from 'primevue/config'
+import { VueQueryPlugin } from '@tanstack/vue-query'
 import App from './App.vue'
 import { router } from './router'
 import { initGateway } from './gateway'
@@ -21,6 +22,9 @@ async function bootstrap(): Promise<void> {
 
   const pinia = createPinia()
   app.use(pinia)
+
+  // TanStack Vue Query for server state management
+  app.use(VueQueryPlugin)
 
   // PrimeVue with unstyled mode (we use our own design tokens)
   app.use(PrimeVue, {

@@ -1,0 +1,49 @@
+
+ =============================================
+   SCLPLAPI Web Studio
+ =============================================
+
+  Starting backend...
+  Starting frontend dev server...
+Traceback (most recent call last):
+  File "c:\Users\sm915\Downloads\sclpl-api\start-web.py", line 101, in <module>
+    raise SystemExit(main())
+                     ~~~~^^
+  File "c:\Users\sm915\Downloads\sclpl-api\start-web.py", line 64, in main
+    frontend = _run_vite()
+  File "c:\Users\sm915\Downloads\sclpl-api\start-web.py", line 31, in _run_vite
+    return subprocess.Popen(
+           ~~~~~~~~~~~~~~~~^
+        ["pnpm", "vite", "--host"],
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        cwd=web_dir,
+        ^^^^^^^^^^^^
+    )
+    ^
+  File "C:\Python314\Lib\subprocess.py", line 1039, in __init__
+    self._execute_child(args, executable, preexec_fn, close_fds,
+    ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                        pass_fds, cwd, env,
+                        ^^^^^^^^^^^^^^^^^^^
+    ...<5 lines>...
+                        gid, gids, uid, umask,
+                        ^^^^^^^^^^^^^^^^^^^^^^
+                        start_new_session, process_group)
+                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Python314\Lib\subprocess.py", line 1553, in _execute_child
+    hp, ht, pid, tid = _winapi.CreateProcess(executable, args,
+                       ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^
+                             # no special security
+                             ^^^^^^^^^^^^^^^^^^^^^
+    ...<4 lines>...
+                             cwd,
+                             ^^^^
+                             startupinfo)
+                             ^^^^^^^^^^^^
+FileNotFoundError: [WinError 2] The system cannot find the file specified
+INFO:     Started server process [27452]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://127.0.0.1:8000 (Press CTRL+C to quit)
+INFO:     127.0.0.1:60914 - "GET /examples/weather_pipeline/workflow.json HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60915 - "GET /api/v1/projects/00000000-0000-0000-0000-000000000001/workflows HTTP/1.1" 200 OK

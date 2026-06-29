@@ -134,7 +134,7 @@ onUnmounted(() => {
     aria-label="Open editors"
   >
     <div class="tab-scroll">
-      <button
+      <div
         v-for="tab in tabsStore.tabs"
         :key="tab.id"
         class="tab"
@@ -156,7 +156,7 @@ onUnmounted(() => {
         >
           <X :size="12" />
         </button>
-      </button>
+      </div>
     </div>
 
     <!-- Context menu -->

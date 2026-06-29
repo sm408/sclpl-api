@@ -116,6 +116,8 @@ class HostValidationMiddleware(BaseHTTPMiddleware):
         self._allowed = allowed_hosts or {
             "127.0.0.1", "localhost",
             "127.0.0.1:8420", "localhost:8420",
+            "127.0.0.1:5173", "localhost:5173",
+            "127.0.0.1:4173", "localhost:4173",
         }
 
     async def dispatch(
@@ -311,6 +313,15 @@ def create_app(
                 "/assets",
                 StaticFiles(directory=str(assets_dir)),
                 name="static-assets",
+            )
+
+        # Example workflows static assets
+        examples_dir = Path(__file__).resolve().parents[2] / "examples"
+        if examples_dir.is_dir():
+            app.mount(
+                "/examples",
+                StaticFiles(directory=str(examples_dir)),
+                name="examples-assets",
             )
 
         # SPA catch-all: serve index.html for all non-API, non-asset routes
