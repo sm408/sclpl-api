@@ -1,0 +1,1383 @@
+<title>The sclpl Rebuild</title>
+<style>
+/* ── Tokens: light is the base set ───────────────────────────────── */
+:root{
+  --paper:#EEF1F5; --surface:#FFFFFF; --surface-2:#F6F8FA;
+  --ink:#101820; --ink-2:#54626F; --ink-3:#7C8B99;
+  --rule:#D4DBE3; --rule-soft:#E4E9EF;
+  --accent:#2F45C5; --accent-soft:#E7EAFB;
+  --signal:#0B7285; --signal-soft:#DFF1F4;
+  --warn:#96500A; --warn-soft:#F9EEE0;
+  --good:#1F6B3F; --good-soft:#E3F1E8;
+  --shadow:0 1px 2px rgba(16,24,32,.05), 0 8px 24px -12px rgba(16,24,32,.18);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --paper:#0D1015; --surface:#141920; --surface-2:#1A2029;
+    --ink:#E7ECF2; --ink-2:#9AA7B5; --ink-3:#71808F;
+    --rule:#242C37; --rule-soft:#1D242D;
+    --accent:#93A4FF; --accent-soft:#1B2140;
+    --signal:#45C7DA; --signal-soft:#102A31;
+    --warn:#E2A75E; --warn-soft:#2C2113;
+    --good:#6FCB92; --good-soft:#13271B;
+    --shadow:0 1px 2px rgba(0,0,0,.4), 0 10px 30px -14px rgba(0,0,0,.7);
+  }
+}
+:root[data-theme="dark"]{
+  --paper:#0D1015; --surface:#141920; --surface-2:#1A2029;
+  --ink:#E7ECF2; --ink-2:#9AA7B5; --ink-3:#71808F;
+  --rule:#242C37; --rule-soft:#1D242D;
+  --accent:#93A4FF; --accent-soft:#1B2140;
+  --signal:#45C7DA; --signal-soft:#102A31;
+  --warn:#E2A75E; --warn-soft:#2C2113;
+  --good:#6FCB92; --good-soft:#13271B;
+  --shadow:0 1px 2px rgba(0,0,0,.4), 0 10px 30px -14px rgba(0,0,0,.7);
+}
+
+/* ── Type roles ──────────────────────────────────────────────────── */
+:root{
+  --sans:"Segoe UI Variable Display","Segoe UI",system-ui,ui-sans-serif,-apple-system,sans-serif;
+  --serif:Constantia,Cambria,Georgia,"Iowan Old Style","Times New Roman",serif;
+  --mono:"Cascadia Code","Cascadia Mono",Consolas,ui-monospace,"SF Mono",Menlo,monospace;
+}
+
+*{box-sizing:border-box;}
+body{
+  margin:0; background:var(--paper); color:var(--ink);
+  font-family:var(--serif); font-size:17px; line-height:1.62;
+  -webkit-font-smoothing:antialiased;
+}
+.doc{max-width:1240px;margin:0 auto;padding:0 24px 120px;}
+
+/* ── Section grid: prose measure + wide + full breakouts ─────────── */
+.sec{
+  display:grid;
+  grid-template-columns:
+    [full-start] minmax(0,1fr)
+    [wide-start] minmax(0,72px)
+    [main-start] minmax(0,730px) [main-end]
+    minmax(0,72px) [wide-end]
+    minmax(0,1fr) [full-end];
+  row-gap:20px;
+  padding:52px 0;
+  border-top:1px solid var(--rule);
+}
+.sec > *{grid-column:main;min-width:0;}
+.sec > .wide{grid-column:wide;}
+.sec > .full{grid-column:full;}
+
+/* ── Headings ────────────────────────────────────────────────────── */
+h1,h2,h3,h4{font-family:var(--sans);text-wrap:balance;margin:0;}
+h1{font-size:clamp(2.4rem,5.2vw,3.6rem);font-weight:700;letter-spacing:-.03em;line-height:1.04;}
+h2{font-size:clamp(1.55rem,3vw,2.05rem);font-weight:680;letter-spacing:-.022em;line-height:1.14;}
+h3{font-size:1.16rem;font-weight:660;letter-spacing:-.012em;margin-top:14px;}
+h4{font-size:.97rem;font-weight:660;letter-spacing:-.005em;}
+p{margin:0;}
+
+.eyebrow{
+  font-family:var(--mono);font-size:.7rem;font-weight:600;
+  letter-spacing:.15em;text-transform:uppercase;color:var(--ink-3);
+  display:flex;align-items:center;gap:10px;
+}
+.eyebrow::after{content:"";flex:1;height:1px;background:var(--rule);}
+.lede{font-size:1.14rem;color:var(--ink-2);line-height:1.55;}
+
+a{color:var(--accent);text-underline-offset:3px;text-decoration-thickness:1px;}
+a:focus-visible{outline:2px solid var(--accent);outline-offset:3px;border-radius:3px;}
+strong{font-weight:600;color:var(--ink);}
+code{
+  font-family:var(--mono);font-size:.855em;background:var(--surface-2);
+  border:1px solid var(--rule-soft);border-radius:4px;padding:.1em .34em;
+  color:var(--ink);
+}
+kbd{
+  font-family:var(--mono);font-size:.8em;background:var(--surface-2);
+  border:1px solid var(--rule);border-bottom-width:2px;border-radius:4px;padding:.05em .35em;
+}
+ul,ol{margin:0;padding-left:1.35em;display:flex;flex-direction:column;gap:8px;}
+li::marker{color:var(--ink-3);}
+
+/* ── Masthead ────────────────────────────────────────────────────── */
+.mast{padding:88px 0 40px;display:grid;gap:26px;}
+.wordmark{
+  font-family:var(--mono);font-size:.76rem;letter-spacing:.34em;
+  text-transform:uppercase;color:var(--accent);font-weight:600;
+}
+.mast .sub{font-size:1.22rem;color:var(--ink-2);max-width:62ch;line-height:1.5;}
+.metastrip{
+  display:flex;flex-wrap:wrap;gap:0;border:1px solid var(--rule);
+  border-radius:8px;overflow:hidden;background:var(--surface);box-shadow:var(--shadow);
+}
+.metastrip > div{
+  flex:1 1 150px;padding:13px 17px;border-right:1px solid var(--rule-soft);
+  display:flex;flex-direction:column;gap:3px;
+}
+.metastrip > div:last-child{border-right:0;}
+.metastrip .k{
+  font-family:var(--mono);font-size:.66rem;letter-spacing:.13em;
+  text-transform:uppercase;color:var(--ink-3);font-weight:600;
+}
+.metastrip .v{font-family:var(--mono);font-size:.9rem;color:var(--ink);font-weight:600;}
+
+/* ── Contents ────────────────────────────────────────────────────── */
+.toc{
+  background:var(--surface);border:1px solid var(--rule);border-radius:8px;
+  padding:22px 24px;display:grid;gap:14px;box-shadow:var(--shadow);
+}
+.toc ol{
+  list-style:none;padding:0;margin:0;display:grid;gap:1px;
+  grid-template-columns:repeat(auto-fill,minmax(250px,1fr));
+}
+.toc li{display:flex;gap:11px;align-items:baseline;padding:5px 0;}
+.toc .n{
+  font-family:var(--mono);font-size:.72rem;color:var(--ink-3);
+  font-weight:600;min-width:20px;font-variant-numeric:tabular-nums;
+}
+.toc a{font-family:var(--sans);font-size:.94rem;text-decoration:none;color:var(--ink);}
+.toc a:hover{color:var(--accent);text-decoration:underline;}
+
+/* ── Panels, callouts ────────────────────────────────────────────── */
+.panel{
+  background:var(--surface);border:1px solid var(--rule);border-radius:8px;
+  padding:20px 22px;display:grid;gap:11px;
+}
+.finding{
+  background:var(--surface);border:1px solid var(--rule);
+  border-left:3px solid var(--warn);border-radius:6px;
+  padding:18px 20px;display:grid;gap:9px;
+}
+.finding .tag{
+  font-family:var(--mono);font-size:.68rem;font-weight:700;letter-spacing:.12em;
+  text-transform:uppercase;color:var(--warn);
+}
+.finding .cite{
+  font-family:var(--mono);font-size:.78rem;color:var(--ink-2);
+  background:var(--warn-soft);border-radius:4px;padding:9px 11px;
+  overflow-x:auto;white-space:pre;line-height:1.55;
+}
+.fix{
+  font-family:var(--sans);font-size:.94rem;color:var(--ink);
+  border-top:1px solid var(--rule-soft);padding-top:10px;
+}
+.fix b{color:var(--good);font-weight:660;}
+.note{
+  border-left:3px solid var(--accent);background:var(--accent-soft);
+  border-radius:0 6px 6px 0;padding:14px 18px;font-size:.97rem;color:var(--ink);
+}
+
+/* ── Tables ──────────────────────────────────────────────────────── */
+.tw{overflow-x:auto;border:1px solid var(--rule);border-radius:8px;background:var(--surface);}
+table{border-collapse:collapse;width:100%;font-family:var(--sans);font-size:.9rem;}
+th,td{padding:10px 15px;text-align:left;border-bottom:1px solid var(--rule-soft);vertical-align:top;}
+th{
+  font-family:var(--mono);font-size:.68rem;letter-spacing:.11em;text-transform:uppercase;
+  color:var(--ink-3);font-weight:600;background:var(--surface-2);white-space:nowrap;
+}
+tbody tr:last-child td{border-bottom:0;}
+td code{background:transparent;border:0;padding:0;font-size:.87em;color:var(--accent);}
+.num{font-variant-numeric:tabular-nums;text-align:right;font-family:var(--mono);}
+
+/* ── Code blocks ─────────────────────────────────────────────────── */
+pre{
+  margin:0;background:var(--surface-2);border:1px solid var(--rule);
+  border-radius:8px;padding:16px 18px;overflow-x:auto;
+  font-family:var(--mono);font-size:.815rem;line-height:1.62;color:var(--ink);
+}
+pre b{color:var(--accent);font-weight:600;}
+pre i{color:var(--ink-3);font-style:normal;}
+pre em{color:var(--signal);font-style:normal;}
+.duo{display:grid;gap:14px;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));}
+.duo figure{margin:0;display:grid;gap:7px;min-width:0;}
+figcaption{
+  font-family:var(--mono);font-size:.68rem;letter-spacing:.11em;text-transform:uppercase;
+  color:var(--ink-3);font-weight:600;
+}
+
+/* ── Terminal mockup: fixed dark palette, intentional in both themes ── */
+.term{
+  --t-bg:#0B0E13; --t-dim:#6E7C8C; --t-fg:#D6DEE8;
+  --t-ok:#5FCB8B; --t-run:#4FC7DC; --t-acc:#8FA0FF; --t-warn:#E3A75E;
+  background:var(--t-bg); border:1px solid #232B36; border-radius:10px;
+  overflow:hidden; box-shadow:var(--shadow);
+  font-family:var(--mono); font-size:.79rem; line-height:1.72; color:var(--t-fg);
+}
+.term .chrome{
+  display:flex;align-items:center;gap:8px;padding:9px 14px;
+  background:#11161E;border-bottom:1px solid #232B36;
+}
+.term .dot{width:9px;height:9px;border-radius:50%;background:#2E3947;}
+.term .ttl{margin-left:6px;font-size:.7rem;color:var(--t-dim);letter-spacing:.04em;}
+.term .body{padding:14px 16px 16px;overflow-x:auto;}
+.term pre{
+  background:transparent;border:0;padding:0;margin:0;color:inherit;
+  font-size:inherit;line-height:inherit;overflow:visible;
+}
+.term .ok{color:var(--t-ok);} .term .run{color:var(--t-run);}
+.term .dim{color:var(--t-dim);} .term .acc{color:var(--t-acc);}
+.term .wr{color:var(--t-warn);}
+.term .live{background:#0F141B;margin:0 -16px -16px;padding:11px 16px 13px;border-top:1px solid #232B36;}
+.bar{
+  display:inline-block;vertical-align:-2px;width:238px;height:9px;
+  background:#1D2531;border-radius:2px;overflow:hidden;
+}
+.bar > span{display:block;height:100%;background:var(--t-run);width:73%;border-radius:2px;}
+.pulse{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--t-run);vertical-align:1px;}
+.caret{display:inline-block;width:7px;height:13px;background:var(--t-fg);vertical-align:-2px;}
+@media (prefers-reduced-motion: no-preference){
+  .bar > span{animation:grow 1.5s cubic-bezier(.22,.85,.3,1) both;}
+  .pulse{animation:blink 1.5s ease-in-out infinite;}
+  .caret{animation:blink 1.1s steps(1,end) infinite;}
+  @keyframes grow{from{width:0}to{width:73%}}
+  @keyframes blink{0%,100%{opacity:1}50%{opacity:.25}}
+}
+
+/* ── Gantt: scheduler comparison ─────────────────────────────────── */
+.gantt{
+  background:var(--surface);border:1px solid var(--rule);border-radius:8px;
+  padding:18px 20px;display:grid;gap:9px;min-width:0;
+}
+.gantt h4{display:flex;justify-content:space-between;align-items:baseline;gap:12px;}
+.gantt h4 .t{font-family:var(--mono);font-size:.78rem;color:var(--ink-2);font-weight:600;}
+.grid{
+  display:grid;grid-template-columns:74px repeat(7,minmax(26px,1fr));
+  align-items:center;row-gap:5px;
+}
+.grid .lbl{
+  font-family:var(--mono);font-size:.72rem;color:var(--ink-2);
+  grid-column:1;padding-right:9px;white-space:nowrap;
+}
+.grid .track{grid-column:2 / -1;height:15px;background:var(--rule-soft);border-radius:3px;}
+.grid .b{
+  height:15px;border-radius:3px;background:var(--accent);
+  display:flex;align-items:center;justify-content:center;
+  font-family:var(--mono);font-size:.64rem;color:#FFFFFF;font-weight:700;
+}
+.grid .b.crit{background:var(--signal);}
+.grid .idle{
+  height:15px;border-radius:3px;
+  background:repeating-linear-gradient(-45deg,var(--warn-soft),var(--warn-soft) 4px,transparent 4px,transparent 8px);
+  border:1px dashed var(--warn);
+}
+.axis{
+  grid-column:2 / -1;display:grid;grid-template-columns:repeat(7,1fr);
+  font-family:var(--mono);font-size:.62rem;color:var(--ink-3);
+  border-top:1px solid var(--rule);padding-top:4px;margin-top:3px;
+}
+.legend{
+  display:flex;flex-wrap:wrap;gap:16px;font-family:var(--mono);
+  font-size:.7rem;color:var(--ink-2);
+}
+.legend i{display:inline-block;width:11px;height:11px;border-radius:2px;vertical-align:-1px;margin-right:5px;}
+
+/* ── Mode ribbon ─────────────────────────────────────────────────── */
+.modes{
+  background:var(--surface);border:1px solid var(--rule);border-radius:8px;
+  padding:19px 21px;display:grid;gap:15px;
+}
+.mrow{display:grid;grid-template-columns:88px minmax(0,1fr) 62px;gap:13px;align-items:center;}
+.mrow .nm{
+  font-family:var(--mono);font-size:.79rem;font-weight:700;color:var(--ink);
+}
+.mrow .nm small{display:block;font-weight:400;font-size:.66rem;color:var(--ink-3);letter-spacing:.04em;}
+.ribbon{display:grid;grid-template-columns:repeat(20,1fr);gap:3px;min-width:0;}
+.ribbon i{
+  display:block;height:19px;border-radius:2px;
+  background:var(--rule-soft);border:1px solid var(--rule);
+}
+.ribbon i.on{background:var(--accent);border-color:var(--accent);}
+.ribbon i.io{background:var(--signal);border-color:var(--signal);}
+.mrow .ct{
+  font-family:var(--mono);font-size:.76rem;color:var(--ink-2);
+  text-align:right;font-variant-numeric:tabular-nums;font-weight:600;
+}
+
+/* ── Lanes ───────────────────────────────────────────────────────── */
+.lanes{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));}
+.lane{
+  background:var(--surface);border:1px solid var(--rule);border-radius:8px;
+  padding:16px 18px;display:grid;gap:7px;align-content:start;
+  border-top:3px solid var(--signal);
+}
+.lane .lt{
+  font-family:var(--mono);font-size:.72rem;font-weight:700;color:var(--signal);
+  letter-spacing:.06em;
+}
+.lane p{font-size:.89rem;color:var(--ink-2);line-height:1.48;}
+
+/* ── Tiers ───────────────────────────────────────────────────────── */
+.tiers{display:grid;gap:14px;grid-template-columns:repeat(auto-fit,minmax(255px,1fr));}
+.tier{
+  background:var(--surface);border:1px solid var(--rule);border-radius:8px;
+  padding:19px 21px;display:grid;gap:10px;align-content:start;
+}
+.tier .who{
+  font-family:var(--mono);font-size:.67rem;letter-spacing:.13em;text-transform:uppercase;
+  font-weight:700;color:var(--signal);
+}
+.tier h4{font-size:1.06rem;}
+.tier p{font-size:.93rem;color:var(--ink-2);line-height:1.5;}
+.tier ul{font-family:var(--sans);font-size:.88rem;gap:6px;color:var(--ink-2);}
+
+/* ── Milestones ──────────────────────────────────────────────────── */
+.ms{display:grid;gap:0;border:1px solid var(--rule);border-radius:8px;background:var(--surface);overflow:hidden;}
+.ms > div{
+  display:grid;grid-template-columns:60px minmax(0,1fr);gap:18px;
+  padding:17px 20px;border-bottom:1px solid var(--rule-soft);
+}
+.ms > div:last-child{border-bottom:0;}
+.ms .id{
+  font-family:var(--mono);font-size:.95rem;font-weight:700;color:var(--accent);
+  letter-spacing:-.02em;
+}
+.ms .c{display:grid;gap:6px;min-width:0;}
+.ms h4{font-size:1rem;}
+.ms p{font-size:.92rem;color:var(--ink-2);line-height:1.5;}
+.ms .exit{
+  font-family:var(--mono);font-size:.76rem;color:var(--ink-2);
+  background:var(--surface-2);border-radius:5px;padding:8px 11px;
+  border-left:2px solid var(--good);
+}
+.ms .exit b{color:var(--good);font-weight:700;}
+
+/* ── Decisions ───────────────────────────────────────────────────── */
+.dec{display:grid;gap:12px;}
+.dq{
+  background:var(--surface);border:1px solid var(--rule);border-radius:8px;
+  padding:17px 20px;display:grid;gap:8px;
+}
+.dq .q{font-family:var(--sans);font-weight:660;font-size:1rem;}
+.dq .r{font-size:.93rem;color:var(--ink-2);}
+.dq .r b{color:var(--good);font-weight:660;}
+
+@media (max-width:760px){
+  body{font-size:16px;}
+  .sec{padding:40px 0;}
+  .mast{padding:56px 0 30px;}
+  .ms > div{grid-template-columns:44px minmax(0,1fr);gap:12px;}
+  .grid{grid-template-columns:58px repeat(7,minmax(18px,1fr));}
+  .mrow{grid-template-columns:70px minmax(0,1fr) 52px;gap:9px;}
+}
+</style>
+
+<div class="doc">
+
+<!-- ═══════════════ MASTHEAD ═══════════════ -->
+<header class="mast">
+  <div class="wordmark">Engineering Plan · feat/cli-studio</div>
+  <h1>Rebuilding SCLPLAPI as one fast CLI</h1>
+  <p class="sub">Strip the TUI and the web studio. Keep the engine ideas, replace the four things that quietly make the current engine unable to do what you are asking for. Ship a single binary that an analyst can drive on day one and a systems engineer can extend on day ninety.</p>
+  <div class="metastrip">
+    <div><span class="k">Branch</span><span class="v">feat/cli-studio</span></div>
+    <div><span class="k">Baseline</span><span class="v">1b1abe0 · 369 files</span></div>
+    <div><span class="k">Code removed</span><span class="v">~33,600 lines</span></div>
+    <div><span class="k">Kept &amp; reworked</span><span class="v">~8,000 lines</span></div>
+    <div><span class="k">Milestones</span><span class="v">M0 → M9</span></div>
+  </div>
+</header>
+
+<!-- ═══════════════ CONTENTS ═══════════════ -->
+<section class="sec" style="border-top:0;padding-top:0;">
+  <nav class="toc wide" aria-label="Contents">
+    <div class="eyebrow">Contents</div>
+    <ol>
+      <li><span class="n">01</span><a href="#s1">The thesis</a></li>
+      <li><span class="n">02</span><a href="#s2">Three users, one tool</a></li>
+      <li><span class="n">03</span><a href="#s3">Why this is a rebuild</a></li>
+      <li><span class="n">04</span><a href="#s4">Architecture</a></li>
+      <li><span class="n">05</span><a href="#s5">The workflow model</a></li>
+      <li><span class="n">06</span><a href="#s6">Import, modes &amp; invocation</a></li>
+      <li><span class="n">07</span><a href="#s7">Expressions &amp; operators</a></li>
+      <li><span class="n">08</span><a href="#s8">Functions</a></li>
+      <li><span class="n">09</span><a href="#s9">Plugins</a></li>
+      <li><span class="n">10</span><a href="#s10">Scheduling &amp; concurrency</a></li>
+      <li><span class="n">11</span><a href="#s11">Memory &amp; caching</a></li>
+      <li><span class="n">12</span><a href="#s12">Pagination &amp; control flow</a></li>
+      <li><span class="n">13</span><a href="#s13">The view</a></li>
+      <li><span class="n">14</span><a href="#s14">CLI surface</a></li>
+      <li><span class="n">15</span><a href="#s15">Docs &amp; playbooks</a></li>
+      <li><span class="n">16</span><a href="#s16">What gets deleted</a></li>
+      <li><span class="n">17</span><a href="#s17">Milestones</a></li>
+      <li><span class="n">18</span><a href="#s18">Risks</a></li>
+      <li><span class="n">19</span><a href="#s19">Decisions I need</a></li>
+    </ol>
+  </nav>
+</section>
+
+<!-- ═══════════════ 01 ═══════════════ -->
+<section class="sec" id="s1">
+  <div class="eyebrow">01 — The thesis</div>
+  <h2>One binary. Declarative pipelines. Nothing hidden behind a UI.</h2>
+  <p class="lede">Today SCLPLAPI has three front ends fighting over one engine: a Textual TUI, a half-finished Vue studio, and a thin CLI. The engine underneath was shaped by the TUI&rsquo;s needs — everything is a string, because a terminal widget only ever displays strings.</p>
+  <p>That single accommodation is what blocks every feature on your list. You cannot compare <code>a &gt; b</code>, sum two fields, sort a result set, or hand a dataframe to the next step when the value model coerces everything to <code>str</code> on the way out of a step. So this is not a port of the CLI — it is a rebuild of the value model, the scheduler, and the transport, with the CLI as the only consumer.</p>
+  <p>The product becomes <strong><code>sclpl</code></strong>: a pipeline runner for HTTP APIs that takes a workflow by name or by path, resolves a dependency graph, runs it as fast as the remote will allow, and writes CSV, JSON, Parquet, or Excel out the other end — with progress you can actually watch.</p>
+  <div class="note"><strong>Design rule that decides most arguments later:</strong> stdout is data, stderr is interface. Progress bars, spinners, and status lines go to stderr. Results go to stdout. <code>sclpl orders --format json | jq</code> works while the progress bar is still animating on your screen.</div>
+</section>
+
+<!-- ═══════════════ 02 ═══════════════ -->
+<section class="sec" id="s2">
+  <div class="eyebrow">02 — Three users, one tool</div>
+  <h2>Progressive disclosure, not three products</h2>
+  <p>Every capability exists at three levels of power. The analyst uses the declarative form; the data engineer composes functions; the software engineer implements the primitives. Same concepts, same file format, same runtime — you only descend a level when you need to.</p>
+
+  <div class="tiers wide">
+    <div class="tier">
+      <div class="who">Tier 1 · Analyst</div>
+      <h4>Writes JSON. Runs it.</h4>
+      <p>Never opens Python. Never thinks about concurrency, sessions, or memory.</p>
+      <ul>
+        <li>Declares endpoints, variables, and an output file</li>
+        <li>Uses built-in functions by name: <code>flatten</code>, <code>save_csv</code>, <code>dedupe</code></li>
+        <li>Runs a colleague&rsquo;s imported workflow by name, in <code>partial</code> mode, on their own file</li>
+        <li>Gets a live progress view and a readable failure</li>
+      </ul>
+    </div>
+    <div class="tier">
+      <div class="who">Tier 2 · Data engineer</div>
+      <h4>Wires functions and plugins.</h4>
+      <p>Composes the primitives, tunes throughput, installs connectors.</p>
+      <ul>
+        <li>SCLPLL for terser authoring, or keeps JSON</li>
+        <li>Joins, merges, filters, pagination strategies</li>
+        <li>Defines the modes: which 12 of 20 steps run in <code>partial</code></li>
+        <li>Installs plugins for databases, scrapers, warehouses</li>
+      </ul>
+    </div>
+    <div class="tier">
+      <div class="who">Tier 3 · Software engineer</div>
+      <h4>Implements the primitives.</h4>
+      <p>Writes typed, async, testable extensions that the other two tiers consume by name.</p>
+      <ul>
+        <li>Registers function overloads for new types</li>
+        <li>Ships plugins with connectors, auth providers, DSL verbs</li>
+        <li>Adds table backends and paginators</li>
+        <li>Everything is an entry point; nothing is a fork</li>
+      </ul>
+    </div>
+  </div>
+
+  <p>The test for whether we got this right: <strong>an analyst should never see the word &ldquo;semaphore&rdquo;</strong>, and a software engineer should never have to fork the repo to add a connector.</p>
+</section>
+
+<!-- ═══════════════ 03 ═══════════════ -->
+<section class="sec" id="s3">
+  <div class="eyebrow">03 — Why this is a rebuild</div>
+  <h2>Four findings from the current code</h2>
+  <p class="lede">I read the engine before writing this. These are not style complaints — each one independently blocks something you explicitly asked for, and all four sit in code the TUI and the web studio both depend on.</p>
+
+  <div class="finding">
+    <div class="tag">Finding 1 · blocks operators, comparisons, dataframes</div>
+    <h3>Every value is stringified on the way out of a step</h3>
+    <p>The context declares string-only storage, the engine casts step output with <code>str()</code>, and the resolver casts again on every read. A JSON number that arrives as <code>42</code> is stored as <code>"42"</code>; a response body becomes a string the next step must re-parse.</p>
+    <div class="cite">app/core/models/context.py:24   workflow_variables: dict[str, str]
+app/core/engine/workflow.py:97   ctx.workflow_variables[step.output_variable] = str(step_result.output)
+app/core/engine/variable_resolver.py:57   return str(value) if value is not None else ...</div>
+    <p>Consequence: <code>price &gt; 100</code> becomes a string comparison, <code>"9" &gt; "100"</code> is true, and there is nowhere to put a pandas DataFrame at all.</p>
+    <div class="fix"><b>Replacement:</b> a typed value store. Values keep their Python type end to end. Interpolation into a URL or header stringifies at the boundary only; expressions receive the real object.</div>
+  </div>
+
+  <div class="finding">
+    <div class="tag">Finding 2 · blocks &ldquo;start the moment dependencies are ready&rdquo;</div>
+    <h3>The parallel engine schedules in barrier waves, not continuously</h3>
+    <p>Its own docstring describes the loop: find the ready set, execute it concurrently, wait for <em>all</em> of it, then find the next ready set. Every wave is a barrier, so a one-second step waits for the slowest step beside it before its dependents can start.</p>
+    <div class="cite">app/core/engine/parallel_workflow.py:60-66
+  2. Find steps with no unmet dependencies (ready set)
+  3. Execute ready set concurrently
+  4. Mark completed steps, find new ready set</div>
+    <div class="fix"><b>Replacement:</b> a continuous ready-queue scheduler. A step is dispatched the instant its last dependency resolves, sharing one set of semaphores with everything else in flight. Section 10 shows the difference on a real graph.</div>
+  </div>
+
+  <div class="finding">
+    <div class="tag">Finding 3 · blocks &ldquo;fast&rdquo;</div>
+    <h3>A new HTTP client, and a new TCP connection, per request</h3>
+    <p>The executor opens <code>httpx.AsyncClient</code> inside an <code>async with</code> for every single call, then closes it. No keep-alive, no pooling, no HTTP/2, and a fresh TLS handshake on every request to the same host — the dominant cost in most API pipelines.</p>
+    <div class="cite">app/services/request_executor.py:33
+  async with httpx.AsyncClient(timeout=30.0) as client:
+      response = await client.request(**kwargs)   <i># client closed here</i></div>
+    <div class="fix"><b>Replacement:</b> one pooled client per host profile for the process lifetime, HTTP/2 on, keep-alive, configurable connection and per-host limits, exposed as workflow parameters.</div>
+  </div>
+
+  <div class="finding">
+    <div class="tag">Finding 4 · security</div>
+    <h3>Secrets silently downgrade to base64</h3>
+    <p>If <code>cryptography</code> is not installed, <code>encrypt_secret()</code> falls back to base64 and returns successfully. Base64 is an encoding, not encryption. The user is never told their credentials are stored in plain text, and the key file is written without restrictive permissions.</p>
+    <div class="cite">app/core/secrets.py:38-46
+  fernet = _get_fernet()          <i># returns None on ImportError</i>
+  if fernet: ...
+  <i># else: base64 fallback, no warning</i></div>
+    <div class="fix"><b>Replacement:</b> hard failure instead of silent downgrade, OS keyring first with an encrypted file fallback, <code>0600</code> on the key, and redaction applied at the reporter so secrets cannot reach a log, a bar label, or a trace dump.</div>
+  </div>
+</section>
+
+<!-- ═══════════════ 04 ═══════════════ -->
+<section class="sec" id="s4">
+  <div class="eyebrow">04 — Architecture</div>
+  <h2>Eight packages, one direction of dependency</h2>
+  <p>Nothing below <code>cli/</code> knows the CLI exists. The reporter is an interface, so the engine emits events and never writes to a terminal. That is what keeps <code>--format json</code> honest and makes the engine testable without capturing stdout.</p>
+
+  <pre class="wide"><b>sclpl/</b>
+  <b>cli/</b>        Typer command tree, argument parsing, exit codes
+  <b>render/</b>     reporter sinks: human | plain | json | quiet
+                <i>owns the live region, bars, spinners, redaction</i>
+  <b>catalog/</b>    workflow registry: import, resolve-by-name, versions, modes
+  <b>run/</b>        <em>compile</em>   JSON | SCLPLL  →  typed IR (a DAG)
+                <em>plan</em>      mode pruning, liveness, critical path, lane assignment
+                <em>schedule</em>  continuous ready-queue + semaphore tiers
+                <em>execute</em>   step drivers: http | fn | control | plugin
+  <b>values/</b>     typed store, ValueRef, spill-to-disk, content-addressed cache
+  <b>expr/</b>       one expression language: paths, operators, dispatch table
+  <b>tables/</b>     TableBackend protocol → pandas | polars | dask
+                <i>csv · json · parquet · xlsx · ndjson</i>
+  <b>ext/</b>        function registry + plugin registry (importlib entry points)
+  <b>state/</b>      SQLite: runs, history, cache index, env, secrets</pre>
+
+  <div class="tw wide">
+    <table>
+      <thead><tr><th>Layer</th><th>Owns</th><th>Never does</th></tr></thead>
+      <tbody>
+        <tr><td><code>cli/</code></td><td>Flags, config precedence, exit codes</td><td>Business logic</td></tr>
+        <tr><td><code>render/</code></td><td>Every byte written to a terminal</td><td>Decide what happens</td></tr>
+        <tr><td><code>catalog/</code></td><td>Names, versions, mode definitions</td><td>Execute anything</td></tr>
+        <tr><td><code>run/</code></td><td>Graph, scheduling, step execution</td><td>Print anything</td></tr>
+        <tr><td><code>values/</code></td><td>Lifetime, identity, spilling of data</td><td>Know what a step is</td></tr>
+        <tr><td><code>expr/</code></td><td>Evaluating paths and operators</td><td>Perform I/O</td></tr>
+        <tr><td><code>tables/</code></td><td>Tabular reads, writes, and ops</td><td>Choose a backend for you silently</td></tr>
+        <tr><td><code>ext/</code></td><td>Discovery, validation, capabilities</td><td>Trust a plugin implicitly</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p><strong>Config precedence</strong>, applied uniformly and printable with <code>sclpl config show</code>: CLI flag → environment variable (<code>SCLPL_*</code>) → mode block → workflow file → project <code>sclpl.toml</code> → user config → built-in default.</p>
+
+  <h3>The weight budget</h3>
+  <p>The failure mode for a project like this is not running out of features — it is ending up with 40,000 lines nobody wants to touch, which is precisely how the current repository got three front ends. So the size target is a constraint with a number on it, checked in CI:</p>
+
+  <div class="tw wide">
+    <table>
+      <thead><tr><th>Package</th><th class="num">Budget</th><th>Kept small by</th></tr></thead>
+      <tbody>
+        <tr><td><code>cli/</code></td><td class="num">600</td><td>Typer generates parsing, help, and completions from signatures</td></tr>
+        <tr><td><code>render/</code></td><td class="num">900</td><td>Owned outright — see section 13; one writer, one fallback ladder</td></tr>
+        <tr><td><code>catalog/</code></td><td class="num">400</td><td>Files on disk plus one SQLite index table</td></tr>
+        <tr><td><code>run/</code></td><td class="num">1,400</td><td>The only genuinely novel code: compile, plan, schedule, execute</td></tr>
+        <tr><td><code>values/</code></td><td class="num">600</td><td>pyarrow does spill and IPC; we do lifetime and keys</td></tr>
+        <tr><td><code>expr/</code></td><td class="num">800</td><td>One parser, one dispatch table, no per-type special cases</td></tr>
+        <tr><td><code>tables/</code></td><td class="num">500</td><td>A thin protocol over pandas; no dataframe logic of our own</td></tr>
+        <tr><td><code>ext/</code></td><td class="num">400</td><td><code>importlib.metadata</code> + pydantic-generated schemas</td></tr>
+        <tr><td><code>state/</code></td><td class="num">400</td><td>Plain SQL, no ORM</td></tr>
+        <tr><td><code>functions/</code> (built-ins)</td><td class="num">900</td><td>Each function is a handful of lines over a library that already works</td></tr>
+        <tr><td><strong>Total target</strong></td><td class="num"><strong>~6,900</strong></td><td>Against ~33,600 deleted</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p>Four rules make the budget hold, and they are the ones worth arguing about in review:</p>
+  <ul>
+    <li><strong>No abstraction until the second caller.</strong> The current codebase has a <code>contracts/</code> package of interfaces with exactly one implementation each. Interfaces earn their place when something actually varies — the reporter, the table backend, the paginator — and nowhere else.</li>
+    <li><strong>Reuse before writing.</strong> Every dependency in the tree does three or four jobs: <code>httpx</code> for pooling, HTTP/2, and retries; <code>typer</code> for the whole CLI surface, help text, and shell completion; <code>pydantic</code> for validation <em>and</em> the JSON Schema that drives plugin help <em>and</em> the generated reference docs; <code>aiosqlite</code> for state, the cache index, <em>and</em> the bundled SQLite plugin; <code>pyarrow</code> for Parquet, spilling, and zero-copy process handoff. Five libraries total.</li>
+    <li><strong>One deliberate exception: the terminal.</strong> The live region is written by hand rather than taken from a rendering library, and <code>rich</code> is dropped entirely. Section 13 argues the case — briefly, it is the most breakage-prone surface in the product, it must survive a worker pool writing underneath it, and it is the one thing we cannot debug in a user&rsquo;s terminal. Two hundred and fifty lines we control beat a general-purpose renderer we do not.</li>
+    <li><strong>One mechanism per concept.</strong> One registry pattern shared by functions, plugins, and paginators. One dispatch table for every operator. One event stream feeding every verbosity level. Where the current code has a service, a repository, and a contract per noun, the rewrite has one module.</li>
+    <li><strong>Deleting counts as progress.</strong> If a milestone adds a feature and the total shrinks, that is the best possible outcome and it gets said out loud in the commit message.</li>
+  </ul>
+  <div class="note">The honest tension: sections 06 through 13 describe a lot of capability, and capability costs lines. The budget is what forces each one to be implemented as configuration over a library rather than as new machinery — pagination is five small strategy objects, not a subsystem; lanes are a dictionary lookup, not a framework.</div>
+</section>
+
+<!-- ═══════════════ 05 ═══════════════ -->
+<section class="sec" id="s5">
+  <div class="eyebrow">05 — The workflow model</div>
+  <h2>One IR, two surfaces</h2>
+  <p>JSON and SCLPLL are two spellings of the same intermediate representation. The IR is canonical; both surfaces round-trip through it, and <code>sclpl convert</code> moves between them without loss. An analyst starts in JSON; a data engineer switches to SCLPLL when the JSON gets noisy; neither is second-class.</p>
+
+  <div class="duo wide">
+    <figure>
+      <figcaption>orders.json — tier 1</figcaption>
+<pre>{
+  "name": "orders",
+  "vars": { "base": "https://api.shop.io" },
+  "steps": [
+    { "id": "orders", "http": {
+        "get": "{{base}}/orders",
+        "paginate": { "style": "cursor",
+          "cursor": "body.next", "into": "body.data" } } },
+    { "id": "customers", "http": {
+        "get": "{{base}}/customers" } },
+    { "id": "joined",
+      "needs": ["orders", "customers"],
+      "fn": "join", "with": {
+        "left": "@orders", "right": "@customers",
+        "on": "customer_id", "how": "left" } },
+    { "id": "big", "needs": ["joined"],
+      "fn": "filter",
+      "where": "row.total &gt; 500" },
+    { "id": "out", "needs": ["big"],
+      "fn": "save_csv",
+      "with": { "path": "big_orders.csv",
+                "flatten": true } }
+  ]
+}</pre>
+    </figure>
+    <figure>
+      <figcaption>orders.sclpll — tier 2, identical IR</figcaption>
+<pre><b>@workflow</b> orders
+<b>@var</b> base = https://api.shop.io
+
+<b>@step</b> orders -&gt; orders
+    get {{base}}/orders
+    paginate cursor body.next into body.data
+
+<b>@step</b> customers -&gt; customers
+    get {{base}}/customers
+
+<b>@step</b> joined &lt;- orders, customers
+    join @orders, @customers on customer_id how left
+
+<b>@step</b> big &lt;- joined
+    filter row.total &gt; 500
+
+<b>@step</b> out &lt;- big
+    save_csv big_orders.csv flatten
+</pre>
+    </figure>
+  </div>
+
+  <h3>Step kinds</h3>
+  <div class="tw wide">
+    <table>
+      <thead><tr><th>Kind</th><th>Purpose</th><th>Shape</th></tr></thead>
+      <tbody>
+        <tr><td><code>http</code></td><td>One request, optionally paginated</td><td><code>get/post/… + headers, query, body, paginate, retry</code></td></tr>
+        <tr><td><code>fn</code></td><td>Call a built-in or plugin function</td><td><code>fn: name, with: {…}</code></td></tr>
+        <tr><td><code>let</code></td><td>Bind an expression to a name</td><td><code>let: {total: "sum(@rows.amount)"}</code></td></tr>
+        <tr><td><code>foreach</code></td><td>Fan out over a collection into the same graph</td><td><code>over, as, body, max_parallel</code></td></tr>
+        <tr><td><code>if</code></td><td>Conditional subgraph</td><td><code>when, then, else</code></td></tr>
+        <tr><td><code>while</code> / <code>do_while</code></td><td>Repeat until a predicate flips</td><td><code>while, body, max_iterations</code></td></tr>
+        <tr><td><code>gate</code></td><td>Assert, or stop the branch</td><td><code>assert, message, on_fail</code></td></tr>
+        <tr><td><code>parallel</code></td><td>Explicit grouping for shared limits</td><td><code>steps, limit</code></td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3>Handoffs are explicit</h3>
+  <p>The current engine mutates one shared dictionary, so any step can clobber any other and nothing is reproducible. In the new model a step declares what it reads (<code>needs</code> plus any <code>@ref</code> in its expressions) and what it produces (its <code>id</code>). The graph is derived from those references, which means <strong>the DAG is inferred, not hand-maintained</strong> — if you reference <code>@orders</code>, you depend on <code>orders</code>, and forgetting to list it is not a class of bug that exists.</p>
+
+  <h3>Rules</h3>
+  <p>Named, reusable predicate sets, so validation lives in one place instead of being copy-pasted into every step:</p>
+<pre>"rules": {
+  "healthy":  "status == 200 and body.errors == null",
+  "throttled": "status == 429 or status == 503"
+},
+"steps": [
+  { "id": "fetch", "http": {...},
+    "assert":   "healthy",       <i>// fail the step if false</i>
+    "retry_if": "throttled",     <i>// retry with backoff</i>
+    "skip_if":  "@feature.enabled == false" }
+]</pre>
+</section>
+
+<!-- ═══════════════ 06 ═══════════════ -->
+<section class="sec" id="s6">
+  <div class="eyebrow">06 — Import, modes &amp; invocation</div>
+  <h2>Run a colleague&rsquo;s pipeline by name, at the depth you need</h2>
+  <p class="lede">A workflow should be something you install once and then invoke like any other command — not a path you have to remember. And a twenty-step pipeline should be runnable at three depths without maintaining three copies of it.</p>
+
+  <h3>The invocation form</h3>
+<pre class="wide"><b>sclpl</b> &lt;workflow&gt; [mode] [inputs…] [outputs…]
+
+<i># by registered name, partial mode, one input, one output</i>
+sclpl orders partial customers.csv report.csv
+
+<i># by file path, full mode, defaults for everything else</i>
+sclpl ./pipelines/orders.sclpll full
+
+<i># named ports when positional order is not obvious</i>
+sclpl orders smoke --in customers=data/c.csv --out report=out/r.xlsx
+
+<i># explicit form, for scripts and CI — always unambiguous</i>
+sclpl run orders --mode partial --in customers=c.csv --out report=r.csv</pre>
+  <p>Resolution order for the first argument: a known subcommand wins; otherwise an existing file path; otherwise the project registry (<code>.sclpl/workflows/</code>); otherwise the user registry (<code>~/.sclpl/workflows/</code>). A miss prints the near-matches rather than a bare error. Scripts should use the explicit <code>sclpl run</code> form — it never has to guess.</p>
+
+  <h3>Importing</h3>
+<pre class="wide">sclpl import ./orders.sclpll                 <i># registers as "orders"</i>
+sclpl import ./p/ --recursive                <i># a whole directory</i>
+sclpl import https://ex.co/etl.json --as etl <i># from a URL, renamed</i>
+sclpl import ./orders.json --project         <i># into .sclpl/, committed with the repo</i>
+
+sclpl list                                   <i># names, versions, modes, ports</i>
+sclpl show orders                            <i># resolved definition + mode matrix</i>
+sclpl remove orders --version 2</pre>
+  <p>Imports are content-hashed and versioned, so re-importing a changed file creates a new version rather than silently replacing one someone else depends on. <code>sclpl run orders@3</code> pins a version. Import validates before registering — a workflow that would not run never enters the catalogue.</p>
+
+  <h3>Modes select a subgraph</h3>
+  <p>Modes are declared once, at the top of the workflow, so the answer to &ldquo;what does partial actually run?&rdquo; lives in one readable place instead of scattered across twenty step definitions:</p>
+
+<pre class="wide">"modes": {
+  "smoke":   { "include": ["auth", "fetch_*"], "limit": { "max_pages": 1 },
+               "vars": { "row_limit": 100 } },
+  "partial": { "exclude": ["enrich_*", "geo_*", "report_pdf", "publish_*"] },
+  "full":    { "all": true },
+  "default": "partial"
+}</pre>
+
+  <div class="modes full">
+    <div class="mrow">
+      <span class="nm">smoke<small>ci gate</small></span>
+      <span class="ribbon" role="img" aria-label="4 of 20 steps run in smoke mode">
+        <i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i></i><i></i><i></i><i></i><i></i><i></i>
+        <i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i>
+      </span>
+      <span class="ct">4 / 20</span>
+    </div>
+    <div class="mrow">
+      <span class="nm">partial<small>daily</small></span>
+      <span class="ribbon" role="img" aria-label="12 of 20 steps run in partial mode">
+        <i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i></i><i></i>
+        <i class="on"></i><i class="on"></i><i></i><i></i><i class="on"></i><i class="on"></i><i></i><i></i><i></i><i></i>
+      </span>
+      <span class="ct">12 / 20</span>
+    </div>
+    <div class="mrow">
+      <span class="nm">full<small>weekly</small></span>
+      <span class="ribbon" role="img" aria-label="all 20 steps run in full mode">
+        <i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i>
+        <i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i>
+      </span>
+      <span class="ct">20 / 20</span>
+    </div>
+    <div class="legend">
+      <span><i style="background:var(--accent)"></i>step runs in this mode</span>
+      <span><i style="background:var(--rule-soft);border:1px solid var(--rule)"></i>pruned from the graph</span>
+      <span>· <code>sclpl show orders</code> prints exactly this matrix</span>
+    </div>
+  </div>
+
+  <p>Selectors accept explicit ids, globs, and tags (<code>"include": ["tag:cheap"]</code>), and a mode may <code>extend</code> another so <code>full</code> is written as &ldquo;partial plus these&rdquo;. A mode can also override variables and limits — which is what makes <code>smoke</code> genuinely cheap rather than merely shorter.</p>
+
+  <div class="note"><strong>Mode selection is a graph operation, not a filter.</strong> Pruning a step whose output a kept step still needs is a validation error, caught by <code>sclpl validate --mode partial</code> before a single request goes out. The error names the missing producer and offers the three legitimate ways to satisfy it: bind it to an input file, serve it <code>--from-cache</code>, or declare a <code>stub</code> value in the mode block.</div>
+
+  <h3>Ports: how inputs and outputs bind</h3>
+  <p>Positional file arguments are only unambiguous if the workflow says what it expects, so ports are declared:</p>
+<pre class="wide">"inputs":  [ { "name": "customers", "format": "csv",  "required": true },
+             { "name": "overrides", "format": "json", "required": false } ],
+"outputs": [ { "name": "report",    "format": "csv" } ]</pre>
+  <ul>
+    <li>Positional arguments bind in declaration order — inputs first, then outputs. Mismatched counts produce an error listing the ports, not a stack trace.</li>
+    <li><code>--in name=path</code> and <code>--out name=path</code> bind by name and win over positional.</li>
+    <li>Format is inferred from the extension and overridable with <code>--in customers=data.txt:csv</code>.</li>
+    <li><code>-</code> means stdin or stdout, so <code>sclpl orders partial - -</code> is a filter in a pipe.</li>
+    <li>A glob binds a port to a list of files, which feeds a <code>foreach</code> naturally.</li>
+    <li>A port unbound in a given mode is simply absent from the pruned graph — that is often the point of the mode.</li>
+  </ul>
+</section>
+
+<!-- ═══════════════ 07 ═══════════════ -->
+<section class="sec" id="s7">
+  <div class="eyebrow">07 — Expressions &amp; operators</div>
+  <h2>Every operator is a generalized function</h2>
+  <p class="lede">You asked for operators to be generalized functions. That is exactly the design: there is one dispatch table, and infix syntax is sugar that compiles to a call in it. <code>a.total &gt; 500</code> and <code>gt(a.total, 500)</code> produce the same IR node.</p>
+
+  <p>Dispatch is on the <em>runtime type of the first argument</em>, so one name works across scalars, lists, and tables. <code>sort</code> on a list sorts a list; <code>sort</code> on a DataFrame becomes <code>sort_values</code>; <code>sort</code> on a Dask frame stays lazy. A plugin registers a new type by registering overloads — it never patches the parser.</p>
+
+<pre class="wide"><b>@overload</b>("filter", Table)
+<b>async def</b> _(t: Table, where: Expr, *, engine) -&gt; Table:
+    <b>return</b> engine.filter(t, where)
+
+<b>@overload</b>("filter", list)
+<b>async def</b> _(xs: list, where: Expr) -&gt; list:
+    <b>return</b> [x <b>for</b> x <b>in</b> xs <b>if</b> <b>await</b> where.eval(row=x)]</pre>
+
+  <h3>Path access</h3>
+  <p>Dot and bracket notation with wildcards, over anything addressable — response bodies, headers, prior step output, environment, loop variables:</p>
+<pre class="wide">@orders.body.data[0].customer.email      <i>single value</i>
+@orders.body.data[*].id                  <i>projection → list</i>
+@orders.body.data[?(total &gt; 500)].id     <i>filtered projection</i>
+@orders.headers["x-request-id"]          <i>bracket for odd keys</i>
+@orders.status                           <i>status code, typed int</i>
+{{base}}/orders/{{order.id}}             <i>interpolation, stringified at the edge</i></pre>
+  <div class="note"><strong>A missing path is an error, not a silent pass-through.</strong> The current resolver returns the literal text <code>{{a.b.c}}</code> when a lookup fails, so a typo becomes a request to a URL containing braces. The new resolver fails the step with the path, the value that was actually there, and the nearest valid key.</div>
+
+  <h3>Operator families</h3>
+  <div class="tw wide">
+    <table>
+      <thead><tr><th>Family</th><th>Functions</th><th>Works on</th></tr></thead>
+      <tbody>
+        <tr><td>Comparison</td><td><code>eq ne gt gte lt lte between in_ matches</code></td><td>scalar, list, column</td></tr>
+        <tr><td>Logical</td><td><code>and_ or_ not_ any_ all_ coalesce</code></td><td>scalar, list, column</td></tr>
+        <tr><td>Arithmetic</td><td><code>add sub mul div mod pow round abs</code></td><td>scalar, list, column</td></tr>
+        <tr><td>Aggregate</td><td><code>sum min max mean median count nunique</code></td><td>list, column, table</td></tr>
+        <tr><td>String</td><td><code>concat join split trim upper lower replace slice pad regex_extract</code></td><td>scalar, list, column</td></tr>
+        <tr><td>Collection</td><td><code>filter map sort_by dedupe unique reverse take skip flat chunk zip</code></td><td>list, table</td></tr>
+        <tr><td>Relational</td><td><code>join merge concat group_by agg pivot unpivot select drop rename</code></td><td>list of dicts, table</td></tr>
+        <tr><td>Shape</td><td><code>flatten explode nest to_table to_records schema</code></td><td>json, list, table</td></tr>
+        <tr><td>Temporal</td><td><code>now parse_date format_date date_add date_diff tz</code></td><td>scalar, column</td></tr>
+        <tr><td>Type</td><td><code>int_ float_ str_ bool_ json_ is_null default</code></td><td>anything</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p>Two safety properties: expressions are evaluated by our own parser over an allowlisted AST — never <code>eval()</code> — and every function is pure with respect to the value store, so caching and liveness analysis stay sound.</p>
+</section>
+
+<!-- ═══════════════ 08 ═══════════════ -->
+<section class="sec" id="s8">
+  <div class="eyebrow">08 — Functions</div>
+  <h2>Batteries that cover the analyst&rsquo;s whole day</h2>
+  <p>Built-ins ship in the wheel and need no registration. Your named example — flattened CSV with underscore-joined field names — is the default behaviour of <code>save_csv</code>, not a recipe:</p>
+
+<pre class="wide"><i># in  →  {"id": 7, "user": {"name": "Ada", "tags": ["x","y"]}, "ok": true}</i>
+save_csv(path="out.csv", flatten=<b>true</b>)
+<i># out →  id,user_name,user_tags,ok
+#         7,Ada,"[""x"",""y""]",true</i>
+
+<i># control the details when you need to</i>
+save_csv(path=..., flatten=<b>true</b>, sep=<b>"_"</b>, explode=[<b>"user.tags"</b>],
+         on_collision=<b>"suffix"</b>, columns=<b>"union"</b>, na=<b>""</b>)</pre>
+
+  <div class="tw wide">
+    <table>
+      <thead><tr><th>Group</th><th>Functions</th></tr></thead>
+      <tbody>
+        <tr><td>Write</td><td><code>save_csv save_json save_ndjson save_parquet save_excel save_sqlite</code></td></tr>
+        <tr><td>Read</td><td><code>read_csv read_json read_ndjson read_parquet read_excel read_sqlite glob_read</code></td></tr>
+        <tr><td>Convert</td><td><code>convert</code> — any read format to any write format, streaming where the backend allows</td></tr>
+        <tr><td>Shape</td><td><code>flatten explode normalize to_table infer_schema cast_schema</code></td></tr>
+        <tr><td>Combine</td><td><code>join merge concat dedupe sort_by group_agg pivot</code></td></tr>
+        <tr><td>HTTP helpers</td><td><code>paginate_all retry_with follow_links parse_link_header</code></td></tr>
+        <tr><td>Diagnostics</td><td><code>assert_schema assert_rowcount profile describe sample</code></td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3>The contract for a custom function</h3>
+  <p>Typed signature, no magic context dictionary, async-aware, and versioned — the version participates in the cache key so bumping it invalidates exactly the affected entries and nothing else.</p>
+<pre class="wide"><b>from</b> sclpl <b>import</b> function, Table
+
+<b>@function</b>(name=<b>"top_customers"</b>, version=2)
+<b>async def</b> top_customers(orders: Table, *, n: int = 10, by: str = <b>"total"</b>) -&gt; Table:
+    <i>"""Return the n highest-spending customers. Shown by `sclpl fn describe`."""</i>
+    <b>return</b> orders.group_by(<b>"customer_id"</b>).agg({by: <b>"sum"</b>}).sort_by(by, desc=<b>True</b>).take(n)</pre>
+  <p>Type hints are not decoration: they generate the JSON Schema for validation, the <code>--help</code> text, the shell completion, and the coercion rules that let a tier-1 user pass <code>"10"</code> from a JSON file into an <code>int</code> parameter.</p>
+</section>
+
+<!-- ═══════════════ 09 ═══════════════ -->
+<section class="sec" id="s9">
+  <div class="eyebrow">09 — Plugins</div>
+  <h2>Connectors without forking</h2>
+  <p>Plugins are ordinary installable Python distributions found through <code>importlib.metadata</code> entry points, plus a local <code>plugins/</code> directory for work in progress. A plugin may contribute six kinds of thing, and each becomes usable from JSON, SCLPLL, and the CLI at the same moment:</p>
+
+  <div class="tw wide">
+    <table>
+      <thead><tr><th>Contribution</th><th>Becomes</th><th>Example</th></tr></thead>
+      <tbody>
+        <tr><td>Connector</td><td>A step source or sink</td><td><code>postgres.query</code>, <code>s3.read</code>, <code>gsheet.append</code></td></tr>
+        <tr><td>Function</td><td>A callable name + overloads</td><td><code>geocode</code>, <code>sentiment</code></td></tr>
+        <tr><td>DSL verb</td><td>A SCLPLL keyword</td><td><code>scrape</code>, <code>query</code></td></tr>
+        <tr><td>Auth provider</td><td>An <code>auth:</code> mode</td><td><code>oauth2_device</code>, <code>aws_sigv4</code></td></tr>
+        <tr><td>Paginator</td><td>A <code>paginate.style</code></td><td><code>jira_startat</code>, <code>graphql_relay</code></td></tr>
+        <tr><td>Table backend</td><td>An <code>--engine</code> value</td><td><code>duckdb</code></td></tr>
+      </tbody>
+    </table>
+  </div>
+
+<pre class="wide"><i># sclpl_postgres/plugin.toml</i>
+[plugin]
+name = <em>"postgres"</em>
+version = <em>"1.2.0"</em>
+api = <em>"sclpl/1"</em>              <i># engine ABI it was built against</i>
+capabilities = [<em>"network"</em>, <em>"secrets:read"</em>]   <i># declared, prompted, recorded</i>
+
+[[connector]]
+name   = <em>"postgres.query"</em>
+schema = <em>"schemas/query.json"</em>   <i># JSON Schema → validation, --help, completion</i>
+lane   = <em>"thread"</em>               <i># optional; the engine infers this otherwise</i>
+</pre>
+
+  <p>Three properties make this maintainable rather than a plugin zoo:</p>
+  <ul>
+    <li><strong>Declared capabilities.</strong> A plugin states whether it touches the network, the filesystem, secrets, or subprocesses. <code>sclpl plugin list</code> shows them and <code>--deny-capability</code> enforces them. A scraper plugin cannot quietly read your secrets.</li>
+    <li><strong>Schema-first configuration.</strong> The JSON Schema is the single source for runtime validation, generated help, and editor completion, so a tier-1 user gets a precise error at <code>sclpl validate</code> time rather than a stack trace at hour two of a run.</li>
+    <li><strong>A pinned ABI.</strong> <code>api = "sclpl/1"</code> lets the runtime refuse a plugin built for an incompatible engine instead of failing deep inside a run.</li>
+  </ul>
+  <p><code>sclpl plugin scaffold my-thing</code> generates a working, tested, typed plugin with one connector and one function, so tier 3 starts from something that already passes CI.</p>
+
+  <h3>What ships in the box</h3>
+  <p>Three bundled plugins, chosen because they cover the overwhelming majority of &ldquo;get data in, get data out&rdquo; without adding a single dependency. Everything else — Postgres, DuckDB, S3, scrapers — lives outside the wheel and installs on demand.</p>
+
+  <div class="tw wide">
+    <table>
+      <thead><tr><th>Plugin</th><th>Provides</th><th class="num">Cost</th></tr></thead>
+      <tbody>
+        <tr><td><code>sqlite</code></td><td><code>sqlite.query</code>, <code>sqlite.write</code>, <code>sqlite.exec</code>, <code>sqlite.schema</code></td><td class="num">~150 lines, 0 new deps</td></tr>
+        <tr><td><code>fs</code></td><td><code>fs.read</code>, <code>fs.write</code>, <code>fs.glob</code>, <code>fs.watch</code> — local files as a source or sink</td><td class="num">~120 lines, 0 new deps</td></tr>
+        <tr><td><code>example</code></td><td>The scaffold template: one connector, one function, one paginator, full tests</td><td class="num">~90 lines, reference only</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p><strong>SQLite works out of the box</strong> because <code>aiosqlite</code> is already carrying the engine&rsquo;s own state and cache index — the plugin is a thin connector over a driver that is loaded anyway, which is exactly the kind of reuse the weight budget is asking for. It is a real plugin using only the public plugin API, so it doubles as the proof that the API is sufficient:</p>
+
+<pre class="wide"><i># using it — tier 1, no Python involved</i>
+{ "id": "customers", "use": "sqlite.query",
+  "with": { "db": "warehouse.db",
+            "sql": "select id, name, region from customers where active = :active",
+            "params": { "active": 1 } } }
+
+{ "id": "save", "needs": ["joined"], "use": "sqlite.write",
+  "with": { "db": "warehouse.db", "table": "orders_enriched",
+            "mode": "replace", "rows": "@joined" } }</pre>
+
+<pre class="wide"><i># implementing it — the whole read side of the plugin</i>
+<b>@connector</b>(<b>"sqlite.query"</b>, lane=<b>"thread"</b>, capabilities=[<b>"fs:read"</b>])
+<b>async def</b> query(db: Path, sql: str, params: dict | <b>None</b> = <b>None</b>) -&gt; Table:
+    <i>"""Run a SELECT and return the rows as a table."""</i>
+    <b>async with</b> aiosqlite.connect(db) <b>as</b> con:
+        con.row_factory = aiosqlite.Row
+        <b>async with</b> con.execute(sql, params <b>or</b> {}) <b>as</b> cur:
+            <b>return</b> to_table([<b>dict</b>(r) <b>async for</b> r <b>in</b> cur])</pre>
+
+  <p>Note what is absent: no connection-string parser, no dialect layer, no query builder. The parameter names become the JSON Schema, the <code>Table</code> return type puts it straight into the operator dispatch, and the declared lane tells the scheduler to keep the blocking driver off the event loop. That is the shape every plugin should have.</p>
+</section>
+
+<!-- ═══════════════ 10 ═══════════════ -->
+<section class="sec" id="s10">
+  <div class="eyebrow">10 — Scheduling &amp; concurrency</div>
+  <h2>Dependencies pull work forward</h2>
+  <p>This is the core of what you described: <em>if a step&rsquo;s dependencies are available it should start immediately, sharing whatever limits are free.</em> Below is the same seven-step graph under both schedulers. The current wave scheduler idles workers at every barrier; the ready-queue scheduler finishes in the length of the critical path, which is the theoretical floor.</p>
+
+  <div class="full" style="display:grid;gap:14px;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));">
+    <div class="gantt">
+      <h4>Wave scheduler <span class="t">today · 7 units</span></h4>
+      <div class="grid">
+        <span class="lbl">A</span><span class="b" style="grid-column:2/span 1">1</span><span class="idle" style="grid-column:3/span 2"></span><span class="track" style="grid-column:5/-1"></span>
+        <span class="lbl">B</span><span class="b" style="grid-column:2/span 3">3</span><span class="track" style="grid-column:5/-1"></span>
+        <span class="lbl">C</span><span class="b" style="grid-column:2/span 1">1</span><span class="idle" style="grid-column:3/span 2"></span><span class="track" style="grid-column:5/-1"></span>
+        <span class="lbl">D ← A</span><span class="track" style="grid-column:2/span 3"></span><span class="b" style="grid-column:5/span 2">2</span><span class="idle" style="grid-column:7/span 1"></span><span class="track" style="grid-column:8/-1"></span>
+        <span class="lbl">E ← B</span><span class="track" style="grid-column:2/span 3"></span><span class="b" style="grid-column:5/span 1">1</span><span class="idle" style="grid-column:6/span 2"></span><span class="track" style="grid-column:8/-1"></span>
+        <span class="lbl">F ← C</span><span class="track" style="grid-column:2/span 3"></span><span class="b" style="grid-column:5/span 3">3</span><span class="track" style="grid-column:8/-1"></span>
+        <span class="lbl">G ← DEF</span><span class="track" style="grid-column:2/span 6"></span><span class="b" style="grid-column:8/span 1">1</span>
+        <div class="axis"><span>0</span><span>1</span><span>2</span><span>3</span><span>4</span><span>5</span><span>6</span></div>
+      </div>
+    </div>
+    <div class="gantt">
+      <h4>Ready-queue scheduler <span class="t">new · 5 units</span></h4>
+      <div class="grid">
+        <span class="lbl">A</span><span class="b" style="grid-column:2/span 1">1</span><span class="track" style="grid-column:3/-1"></span>
+        <span class="lbl">B</span><span class="b crit" style="grid-column:2/span 3">3</span><span class="track" style="grid-column:5/-1"></span>
+        <span class="lbl">C</span><span class="b" style="grid-column:2/span 1">1</span><span class="track" style="grid-column:3/-1"></span>
+        <span class="lbl">D ← A</span><span class="track" style="grid-column:2/span 1"></span><span class="b" style="grid-column:3/span 2">2</span><span class="track" style="grid-column:5/-1"></span>
+        <span class="lbl">E ← B</span><span class="track" style="grid-column:2/span 3"></span><span class="b crit" style="grid-column:5/span 1">1</span><span class="track" style="grid-column:6/-1"></span>
+        <span class="lbl">F ← C</span><span class="track" style="grid-column:2/span 1"></span><span class="b" style="grid-column:3/span 3">3</span><span class="track" style="grid-column:6/-1"></span>
+        <span class="lbl">G ← DEF</span><span class="track" style="grid-column:2/span 4"></span><span class="b crit" style="grid-column:6/span 1">1</span><span class="track" style="grid-column:7/-1"></span>
+        <div class="axis"><span>0</span><span>1</span><span>2</span><span>3</span><span>4</span><span>5</span><span>6</span></div>
+      </div>
+    </div>
+    <div class="legend" style="grid-column:1/-1;">
+      <span><i style="background:var(--accent)"></i>step executing</span>
+      <span><i style="background:var(--signal)"></i>critical path (B→E→G = 5)</span>
+      <span><i style="background:var(--warn-soft);border:1px dashed var(--warn)"></i>worker idle at a barrier</span>
+    </div>
+  </div>
+
+  <h3>How it works</h3>
+  <ul>
+    <li><strong>Ready queue, not waves.</strong> Each node carries an unmet-dependency count. On completion the scheduler decrements its dependents and pushes any that hit zero — immediately, mid-flight.</li>
+    <li><strong>Critical-path priority.</strong> The queue is a heap ordered by longest remaining path, so the step that gates the most downstream work starts first when capacity is scarce. That is the difference between 5 units and 6 on the graph above.</li>
+    <li><strong>Layered semaphores.</strong> Global → per-host → per-tag, acquired in a fixed global order so the arrangement cannot deadlock. Fan-out from <code>foreach</code> injects nodes into the <em>same</em> graph, so a thousand-item loop shares the same limits instead of spawning a thousand unbounded tasks.</li>
+    <li><strong>Adaptive concurrency.</strong> An AIMD controller per host raises concurrency while latency is flat and backs off on 429/503 or a rising p95 — honouring <code>Retry-After</code> exactly. Static caps remain available for the analyst who just wants <code>--concurrency 4</code>.</li>
+    <li><strong>Cancellation is structured.</strong> <code>asyncio.TaskGroup</code> throughout; first <kbd>Ctrl-C</kbd> drains in-flight work and writes partial results, second aborts. <code>--keep-going</code> continues independent branches after a failure.</li>
+  </ul>
+
+  <h3>Lanes: threads and processes chosen for you</h3>
+  <p>You asked that speed, handoff, and threads or processes be handled automatically. The planner classifies every step and assigns it a lane; nothing in the workflow file mentions a thread. A step&rsquo;s lane is visible in <code>sclpl explain</code> and overridable with <code>"lane": …</code>, but the default should be right often enough that nobody bothers.</p>
+
+  <div class="lanes wide">
+    <div class="lane"><div class="lt">async</div><p><b>HTTP, sockets, file reads.</b> Runs on the event loop. Thousands concurrent, bounded only by the semaphores.</p></div>
+    <div class="lane"><div class="lt">thread</div><p><b>Blocking sync code</b> — a plugin using <code>requests</code> or a DB driver. Offloaded to a thread pool so it cannot stall the loop.</p></div>
+    <div class="lane"><div class="lt">process</div><p><b>CPU-bound work</b> — large joins, parsing, compression. A process pool sized to the core count sidesteps the GIL.</p></div>
+    <div class="lane"><div class="lt">serial</div><p><b>Memory-heavy steps.</b> Admitted one at a time under memory pressure, with spilling preferred over eviction.</p></div>
+  </div>
+
+  <p>Classification uses three signals, in order: an explicit <code>lane</code> in the step or plugin manifest; the function&rsquo;s own signature (an <code>async def</code> is async, a plain <code>def</code> touching a Table is a process candidate); and measured statistics from previous runs of the same workflow, kept in run history — so a step that has consistently burned four seconds of CPU is scheduled to the process pool the next time without anyone configuring it.</p>
+
+  <h4>Workers</h4>
+  <p>One worker abstraction serves all four lanes, which is what keeps this a few hundred lines rather than a framework. A worker is a loop that pulls the next ready node, acquires its semaphores, dispatches it to its lane, publishes the result, and wakes the dependents. The lane decides only <em>where the call happens</em> — on the loop, in <code>run_in_executor</code> against the thread pool, or in the process pool — never how the work is tracked.</p>
+  <ul>
+    <li><strong>Async workers</strong> scale with the concurrency limit, not the core count; they are cheap tasks, so <code>--concurrency 200</code> is reasonable for a slow API.</li>
+    <li><strong>The thread pool</strong> defaults to 32 and exists to quarantine blocking code. A badly behaved plugin stalls its own thread and nothing else.</li>
+    <li><strong>The process pool</strong> is created lazily on the first process-lane step and sized to the core count, so a pipeline that never needs it never pays the fork cost.</li>
+    <li><strong>Every worker is cancellable</strong> and every pool is drained in a <code>finally</code>, which is what makes <kbd>Ctrl-C</kbd> leave no orphans and no half-written output files.</li>
+    <li><strong>Back-pressure is shared.</strong> Because all lanes admit through the same semaphore stack, the resource governor can slow the entire run by lowering one number.</li>
+  </ul>
+
+  <h4>Handoff across a lane boundary</h4>
+  <p>Moving a value between the loop and a process is where naive engines lose all their speed to pickling. The engine picks the cheapest transfer available for the value it actually holds:</p>
+  <div class="tw wide">
+    <table>
+      <thead><tr><th>Value</th><th>Transfer</th><th>Cost</th></tr></thead>
+      <tbody>
+        <tr><td>Small object (&lt; 1 MB)</td><td>pickle through the pool queue</td><td>negligible</td></tr>
+        <tr><td>Table (pandas / polars)</td><td>Arrow IPC over shared memory, zero-copy</td><td>no serialization of the payload</td></tr>
+        <tr><td>Already spilled value</td><td>pass the scratch path; the worker reads it directly</td><td>no transfer at all</td></tr>
+        <tr><td>Large object, not tabular</td><td>spill first, then pass the path</td><td>one write, one read</td></tr>
+        <tr><td>Same-lane consumer</td><td>reference passed in-process</td><td>zero</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p>This is the reason spilling (section 11) and lane assignment are designed together: once a value is on disk, crossing a process boundary becomes free, so memory pressure and parallelism stop being opposed goals.</p>
+
+  <div class="tw wide">
+    <table>
+      <thead><tr><th>Knob</th><th>Workflow key</th><th>CLI flag</th><th>Default</th></tr></thead>
+      <tbody>
+        <tr><td>Total in-flight steps</td><td><code>limits.concurrency</code></td><td><code>--concurrency</code></td><td class="num">16</td></tr>
+        <tr><td>Per-host requests</td><td><code>limits.per_host</code></td><td><code>--host-concurrency</code></td><td class="num">6</td></tr>
+        <tr><td>Pooled connections</td><td><code>limits.connections</code></td><td><code>--connections</code></td><td class="num">100</td></tr>
+        <tr><td>Keep-alive idle</td><td><code>limits.keepalive_s</code></td><td><code>--keepalive</code></td><td class="num">30s</td></tr>
+        <tr><td>Worker processes</td><td><code>limits.processes</code></td><td><code>--processes</code></td><td>cpu_count</td></tr>
+        <tr><td>Worker threads</td><td><code>limits.threads</code></td><td><code>--threads</code></td><td class="num">32</td></tr>
+        <tr><td>Adaptive control</td><td><code>limits.adaptive</code></td><td><code>--adaptive / --no-adaptive</code></td><td>on</td></tr>
+        <tr><td>Request timeout</td><td><code>timeout</code></td><td><code>--timeout</code></td><td class="num">30s</td></tr>
+        <tr><td>Retries + backoff</td><td><code>retry.{max,backoff,jitter}</code></td><td><code>--retries</code></td><td>3, exp, full</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- ═══════════════ 11 ═══════════════ -->
+<section class="sec" id="s11">
+  <div class="eyebrow">11 — Memory &amp; caching</div>
+  <h2>Memory should never be the reason a run dies</h2>
+  <p>Four mechanisms, in the order they engage.</p>
+
+  <h3>1 · Liveness analysis — automatic disposal</h3>
+  <p>You asked for values to be discarded once nothing downstream needs them. Because the DAG is known at compile time — after mode pruning, so a partial run frees more, sooner — the planner computes the <em>last consumer</em> of every value and attaches a release point to it. When a step finishes, the store decrements a reference count on each of its inputs; at zero the value is freed and any spill file is deleted. Values marked <code>keep</code>, or bound to an output port, are pinned.</p>
+  <div class="note">Honest limitation: inside <code>while</code> and <code>foreach</code> bodies, liveness must be conservative — a value referenced anywhere in a loop body stays live until the loop exits. <code>sclpl explain --memory</code> prints the computed release points so this is inspectable rather than mysterious, and <code>--keep-all</code> disables disposal for debugging.</div>
+
+  <h3>2 · Spill to disk</h3>
+  <p>Values above a threshold (default 64 MB) are written to the run&rsquo;s scratch directory — Parquet for tables, pickle for arbitrary objects — and replaced in memory by a <code>ValueRef</code> that rehydrates on access. Steps never know the difference, and as section 10 notes, a spilled value crosses a process boundary for free. Scratch is cleaned on exit and reclaimable with <code>sclpl cache prune</code>.</p>
+
+  <h3>3 · Resource governor</h3>
+  <p>A sampler watches process RSS, system available memory, and open file descriptors. At the soft watermark (70% of budget) it stops admitting new steps and prefers spilling; at the hard watermark (85%) it reduces concurrency and warns in the status line with the actual numbers. The budget defaults to a share of system memory and is settable with <code>--memory-budget 4G</code>. The goal is that a run degrades to slower rather than dying.</p>
+
+  <h3>4 · Content-addressed cache</h3>
+  <p>Heavy caching that cannot serve a wrong answer, because the key is derived from everything that could change the result:</p>
+<pre class="wide">key = sha256(
+    step_kind, method, resolved_url, sorted_query, body_digest,
+    headers_minus_volatile, function_name, function_version,
+    input_value_digests, plugin_version, engine_version,
+    credential_identity_salt        <i># hash of the credential, never the credential</i>
+)</pre>
+  <p>The key deliberately excludes the mode, so a <code>partial</code> run and a later <code>full</code> run share every step they have in common — which is what makes &ldquo;run partial all day, full once at night&rdquo; cheap.</p>
+  <div class="tw wide">
+    <table>
+      <thead><tr><th>Flag</th><th>Read cache</th><th>Write cache</th><th>Use for</th></tr></thead>
+      <tbody>
+        <tr><td>default</td><td>yes</td><td>yes</td><td>Normal development loops</td></tr>
+        <tr><td><code>--refresh</code></td><td>no</td><td>yes</td><td>Force fresh data, keep it for next time</td></tr>
+        <tr><td><code>--no-cache</code></td><td>no</td><td>no</td><td>Auditable production run</td></tr>
+        <tr><td><code>--offline</code></td><td>only</td><td>no</td><td>Rerun on a plane; a miss is an error</td></tr>
+        <tr><td><code>--http-cache</code></td><td>revalidate</td><td>yes</td><td>Honour ETag / Last-Modified; 304 counts as a hit</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p>Storage is a blob directory plus a SQLite index with TTL, a size cap, and LRU eviction. <code>sclpl cache stats</code> reports hit rate, bytes, and the ten largest entries.</p>
+</section>
+
+<!-- ═══════════════ 12 ═══════════════ -->
+<section class="sec" id="s12">
+  <div class="eyebrow">12 — Pagination &amp; control flow</div>
+  <h2>Paging is declarative; loops are graph nodes</h2>
+  <p>Pagination is the single most common reason an analyst gives up on a tool, so it is a first-class field rather than a hand-written loop. Pages stream into the scheduler as they arrive, so downstream steps can begin on page one while page nine is still in flight.</p>
+
+  <div class="tw wide">
+    <table>
+      <thead><tr><th>Style</th><th>Configuration</th><th>Typical API</th></tr></thead>
+      <tbody>
+        <tr><td><code>cursor</code></td><td><code>cursor: body.next_cursor</code></td><td>Stripe, Slack</td></tr>
+        <tr><td><code>page</code></td><td><code>param: page, size: 100, until: empty</code></td><td>Generic REST</td></tr>
+        <tr><td><code>offset</code></td><td><code>param: offset, step: 50, total: body.total</code></td><td>Jira, SQL-backed</td></tr>
+        <tr><td><code>link_header</code></td><td><code>rel: next</code> (RFC 5988)</td><td>GitHub</td></tr>
+        <tr><td><code>token</code></td><td><code>token: body.nextPageToken</code></td><td>Google APIs</td></tr>
+        <tr><td><code>custom</code></td><td>plugin-provided paginator</td><td>anything else</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p>Every style accepts <code>into</code> (the path to the item array), <code>max_pages</code>, <code>stop_when</code> (a predicate), and <code>concurrent</code> for APIs where page count is known up front and pages can be fetched in parallel. A mode can cap <code>max_pages</code> globally, which is how <code>smoke</code> runs the real pipeline against one page of everything.</p>
+
+  <h3>Loops and branches</h3>
+<pre class="wide">{ "id": "per_region", "foreach": {
+    "over": "@regions.body.data[*].code", "as": "region",
+    "max_parallel": 4,
+    "body": [ { "id": "sales", "http": { "get": "{{base}}/sales?region={{region}}" } } ] } }
+
+{ "id": "poll", "do_while": {
+    "body":  [ { "id": "job", "http": { "get": "{{base}}/jobs/{{job_id}}" } } ],
+    "while": "@job.body.state in ['queued','running']",
+    "delay": "backoff(2s, max=60s)", "max_iterations": 100 } }</pre>
+  <p>Loop bodies are compiled subgraphs injected into the parent DAG at runtime, which is why a <code>foreach</code> over 5,000 regions obeys the same global concurrency ceiling as everything else and shows up as one aggregate progress line rather than 5,000.</p>
+</section>
+
+<!-- ═══════════════ 13 ═══════════════ -->
+<section class="sec" id="s13">
+  <div class="eyebrow">13 — The view</div>
+  <h2>An <code>apt</code>-grade live region</h2>
+  <p class="lede">You were specific about this, so here is the mechanism rather than a promise. <code>apt</code> keeps its bar pinned while log lines scroll above it by setting the terminal&rsquo;s scroll region with DECSTBM — <code>ESC[1;{rows-k}r</code> — reserving the bottom <em>k</em> lines. Ordinary output scrolls inside the region above; the reserved lines are repainted in place with cursor-save and cursor-restore.</p>
+  <p><strong>We write those bytes ourselves rather than taking Rich.</strong> This is the one place the reuse rule in section 04 is deliberately overridden, and the reason is that a pinned live region is the single most breakable thing in the product: a general-purpose renderer that assumes one writer will tear frames the moment a worker pool writes underneath it, and when it breaks it breaks in someone else&rsquo;s terminal where we cannot debug it. Owning the escape sequences costs about 250 lines and buys byte-exact snapshot tests, one failure model, and no dependency in the hot path.</p>
+
+  <h3>What &ldquo;break-proof&rdquo; actually means here</h3>
+  <ul>
+    <li><strong>One writer, always.</strong> Exactly one task owns the handle to stderr; every worker, plugin, and log record arrives as an event on a queue. Nothing else may write. This alone removes the entire class of interleaved and torn output that makes live regions look unreliable.</li>
+    <li><strong>Probe once at startup, never re-probe.</strong> <code>isatty</code>, <code>TERM</code>, <code>COLORTERM</code>, <code>NO_COLOR</code>, <code>CI</code>, and on Windows an explicit <code>ENABLE_VIRTUAL_TERMINAL_PROCESSING</code> call — if enabling VT fails, we are in plain mode for the whole run. The renderer never changes its mind halfway through.</li>
+    <li><strong>A ladder that only goes down.</strong> <em>full</em> (scroll region, colour, Unicode) → <em>simple</em> (repaint the last k lines with carriage return and erase-line, no scroll region) → <em>plain</em> (one line per event, no cursor movement). Any write error, unsupported sequence, or encoding failure drops a rung permanently. It never climbs back up.</li>
+    <li><strong>Nothing ever wraps.</strong> Every line is measured and truncated to the terminal width before it is written, because a wrapped line inside a pinned region is what corrupts the display. Width comes from <code>os.get_terminal_size</code> with an 80×24 fallback, re-measured on <code>SIGWINCH</code>.</li>
+    <li><strong>Glyphs are probed, not assumed.</strong> The spinner and box characters are encoded against the stream encoding at startup; on failure the renderer swaps to an ASCII set. Windows code pages are the usual culprit and the usual source of mojibake.</li>
+    <li><strong>Restoration is guaranteed three ways.</strong> Reset of the scroll region and cursor happens in a <code>finally</code>, in an <code>atexit</code> hook, and in the <code>SIGINT</code>/<code>SIGTERM</code> handlers. The reset is idempotent, so running all three is harmless — and the terminal is never left broken, which is the failure users actually remember.</li>
+    <li><strong>Bounded repaint.</strong> Frames are coalesced and capped at 10 Hz regardless of event volume, so a fast pipeline cannot flood a slow terminal, and output over SSH stays usable.</li>
+    <li><strong>Subprocesses are quarantined.</strong> Child processes inherit <code>SCLPL_RENDER=plain</code> and their output is captured and re-emitted through the same queue, so a plugin shelling out cannot write into the region.</li>
+    <li><strong>Escape hatches that always work.</strong> <code>--plain</code> forces the bottom rung; <code>SCLPL_RENDER=plain|simple|full</code> pins a level for an environment we guessed wrong about. Neither requires a code change to unblock someone.</li>
+  </ul>
+  <p>The test harness runs the renderer against a real pty and asserts the emitted byte sequence against golden snapshots at each rung, plus a fuzz test that resizes and interrupts mid-run and asserts the terminal state is fully restored. If a terminal is not on that list, the ladder puts it on plain lines rather than guessing — a boring, correct fallback is the whole point.</p>
+
+  <div class="term full">
+    <div class="chrome"><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="ttl">sclpl orders partial customers.csv report.csv</span></div>
+    <div class="body">
+<pre><span class="dim">▸</span> orders <span class="acc">v3</span> <span class="dim">· mode</span> <span class="acc">partial</span> <span class="dim">· 12 of 20 steps · 4 hosts · critical path 6</span>
+<span class="ok">✔</span> auth.token         <span class="dim">200</span>  <span class="acc">cached</span>            <span class="dim">   2ms</span>
+<span class="ok">✔</span> regions.fetch      <span class="dim">200</span>  <span class="dim">14 rows</span>            <span class="dim"> 121ms</span>
+<span class="ok">✔</span> orders.fetch       <span class="dim">200</span>  <span class="dim">3 pages · 8,412 rows</span> <span class="dim">1.24s</span>
+<span class="ok">✔</span> customers.load     <span class="dim">csv</span>  <span class="dim">1,905 rows</span>         <span class="dim">  38ms</span>
+<span class="wr">⚠</span> inventory.fetch    <span class="wr">429</span>  <span class="dim">retry 2/3 in 1.6s</span>
+<span class="ok">✔</span> orders.join        <span class="dim">left join on customer_id → 8,412 rows</span>  <span class="dim">[process]</span>
+<span class="dim">  ↳ freed @customers.body (18.4 MB) — no downstream reader</span>
+<span class="dim">  ↳ skipped enrich_geo, report_pdf, publish_s3 — not in mode partial</span></pre>
+      <div class="live">
+<pre><span class="run pulse"></span> <span class="run">inventory.fetch</span>   <span class="dim">page 4/9</span>      <span class="dim">▸ 2.1s</span>
+<span class="run pulse"></span> <span class="run">orders.enrich</span>     <span class="dim">geocode 3,180/8,412</span>
+<span class="dim">──────────────────────────────────────────────────────────</span>
+<span class="acc">orders</span>  <span class="bar"><span></span></span>  <span class="ok">73%</span>  <span class="dim">9/12</span>   <span class="dim">http 6/16 · mem 412M/4G · cache 62% · 00:41</span><span class="caret"></span></pre>
+      </div>
+    </div>
+  </div>
+
+  <p>What the live region shows, and why each part earns its space: the in-flight steps (so a stall is visible), an aggregate bar counting only the steps this mode will actually run, and a single instrument line — concurrency in use, memory against budget, cache hit rate, elapsed. Freed values and mode-skipped steps are logged so the automatic behaviour in sections 06 and 11 is observable rather than mysterious.</p>
+
+  <h3>Degradation is a matrix, not an afterthought</h3>
+  <div class="tw wide">
+    <table>
+      <thead><tr><th>Condition</th><th>Detection</th><th>Behaviour</th></tr></thead>
+      <tbody>
+        <tr><td>Interactive TTY</td><td><code>isatty(2)</code></td><td>Full live region, colour, spinners</td></tr>
+        <tr><td>Piped or redirected</td><td>not a TTY</td><td>One line per event, no ANSI, no repaint</td></tr>
+        <tr><td>CI</td><td><code>CI</code> env var</td><td>Plain lines + heartbeat every 30s so logs do not look hung</td></tr>
+        <tr><td><code>NO_COLOR</code> set</td><td>env var</td><td>Structure kept, colour dropped</td></tr>
+        <tr><td><code>TERM=dumb</code></td><td>env var</td><td>Plain lines only</td></tr>
+        <tr><td>Narrow terminal</td><td>width &lt; 60</td><td>Bar shrinks, then columns drop right to left</td></tr>
+        <tr><td>Window resized</td><td><code>SIGWINCH</code></td><td>Re-measure, reset scroll region, repaint</td></tr>
+        <tr><td>Interrupted</td><td><code>SIGINT</code>/<code>SIGTERM</code></td><td>Restore scroll region, show cursor, print partial summary</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p>That last row matters more than it looks: a tool that leaves your terminal with a broken scroll region after <kbd>Ctrl-C</kbd> feels broken forever after. Restoring <code>ESC[r</code> and the cursor happens in a <code>finally</code> and is covered by a test.</p>
+
+  <h3>Verbosity and logging</h3>
+  <div class="tw wide">
+    <table>
+      <thead><tr><th>Level</th><th>Flag</th><th>Shows</th></tr></thead>
+      <tbody>
+        <tr><td>Silent</td><td><code>-qq</code></td><td>Nothing but the exit code</td></tr>
+        <tr><td>Quiet</td><td><code>-q</code></td><td>Errors and the final summary</td></tr>
+        <tr><td>Normal</td><td>default</td><td>One line per step + live region</td></tr>
+        <tr><td>Verbose</td><td><code>-v</code></td><td>Timings, cache hits/misses, retry reasons, lanes, freed values</td></tr>
+        <tr><td>Debug</td><td><code>-vv</code></td><td>Resolved variables, request/response headers <em>(secrets redacted)</em></td></tr>
+        <tr><td>Trace</td><td><code>-vvv</code></td><td>Bodies (truncated), scheduler admissions, semaphore waits</td></tr>
+        <tr><td>Machine</td><td><code>--json</code></td><td>NDJSON events on stderr; human view suppressed</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p>The same event stream feeds all of them — the sink differs, never the semantics. Independently: <code>--log-file run.log</code>, <code>--log-level</code>, <code>--log-format json|text</code>, size-based rotation, and redaction applied in the reporter so a secret cannot reach a log file even at trace level.</p>
+</section>
+
+<!-- ═══════════════ 14 ═══════════════ -->
+<section class="sec" id="s14">
+  <div class="eyebrow">14 — CLI surface</div>
+  <h2>Verbs an analyst can guess</h2>
+<pre class="wide"><b>sclpl</b> &lt;workflow&gt; [mode] [inputs…] [outputs…]     <i>shorthand — resolves to `run`</i>
+<b>sclpl run</b> &lt;workflow&gt;                            <i>explicit form for scripts and CI</i>
+    --mode partial            --in name=path   --out name=path
+    --env prod  --var k=v     --set steps.big.where='row.total &gt; 900'
+    --concurrency N  --host-concurrency N  --processes N  --threads N
+    --timeout 30s  --retries 3   --memory-budget 4G
+    --no-cache | --refresh | --offline | --http-cache
+    --from STEP  --only STEP…  --skip STEP…   --dry-run  --keep-going
+    --format csv|json|ndjson|parquet|xlsx|table
+    -q | -v | -vv | -vvv | --json | --no-color | --log-file run.log
+
+<b>sclpl import</b> &lt;file|dir|url&gt; [--as name] [--project] [--recursive]
+<b>sclpl list</b>                        <i>registered workflows: name, version, modes, ports</i>
+<b>sclpl show</b> &lt;workflow&gt;             <i>definition, mode matrix, declared ports</i>
+<b>sclpl remove</b> &lt;workflow&gt; [--version N]
+
+<b>sclpl validate</b> &lt;workflow&gt; [--mode M]   <i>parse, typecheck, resolve refs — zero I/O</i>
+<b>sclpl explain</b>  &lt;workflow&gt; [--mode M]   <i>pruned DAG, critical path, lanes, release points</i>
+<b>sclpl fmt</b>      &lt;workflow&gt;              <i>canonical formatting, in place</i>
+<b>sclpl convert</b>  a.json b.sclpll          <i>lossless either direction</i>
+
+<b>sclpl call</b> GET https://api.io/users -H 'A: B' -q page=2   <i>one-off, curl mode</i>
+
+<b>sclpl env</b>     list | use | set | unset | show
+<b>sclpl secret</b>  set | rm | list | rotate          <i>never prints a value</i>
+<b>sclpl fn</b>      list | describe | run
+<b>sclpl plugin</b>  list | install | describe | scaffold | enable | disable
+<b>sclpl data</b>    convert | flatten | head | schema | profile   <i>standalone table tools</i>
+<b>sclpl cache</b>   stats | prune | clear
+<b>sclpl runs</b>    list | show | diff | replay | export
+<b>sclpl doctor</b>                          <i>deps, permissions, resources, connectivity</i>
+<b>sclpl completion</b> bash|zsh|fish|powershell</pre>
+  <p>Three of these are disproportionately valuable to a nervous first-time user: <code>validate</code> (catches typos with no network calls), <code>explain</code> (shows the pruned plan before committing to it), and <code>doctor</code> (answers &ldquo;is it me or is it the tool?&rdquo;). <code>runs diff</code> — comparing two runs of the same pipeline — replaces the deleted TUI diff viewer and is more useful on the command line than it was in a widget.</p>
+  <p>Exit codes are stable and scriptable: <code>0</code> success · <code>1</code> step failure · <code>2</code> usage error · <code>3</code> validation failure · <code>4</code> assertion failure · <code>5</code> cache miss under <code>--offline</code> · <code>6</code> unknown workflow or mode · <code>130</code> interrupted.</p>
+</section>
+
+<!-- ═══════════════ 15 ═══════════════ -->
+<section class="sec" id="s15">
+  <div class="eyebrow">15 — Docs &amp; playbooks</div>
+  <h2>Rewritten from zero, and mostly generated</h2>
+  <p class="lede">Every existing document describes a Textual TUI or a Vue studio that is about to stop existing, so none of it survives. The replacement is deliberately small — and the largest part of it is generated from the code, because hand-written reference documentation is a promise to keep it up to date that nobody keeps.</p>
+
+<pre class="wide"><b>README.md</b>                  <i>install → first pipeline in ten minutes. Nothing else.</i>
+<b>docs/</b>
+  <b>playbooks/</b>
+    analyst.md            <i>run workflows, bind files, pick a mode, read a failure</i>
+    pipelines.md          <i>author workflows: steps, refs, modes, pagination, joins</i>
+    extending.md          <i>write functions, plugins, connectors, table backends</i>
+    operating.md          <i>concurrency, caching, memory, logging, CI</i>
+  <b>reference/</b>             <i>── generated; never hand-edited ──</i>
+    cli.md                <i>← from the Typer command tree</i>
+    functions.md          <i>← from the function registry + type hints</i>
+    workflow-schema.md    <i>← from the pydantic IR models</i>
+    expressions.md        <i>← from the operator dispatch table</i>
+    plugins.md            <i>← from each plugin manifest + JSON Schema</i>
+  <b>concepts.md</b>             <i>the DAG, values, lanes, modes — the mental model, once</i>
+  <b>adr/</b>                    <i>one short file per decision that was hard</i>
+  <b>HANDOFF.md</b>              <i>current state, next task, invariants — for an agent or a new dev</i></pre>
+
+  <p>Four properties, each of which is a rule rather than an aspiration:</p>
+  <ul>
+    <li><strong>Generated reference cannot drift.</strong> <code>sclpl docs build</code> walks the Typer tree, the function registry, the pydantic models, and the plugin manifests, and writes <code>docs/reference/</code>. CI regenerates and fails on a diff — so adding a function or a flag updates its documentation or breaks the build.</li>
+    <li><strong>Every example is a test.</strong> The workflows quoted in the playbooks live in <code>examples/</code> and run in CI against a local mock server. A snippet that stops working stops the build, which is the only way examples stay honest.</li>
+    <li><strong>One concept explained once.</strong> The DAG, the value store, lanes, and modes are described in <code>concepts.md</code> and referenced everywhere else. The current repository explains the workflow engine in four documents that already disagree.</li>
+    <li><strong>The <code>--help</code> is the documentation</strong> for anything a person needs mid-task. Docs cover what help text cannot: why, and what to do when it goes wrong.</li>
+  </ul>
+
+  <h3>Playbooks map to the three tiers</h3>
+  <div class="tw wide">
+    <table>
+      <thead><tr><th>Playbook</th><th>Reader</th><th>Answers</th><th class="num">Target</th></tr></thead>
+      <tbody>
+        <tr><td><code>analyst.md</code></td><td>Tier 1</td><td>How do I run someone&rsquo;s pipeline on my file, in partial mode, and find the output?</td><td class="num">~4 pages</td></tr>
+        <tr><td><code>pipelines.md</code></td><td>Tier 1 → 2</td><td>How do I author one: steps, references, joins, pagination, modes, ports?</td><td class="num">~10 pages</td></tr>
+        <tr><td><code>extending.md</code></td><td>Tier 3</td><td>How do I add a function, a connector, an operator overload, a paginator?</td><td class="num">~8 pages</td></tr>
+        <tr><td><code>operating.md</code></td><td>Tier 2 → 3</td><td>How do I make it fast, cheap, observable, and safe in CI?</td><td class="num">~6 pages</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p>Each playbook opens with a complete worked example and adds one idea at a time, and each ends with the failures that reader will actually hit — a pruned dependency, a rate limit, a memory warning, a plugin capability denial — with the exact command that resolves each. <code>HANDOFF.md</code> is the twin of this document: it records where the work stands, what the next milestone is, and the invariants a contributor must not break, so an agent or a new engineer can pick the work up without reading this plan end to end.</p>
+</section>
+
+<!-- ═══════════════ 16 ═══════════════ -->
+<section class="sec" id="s16">
+  <div class="eyebrow">16 — What gets deleted</div>
+  <h2>~33,600 lines out, ~8,000 reworked</h2>
+  <p>The baseline commit on <code>main</code> preserves all of it, so nothing is unrecoverable — but this branch does not keep a TUI on life support.</p>
+
+  <div class="tw wide">
+    <table>
+      <thead><tr><th>Path</th><th class="num">Lines</th><th>Fate</th></tr></thead>
+      <tbody>
+        <tr><td><code>web/</code> — Vue SPA</td><td class="num">15,746</td><td>Delete</td></tr>
+        <tr><td><code>app/ui/</code> — Textual TUI, screens, widgets</td><td class="num">8,171</td><td>Delete; CLI rewritten from scratch</td></tr>
+        <tr><td><code>app/web/</code> — FastAPI, SSE, DTOs</td><td class="num">4,380</td><td>Delete</td></tr>
+        <tr><td><code>tests/test_web*.py</code>, <code>*_api.py</code></td><td class="num">3,024</td><td>Delete</td></tr>
+        <tr><td><code>tests/test_tui*.py</code></td><td class="num">2,311</td><td>Delete</td></tr>
+        <tr><td><code>docs/plan/</code> — web studio spec</td><td class="num">—</td><td>Archive under <code>docs/attic/</code></td></tr>
+        <tr><td><code>app/core/engine/sclpll_compiler.py</code></td><td class="num">~450</td><td><strong>Keep</strong> — extend grammar, keep round-trip tests</td></tr>
+        <tr><td><code>app/core/engine/{workflow,parallel_workflow}.py</code></td><td class="num">~700</td><td>Replace with the ready-queue scheduler</td></tr>
+        <tr><td><code>app/core/engine/variable_resolver.py</code></td><td class="num">~90</td><td>Replace with the typed path resolver</td></tr>
+        <tr><td><code>app/services/request_executor.py</code></td><td class="num">~180</td><td>Rewrite around a pooled client</td></tr>
+        <tr><td><code>app/services/{export,batch,function}*.py</code></td><td class="num">~1,200</td><td>Fold into built-in functions</td></tr>
+        <tr><td><code>app/storage/</code> + migrations</td><td class="num">808</td><td><strong>Keep</strong> — add catalogue + cache index, drop TUI-only tables</td></tr>
+        <tr><td><code>app/core/models/</code></td><td class="num">~900</td><td>Keep the shapes, retype the value model</td></tr>
+        <tr><td><code>functions/</code>, <code>plugins/</code>, <code>examples/</code></td><td class="num">—</td><td>Port to the new contracts as fixtures</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p><strong>Data migration:</strong> a one-shot <code>sclpl migrate</code> reads an existing <code>sclplapi.db</code>, backs it up, and carries environments, secrets, saved requests, and workflows across — workflows landing directly in the new catalogue. Requests become single-step workflow files; collections become directories. Nobody loses their saved work, and the old database is left untouched on disk.</p>
+</section>
+
+<!-- ═══════════════ 16 ═══════════════ -->
+<section class="sec" id="s17">
+  <div class="eyebrow">17 — Milestones</div>
+  <h2>Ten steps, each independently demonstrable</h2>
+  <p>M0–M3 produce a tool that already does something real end to end. Every milestone has an exit criterion that can be checked, not assessed.</p>
+
+  <div class="ms wide">
+    <div><div class="id">M0</div><div class="c"><h4>Strip and skeleton</h4><p>Delete the TUI, the web API, and the SPA. Stand up the <code>sclpl</code> package, Typer command tree, reporter facade with all four sinks, and CI (ruff, mypy strict, pytest).</p><div class="exit"><b>Exit:</b> <code>sclpl call GET https://httpbin.org/json</code> prints a response and honours <code>-q</code>, <code>-v</code>, and <code>--json</code>.</div></div></div>
+    <div><div class="id">M1</div><div class="c"><h4>Typed values and expressions</h4><p>Value store, path resolver with wildcards and filters, the expression parser over an allowlisted AST, and the operator dispatch table with scalar and list overloads.</p><div class="exit"><b>Exit:</b> <code>"@a.body.items[?(price &gt; 10)].id"</code> evaluates correctly; a bad path fails with a suggestion.</div></div></div>
+    <div><div class="id">M2</div><div class="c"><h4>Scheduler and transport</h4><p>Ready-queue scheduler with critical-path priority and layered semaphores; pooled HTTP/2 client, retries with jitter, structured cancellation.</p><div class="exit"><b>Exit:</b> the section-10 graph completes in critical-path time; a 500-step run holds one connection pool and survives <kbd>Ctrl-C</kbd> cleanly.</div></div></div>
+    <div><div class="id">M3</div><div class="c"><h4>The view</h4><p>The hand-written terminal layer: single-writer queue, the full → simple → plain ladder, DECSTBM live region, multi-step rows, aggregate bar, instrument line, NDJSON events, file logging with redaction.</p><div class="exit"><b>Exit:</b> the mockup in section 13 is real; pty snapshots pass at all three rungs; piping to <code>cat</code>, resizing mid-run, and <kbd>Ctrl-C</kbd> each leave a fully restored terminal.</div></div></div>
+    <div><div class="id">M4</div><div class="c"><h4>Workflow IR, catalogue and modes</h4><p>JSON and SCLPLL both compile to the IR; <code>import</code>, <code>list</code>, <code>show</code>, run-by-name with versions; mode blocks, graph pruning, port declaration and binding; <code>validate</code>, <code>explain</code>, <code>fmt</code>, <code>convert</code>.</p><div class="exit"><b>Exit:</b> <code>sclpl orders partial in.csv out.csv</code> runs 12 of 20 steps; pruning a needed producer fails at validate time with a named fix.</div></div></div>
+    <div><div class="id">M5</div><div class="c"><h4>Functions and tables</h4><p>TableBackend protocol with pandas first; csv/json/ndjson/parquet/xlsx; the built-in catalogue including underscore-flattening <code>save_csv</code>; typed function decorator and registry.</p><div class="exit"><b>Exit:</b> nested JSON → flattened CSV → Excel in one pipeline, with a schema assertion in the middle.</div></div></div>
+    <div><div class="id">M6</div><div class="c"><h4>Control flow and pagination</h4><p>All five paginator styles streaming into the scheduler; <code>foreach</code>, <code>if</code>, <code>while</code>, <code>do_while</code>, <code>gate</code> as runtime-injected subgraphs; rules blocks.</p><div class="exit"><b>Exit:</b> a cursor-paginated source with 40 pages fans out into a bounded <code>foreach</code> and reports as one progress line.</div></div></div>
+    <div><div class="id">M7</div><div class="c"><h4>Memory, lanes and cache</h4><p>Liveness analysis and refcount disposal, spill-to-disk with <code>ValueRef</code>, the resource governor, automatic lane assignment with Arrow/path handoff, the content-addressed cache and its flags.</p><div class="exit"><b>Exit:</b> a run whose intermediates total 3× the memory budget completes by spilling; a CPU-bound join is auto-assigned to a process without config.</div></div></div>
+    <div><div class="id">M8</div><div class="c"><h4>Plugins and the bundled set</h4><p>Entry-point discovery, manifest and ABI check, capability declaration and enforcement, schema-driven help, <code>plugin scaffold</code>, and the three shipped plugins — <code>sqlite</code>, <code>fs</code>, and <code>example</code> — each built only on the public plugin API.</p><div class="exit"><b>Exit:</b> a pipeline reads from SQLite, joins it with an API result, and writes back to a table with no configuration beyond the workflow file; an external plugin <code>pip install</code>s into a clean venv and works.</div></div></div>
+    <div><div class="id">M9</div><div class="c"><h4>Secrets, history, packaging</h4><p>Keyring-backed secrets with no silent downgrade, environments, run history and <code>runs diff</code>, <code>doctor</code>, <code>migrate</code>, shell completions, wheel, docs, and a getting-started path an analyst can follow unaided.</p><div class="exit"><b>Exit:</b> a new user installs the wheel, imports a shared workflow, and completes a paginated API → flattened CSV run from the README in under ten minutes.</div></div></div>
+  </div>
+</section>
+
+<!-- ═══════════════ 17 ═══════════════ -->
+<section class="sec" id="s18">
+  <div class="eyebrow">18 — Risks</div>
+  <h2>Where this could go wrong</h2>
+  <div class="panel wide">
+    <h4>Expression language scope creep</h4>
+    <p>The operator list in section 07 is already large, and every real pipeline will want one more function. <em>Mitigation:</em> the dispatch table is the extension point — new operators arrive as plugin overloads, and the core list is frozen after M6 unless something cannot be expressed at all.</p>
+  </div>
+  <div class="panel wide">
+    <h4>Modes becoming a second, shadow workflow language</h4>
+    <p>Include/exclude selectors with globs, tags, inheritance, variable overrides and stubs can quietly grow into a configuration language of its own. <em>Mitigation:</em> modes may only <em>subtract</em> steps and override scalars — they can never add a step, change a dependency, or alter an expression. If a mode needs to do more than that, it is a separate workflow.</p>
+  </div>
+  <div class="panel wide">
+    <h4>pandas is a heavy dependency for a tier-1 install</h4>
+    <p>pandas plus pyarrow is roughly 100 MB, which is a lot for someone who only wants to hit two endpoints. <em>Mitigation:</em> core install stays light; <code>pip install sclpl[data]</code> adds the table stack, and any function that needs it raises a precise install instruction rather than an <code>ImportError</code>. See the open decision below.</p>
+  </div>
+  <div class="panel wide">
+    <h4>We now own every terminal bug</h4>
+    <p>Dropping Rich means Windows Terminal, ConHost, tmux, mosh, VS Code&rsquo;s terminal, and every CI runner become our problem rather than a maintainer&rsquo;s. That is a real cost and it is accepted deliberately, because the alternative is a breakage we can neither reproduce nor fix. <em>Mitigation:</em> single-writer discipline removes the common cause outright; the fallback ladder only descends, so an unrecognised terminal gets boring plain lines instead of a guess; a pty harness asserts golden byte sequences at each rung; a fuzz test resizes and interrupts mid-run and asserts full restoration; and <code>--plain</code> plus <code>SCLPL_RENDER</code> unblock any user without a release.</p>
+  </div>
+  <div class="panel wide">
+    <h4>Liveness analysis freeing something still in use</h4>
+    <p>A wrong disposal is a crash mid-run — the worst failure mode here. <em>Mitigation:</em> conservative by construction (dynamic scopes pin their values), disposal is off under <code>--keep-all</code>, and a debug mode tombstones freed values so any access raises a precise error naming the step instead of a <code>KeyError</code>.</p>
+  </div>
+  <div class="panel wide">
+    <h4>Automatic lane assignment guessing wrong</h4>
+    <p>Sending a cheap step to a process pool costs more in transfer than it saves, and history-based tuning can lock in a bad early sample. <em>Mitigation:</em> a size threshold below which the process lane is never chosen, statistics kept as a rolling median rather than a single observation, <code>sclpl explain</code> showing every assignment, and an explicit <code>lane</code> override that always wins.</p>
+  </div>
+</section>
+
+<!-- ═══════════════ 18 ═══════════════ -->
+<section class="sec" id="s19">
+  <div class="eyebrow">19 — Decisions I need</div>
+  <h2>Six questions, with my recommendation on each</h2>
+  <p>None of these block starting M0. Tell me where you disagree and I will adjust; otherwise I proceed on the recommendation.</p>
+
+  <div class="dec wide">
+    <div class="dq"><div class="q">1 · Is the command <code>sclpl</code> or <code>sclplapi</code>?</div><div class="r"><b>Recommend <code>sclpl</code>.</b> Six characters, typed dozens of times a day, and the tool is no longer only about APIs. The <code>sclplapi</code> entry point can stay as an alias for one release.</div></div>
+    <div class="dq"><div class="q">2 · Is the bare form <code>sclpl orders partial in.csv out.csv</code> worth the ambiguity?</div><div class="r"><b>Recommend yes, with the explicit <code>sclpl run</code> form always available.</b> The shorthand is what makes the tool feel like a command rather than a runner, and the resolution order is deterministic. Documentation tells scripts and CI to use <code>run</code>.</div></div>
+    <div class="dq"><div class="q">3 · Is pandas a core dependency or an extra?</div><div class="r"><b>Recommend an extra</b> — <code>sclpl[data]</code> — with a clear message when a table function is called without it. If you would rather an analyst never sees an install prompt, I will make it core and accept the download size.</div></div>
+    <div class="dq"><div class="q">4 · Does SCLPLL keep backward compatibility?</div><div class="r"><b>Recommend a clean break to v2.</b> The existing grammar has no way to express typed expressions, rules, modes, or pagination. <code>sclpl convert --from v1</code> upgrades old files mechanically; there are four example workflows in the repo and they are the only known users.</div></div>
+    <div class="dq"><div class="q">5 · Does run history stay in SQLite?</div><div class="r"><b>Recommend yes</b>, for <code>runs list/diff/replay</code> and for the lane statistics that drive auto-tuning — but each run also writes a self-contained NDJSON event log so history is greppable and portable without the database.</div></div>
+    <div class="dq"><div class="q">6 · How aggressive should M0 deletion be?</div><div class="r"><b>Recommend deleting outright on this branch.</b> The baseline commit <code>1b1abe0</code> on <code>main</code> holds the TUI and web studio intact; keeping dead code alongside the rewrite is what produced the current three-front-end situation.</div></div>
+  </div>
+
+  <div class="note wide" style="margin-top:8px;">
+    <strong>Where things stand right now:</strong> the repository is under version control for the first time and the full pre-rework state is preserved as commit <code>1b1abe0</code>. This plan and its agent handoff note are committed under <code>docs/cli-rebuild/</code>. Nothing has been deleted yet — M0 starts on your word.
+  </div>
+</section>
+
+</div>
