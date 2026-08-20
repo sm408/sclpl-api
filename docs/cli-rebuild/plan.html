@@ -80,6 +80,18 @@ p{margin:0;}
   display:flex;align-items:center;gap:10px;
 }
 .eyebrow::after{content:"";flex:1;height:1px;background:var(--rule);}
+.rev{
+  font-family:var(--mono);font-size:.6rem;font-weight:700;letter-spacing:.09em;
+  color:var(--signal);background:var(--signal-soft);
+  border:1px solid var(--signal);border-radius:3px;padding:1px 6px;
+}
+.revlog{display:grid;gap:0;border:1px solid var(--rule);border-radius:8px;background:var(--surface);overflow:hidden;}
+.revlog > header{
+  padding:13px 20px;background:var(--surface-2);border-bottom:1px solid var(--rule);
+  display:flex;justify-content:space-between;align-items:baseline;gap:14px;flex-wrap:wrap;
+}
+.revlog > header .rt{font-family:var(--sans);font-weight:660;font-size:1rem;}
+.revlog > header .rd{font-family:var(--mono);font-size:.72rem;color:var(--ink-3);}
 .lede{font-size:1.14rem;color:var(--ink-2);line-height:1.55;}
 
 a{color:var(--accent);text-underline-offset:3px;text-decoration-thickness:1px;}
@@ -346,6 +358,7 @@ figcaption{
   padding:17px 20px;display:grid;gap:8px;
 }
 .dq .q{font-family:var(--sans);font-weight:660;font-size:1rem;}
+.dq .q .ok{color:var(--good);margin-right:5px;font-family:var(--mono);}
 .dq .r{font-size:.93rem;color:var(--ink-2);}
 .dq .r b{color:var(--good);font-weight:660;}
 
@@ -398,7 +411,8 @@ figcaption{
       <li><span class="n">16</span><a href="#s16">What gets deleted</a></li>
       <li><span class="n">17</span><a href="#s17">Milestones</a></li>
       <li><span class="n">18</span><a href="#s18">Risks</a></li>
-      <li><span class="n">19</span><a href="#s19">Decisions I need</a></li>
+      <li><span class="n">19</span><a href="#s19">Decisions</a></li>
+      <li><span class="n">20</span><a href="#s20">Revision log</a></li>
     </ol>
   </nav>
 </section>
@@ -510,7 +524,7 @@ app/core/engine/variable_resolver.py:57   return str(value) if value is not None
 
 <!-- ═══════════════ 04 ═══════════════ -->
 <section class="sec" id="s4">
-  <div class="eyebrow">04 — Architecture</div>
+  <div class="eyebrow">04 — Architecture <span class="rev">Rev C</span></div>
   <h2>Eight packages, one direction of dependency</h2>
   <p>Nothing below <code>cli/</code> knows the CLI exists. The reporter is an interface, so the engine emits events and never writes to a terminal. That is what keeps <code>--format json</code> honest and makes the engine testable without capturing stdout.</p>
 
@@ -555,7 +569,7 @@ app/core/engine/variable_resolver.py:57   return str(value) if value is not None
     <table>
       <thead><tr><th>Package</th><th class="num">Budget</th><th>Kept small by</th></tr></thead>
       <tbody>
-        <tr><td><code>cli/</code></td><td class="num">600</td><td>Typer generates parsing, help, and completions from signatures</td></tr>
+        <tr><td><code>cli/</code></td><td class="num">850</td><td>Typer generates parsing, help, and completions; +250 for the bare launcher</td></tr>
         <tr><td><code>render/</code></td><td class="num">900</td><td>Owned outright — see section 13; one writer, one fallback ladder</td></tr>
         <tr><td><code>catalog/</code></td><td class="num">400</td><td>Files on disk plus one SQLite index table</td></tr>
         <tr><td><code>run/</code></td><td class="num">1,400</td><td>The only genuinely novel code: compile, plan, schedule, execute</td></tr>
@@ -565,7 +579,7 @@ app/core/engine/variable_resolver.py:57   return str(value) if value is not None
         <tr><td><code>ext/</code></td><td class="num">400</td><td><code>importlib.metadata</code> + pydantic-generated schemas</td></tr>
         <tr><td><code>state/</code></td><td class="num">400</td><td>Plain SQL, no ORM</td></tr>
         <tr><td><code>functions/</code> (built-ins)</td><td class="num">900</td><td>Each function is a handful of lines over a library that already works</td></tr>
-        <tr><td><strong>Total target</strong></td><td class="num"><strong>~6,900</strong></td><td>Against ~33,600 deleted</td></tr>
+        <tr><td><strong>Total target</strong></td><td class="num"><strong>~7,150</strong></td><td>Against ~33,600 deleted</td></tr>
       </tbody>
     </table>
   </div>
@@ -1196,8 +1210,56 @@ lane   = <em>"thread"</em>               <i># optional; the engine infers this o
 
 <!-- ═══════════════ 14 ═══════════════ -->
 <section class="sec" id="s14">
-  <div class="eyebrow">14 — CLI surface</div>
+  <div class="eyebrow">14 — CLI surface <span class="rev">Rev C</span></div>
   <h2>Verbs an analyst can guess</h2>
+
+  <h3>Started bare</h3>
+  <p>Typing <code>sclpl</code> with no arguments should not punish you with a wall of help text. It opens a plain numbered launcher — every common entry point in one list, with the current state of the workspace across the top:</p>
+
+  <div class="term full">
+    <div class="chrome"><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="ttl">sclpl</span></div>
+    <div class="body">
+<pre><span class="acc">sclpl 0.1.0</span>   <span class="dim">7 workflows · 3 plugins · env</span> <span class="ok">prod</span> <span class="dim">· 5 runs kept</span>
+
+  <span class="acc">1</span>  Run a saved workflow          <span class="dim">orders, refunds, inventory, …</span>
+  <span class="acc">2</span>  Run a workflow file by path
+  <span class="acc">3</span>  Validate a workflow           <span class="dim">no network, no writes</span>
+  <span class="acc">4</span>  History                       <span class="dim">view · search · export</span>
+  <span class="acc">5</span>  Import                        <span class="dim">workflow · function · plugin · settings</span>
+  <span class="acc">6</span>  Rerun last                    <span class="dim">orders · partial · 14m ago ·</span> <span class="ok">ok</span>
+  <span class="acc">7</span>  Environments &amp; secrets
+  <span class="acc">8</span>  Settings
+  <span class="acc">9</span>  Help
+  <span class="acc">q</span>  Exit
+
+<span class="dim">›</span> 1
+
+  <span class="acc">1</span> orders      <span class="dim">v3 · modes: smoke, partial, full · 2 ports</span>
+  <span class="acc">2</span> refunds     <span class="dim">v1 · modes: full</span>
+  <span class="acc">3</span> inventory   <span class="dim">v7 · modes: partial, full · 1 port</span>
+
+<span class="dim">›</span> 1
+<span class="dim">  mode [partial]:</span> <span class="dim">↵</span>
+<span class="dim">  in  customers (csv):</span> data/c.csv
+<span class="dim">  out report    (csv):</span> out/report.csv
+
+<span class="dim">  ↳</span> <span class="run">sclpl run orders --mode partial --in customers=data/c.csv --out report=out/report.csv</span>
+<span class="dim">  run this? [Y/n]</span> <span class="caret"></span></pre>
+    </div>
+  </div>
+
+  <p>Six rules keep this a convenience rather than a second interface — which is the trap that produced the TUI we are deleting:</p>
+  <ul>
+    <li><strong>It always prints the command it is about to run</strong>, then asks. The launcher is a way to <em>learn</em> the CLI, not an alternative to it — after a week you type the command directly, which is the intended outcome.</li>
+    <li><strong>Only when both stdin and stderr are a terminal.</strong> Piped, redirected, or in CI, bare <code>sclpl</code> prints help and exits <code>2</code>. It can never hang a script waiting on input.</li>
+    <li><strong>Plain prompts only</strong> — line-based reads and ordinary writes, no cursor addressing. The launcher sits below the render ladder in section 13, so it cannot be broken by a terminal the live region would struggle with.</li>
+    <li><strong>Numbers, plus <code>q</code> to quit and <code>?</code> for help</strong>, at every level. Every submenu has the same shape, so there is one interaction to learn. <kbd>Ctrl-C</kbd> backs out one level; twice exits.</li>
+    <li><strong>Defaults in brackets, <kbd>Enter</kbd> accepts.</strong> The mode shown is the workflow&rsquo;s declared default; ports are pre-filled from the last run of that workflow.</li>
+    <li><strong>Nothing destructive without naming the target.</strong> Overwriting an existing output, removing a workflow, or clearing history requires an explicit confirmation that says what will be lost.</li>
+  </ul>
+  <p>Budgeted at ~250 lines, because it is a loop over a list of commands the CLI already exposes — it holds no state and duplicates no logic.</p>
+
+  <h3>The full surface</h3>
 <pre class="wide"><b>sclpl</b> &lt;workflow&gt; [mode] [inputs…] [outputs…]     <i>shorthand — resolves to `run`</i>
 <b>sclpl run</b> &lt;workflow&gt;                            <i>explicit form for scripts and CI</i>
     --mode partial            --in name=path   --out name=path
@@ -1206,12 +1268,16 @@ lane   = <em>"thread"</em>               <i># optional; the engine infers this o
     --timeout 30s  --retries 3   --memory-budget 4G
     --no-cache | --refresh | --offline | --http-cache
     --from STEP  --only STEP…  --skip STEP…   --dry-run  --keep-going
+    --name "nightly refresh"   --tag daily --tag prod   --no-validate
     --format csv|json|ndjson|parquet|xlsx|table
     -q | -v | -vv | -vvv | --json | --no-color | --log-file run.log
 
-<b>sclpl import</b> &lt;file|dir|url&gt; [--as name] [--project] [--recursive]
-<b>sclpl list</b>                        <i>registered workflows: name, version, modes, ports</i>
-<b>sclpl show</b> &lt;workflow&gt;             <i>definition, mode matrix, declared ports</i>
+<b>sclpl import workflow</b> &lt;file|dir|url&gt; [--as name] [--project] [--recursive]
+<b>sclpl import function</b> &lt;file|dir&gt;      <i>register .py functions into the catalogue</i>
+<b>sclpl import plugin</b>   &lt;path|dist&gt;     <i>local directory or installed distribution</i>
+<b>sclpl import settings</b> &lt;file.toml&gt;     <i>merge config, environments, limits</i>
+<b>sclpl list</b>   [workflows|functions|plugins]   <i>name, version, modes, ports</i>
+<b>sclpl show</b>   &lt;workflow&gt;            <i>definition, mode matrix, declared ports</i>
 <b>sclpl remove</b> &lt;workflow&gt; [--version N]
 
 <b>sclpl validate</b> &lt;workflow&gt; [--mode M]   <i>parse, typecheck, resolve refs — zero I/O</i>
@@ -1227,10 +1293,61 @@ lane   = <em>"thread"</em>               <i># optional; the engine infers this o
 <b>sclpl plugin</b>  list | install | describe | scaffold | enable | disable
 <b>sclpl data</b>    convert | flatten | head | schema | profile   <i>standalone table tools</i>
 <b>sclpl cache</b>   stats | prune | clear
-<b>sclpl runs</b>    list | show | diff | replay | export
+<b>sclpl runs</b>    list | show | search | diff | replay | export | pin | prune
 <b>sclpl doctor</b>                          <i>deps, permissions, resources, connectivity</i>
 <b>sclpl completion</b> bash|zsh|fish|powershell</pre>
   <p>Three of these are disproportionately valuable to a nervous first-time user: <code>validate</code> (catches typos with no network calls), <code>explain</code> (shows the pruned plan before committing to it), and <code>doctor</code> (answers &ldquo;is it me or is it the tool?&rdquo;). <code>runs diff</code> — comparing two runs of the same pipeline — replaces the deleted TUI diff viewer and is more useful on the command line than it was in a widget.</p>
+
+  <h3>Preflight — validation runs by default</h3>
+  <p>Every run validates before it does anything observable. It costs milliseconds, touches no network and writes no files, and it is where a missing optional dependency is reported — not twenty minutes into a pipeline. <code>--no-validate</code> skips it for the rare case where you are certain.</p>
+  <div class="tw wide">
+    <table>
+      <thead><tr><th>Check</th><th>Catches</th></tr></thead>
+      <tbody>
+        <tr><td>Parse and schema</td><td>Malformed JSON or SCLPLL, unknown keys, wrong types</td></tr>
+        <tr><td>Reference resolution</td><td><code>@step</code> that does not exist, a path into a shape that cannot produce it</td></tr>
+        <tr><td>Graph closure under the mode</td><td>A pruned step that a kept step still needs — with the three ways to fix it</td></tr>
+        <tr><td>Port binding</td><td>Required input unbound, argument count mismatch, unreadable input file</td></tr>
+        <tr><td>Missing extras</td><td><code>save_parquet</code> without <code>sclpl[data]</code> — prints the exact <code>pip install</code> line</td></tr>
+        <tr><td>Plugins and capabilities</td><td>Unknown connector, ABI mismatch, a capability the run denies</td></tr>
+        <tr><td>Output writability</td><td>Unwritable directory, and an overwrite that needs confirming</td></tr>
+      </tbody>
+    </table>
+  </div>
+<pre class="wide">$ sclpl orders full data/c.csv out/report.parquet
+<b>preflight failed</b> — 1 problem, nothing was run
+
+  <em>step</em> save_report  <em>needs</em> parquet support, which is not installed
+    ↳ pip install 'sclpl[data]'
+
+<i>run anyway with --no-validate, or choose a mode that skips this step:</i>
+  sclpl orders partial data/c.csv out/report.csv</pre>
+
+  <h3>History</h3>
+  <p>Runs are kept in SQLite. <strong>Retention is configurable and defaults to the last 5</strong> — enough to compare against yesterday without a database that grows forever. Pruning happens after each run; pinned runs are exempt and never counted against the limit.</p>
+  <div class="tw wide">
+    <table>
+      <thead><tr><th>Recorded</th><th>Detail</th></tr></thead>
+      <tbody>
+        <tr><td>Identity</td><td>Short id, workflow name and version, mode, and a run name — <code>--name</code>, or auto-generated as <code>orders-partial-0821-1432</code></td></tr>
+        <tr><td>Dates</td><td>Started, finished, duration, and the wall-clock of each step</td></tr>
+        <tr><td>Tags</td><td>Repeatable <code>--tag</code>, plus automatic ones: environment, host set, exit status</td></tr>
+        <tr><td>Bindings</td><td>Resolved input and output paths, with content hashes so a rerun can detect changed inputs</td></tr>
+        <tr><td>Outcome</td><td>Exit code, failing step and error, steps run vs skipped by mode, retries</td></tr>
+        <tr><td>Metrics</td><td>Cache hit rate, peak memory, bytes in and out, lane assignments — these also feed auto-tuning</td></tr>
+        <tr><td>Artifacts</td><td>A per-run NDJSON event log and scratch manifest, so history is greppable without the database</td></tr>
+      </tbody>
+    </table>
+  </div>
+<pre class="wide">sclpl runs list                                <i>the kept runs, newest first</i>
+sclpl runs search --tag prod --status failed --since 7d
+sclpl runs search "timeout" --workflow orders  <i>full text over step ids and errors</i>
+sclpl runs show r7c2 --step orders.join        <i>one run, or one step of it</i>
+sclpl runs diff r7c2 r9f1                      <i>what changed between two runs</i>
+sclpl runs export r7c2 --format json           <i>portable, self-contained</i>
+sclpl runs pin r7c2                            <i>exempt from retention</i>
+sclpl runs prune --keep 20                     <i>or set history.keep in config</i></pre>
+  <p>Search uses SQLite FTS5 where the interpreter was built with it and falls back to indexed <code>LIKE</code> where it was not — no new dependency either way.</p>
   <p>Exit codes are stable and scriptable: <code>0</code> success · <code>1</code> step failure · <code>2</code> usage error · <code>3</code> validation failure · <code>4</code> assertion failure · <code>5</code> cache miss under <code>--offline</code> · <code>6</code> unknown workflow or mode · <code>130</code> interrupted.</p>
 </section>
 
@@ -1362,21 +1479,75 @@ lane   = <em>"thread"</em>               <i># optional; the engine infers this o
 
 <!-- ═══════════════ 18 ═══════════════ -->
 <section class="sec" id="s19">
-  <div class="eyebrow">19 — Decisions I need</div>
-  <h2>Six questions, with my recommendation on each</h2>
-  <p>None of these block starting M0. Tell me where you disagree and I will adjust; otherwise I proceed on the recommendation.</p>
+  <div class="eyebrow">19 — Decisions <span class="rev">Rev C</span></div>
+  <h2>All six settled</h2>
+  <p>Answered by the owner on 21 Aug 2026. These are now constraints, not proposals — changing one requires a new entry here recording the reason.</p>
 
   <div class="dec wide">
-    <div class="dq"><div class="q">1 · Is the command <code>sclpl</code> or <code>sclplapi</code>?</div><div class="r"><b>Recommend <code>sclpl</code>.</b> Six characters, typed dozens of times a day, and the tool is no longer only about APIs. The <code>sclplapi</code> entry point can stay as an alias for one release.</div></div>
-    <div class="dq"><div class="q">2 · Is the bare form <code>sclpl orders partial in.csv out.csv</code> worth the ambiguity?</div><div class="r"><b>Recommend yes, with the explicit <code>sclpl run</code> form always available.</b> The shorthand is what makes the tool feel like a command rather than a runner, and the resolution order is deterministic. Documentation tells scripts and CI to use <code>run</code>.</div></div>
-    <div class="dq"><div class="q">3 · Is pandas a core dependency or an extra?</div><div class="r"><b>Recommend an extra</b> — <code>sclpl[data]</code> — with a clear message when a table function is called without it. If you would rather an analyst never sees an install prompt, I will make it core and accept the download size.</div></div>
-    <div class="dq"><div class="q">4 · Does SCLPLL keep backward compatibility?</div><div class="r"><b>Recommend a clean break to v2.</b> The existing grammar has no way to express typed expressions, rules, modes, or pagination. <code>sclpl convert --from v1</code> upgrades old files mechanically; there are four example workflows in the repo and they are the only known users.</div></div>
-    <div class="dq"><div class="q">5 · Does run history stay in SQLite?</div><div class="r"><b>Recommend yes</b>, for <code>runs list/diff/replay</code> and for the lane statistics that drive auto-tuning — but each run also writes a self-contained NDJSON event log so history is greppable and portable without the database.</div></div>
-    <div class="dq"><div class="q">6 · How aggressive should M0 deletion be?</div><div class="r"><b>Recommend deleting outright on this branch.</b> The baseline commit <code>1b1abe0</code> on <code>main</code> holds the TUI and web studio intact; keeping dead code alongside the rewrite is what produced the current three-front-end situation.</div></div>
+    <div class="dq"><div class="q"><span class="ok">✓</span> 1 · Command name</div><div class="r"><b>Ships as <code>sclpl</code>.</b> No <code>sclplapi</code> alias — nothing depends on it yet, and one name is one thing to document.</div></div>
+    <div class="dq"><div class="q"><span class="ok">✓</span> 2 · Bare shorthand</div><div class="r"><b><code>sclpl orders partial in.csv out.csv</code> is supported</b>, with explicit <code>sclpl run</code> always available and required in scripts and CI. Resolution order is deterministic: subcommand → file path → project registry → user registry.</div></div>
+    <div class="dq"><div class="q"><span class="ok">✓</span> 3 · pandas is an extra</div><div class="r"><b><code>pip install sclpl[data]</code>.</b> The missing extra is reported by <em>preflight</em> — at validation, and at the start of every run — never mid-pipeline after twenty minutes of work. See the preflight block in section 14.</div></div>
+    <div class="dq"><div class="q"><span class="ok">✓</span> 4 · SCLPLL v2, no compatibility</div><div class="r"><b>Clean break, and no v1 converter is built.</b> The project is pre-release; the four example workflows are rewritten by hand. This deletes a migration path we would otherwise have to test forever.</div></div>
+    <div class="dq"><div class="q"><span class="ok">✓</span> 5 · Run history</div><div class="r"><b>SQLite, retention configurable, default 5 runs.</b> Each run is dated, named, and taggable, and the whole history is searchable. Full model in section 14.</div></div>
+    <div class="dq"><div class="q"><span class="ok">✓</span> 6 · Deletion</div><div class="r"><b>Delete outright in M0.</b> The baseline commit <code>1b1abe0</code> is the archive; no dead code rides along beside the rewrite.</div></div>
   </div>
 
   <div class="note wide" style="margin-top:8px;">
-    <strong>Where things stand right now:</strong> the repository is under version control for the first time and the full pre-rework state is preserved as commit <code>1b1abe0</code>. This plan and its agent handoff note are committed under <code>docs/cli-rebuild/</code>. Nothing has been deleted yet — M0 starts on your word.
+    <strong>Where things stand right now:</strong> the repository is under version control for the first time and the full pre-rework state is preserved as commit <code>1b1abe0</code>. This plan and its agent handoff note are committed under <code>docs/cli-rebuild/</code>. Every open question is now answered, so <strong>M0 is unblocked</strong> — the next commit deletes the TUI, the FastAPI layer, and the SPA.
+  </div>
+</section>
+
+<!-- ═══════════════ 20 ═══════════════ -->
+<section class="sec" id="s20">
+  <div class="eyebrow">20 — Revision log</div>
+  <h2>What changed, and what asked for it</h2>
+  <p>Every revision to this plan, so a reader who saw an earlier version knows exactly what moved. Sections carrying a <span class="rev">Rev C</span> badge changed in the most recent round.</p>
+
+  <div class="revlog wide">
+    <header><span class="rt">Rev A — initial plan</span><span class="rd">21 Aug 2026 · commit ad2ddb6</span></header>
+    <div class="tw" style="border:0;border-radius:0;">
+      <table>
+        <tbody>
+          <tr><td colspan="2">First complete draft, written after reading the existing engine. Established the four cited defects (§03), the architecture (§04), the JSON/SCLPLL IR (§05), generalized-function operators (§07), the built-in function library (§08), the plugin contract (§09), the ready-queue scheduler with lanes and handoff (§10), memory and caching (§11), pagination and control flow (§12), the terminal view (§13), the CLI surface (§14), the deletion inventory (§16), milestones M0–M9 (§17), and risks (§18).</td></tr>
+          <tr><td><strong>§06 added</strong></td><td>Workflow import, run-by-name catalogue, run modes with graph pruning, and port binding — requested mid-draft.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="revlog wide">
+    <header><span class="rt">Rev B — library, size, and the terminal reversal</span><span class="rd">21 Aug 2026</span></header>
+    <div class="tw" style="border:0;border-radius:0;">
+      <table>
+        <thead><tr><th>Section</th><th>Change</th><th>Asked for by</th></tr></thead>
+        <tbody>
+          <tr><td>§04</td><td><strong>Weight budget added</strong> — per-package line targets, ~7,150 total, checked in CI; plus the four rules that hold it (no abstraction until the second caller, reuse before writing, one mechanism per concept, deleting counts as progress).</td><td>&ldquo;Small in size, reuse wherever you can&rdquo;</td></tr>
+          <tr><td>§09</td><td><strong>Bundled plugin set</strong> — <code>sqlite</code>, <code>fs</code>, <code>example</code>, with the SQLite connector shown in full. Costs no new dependency because <code>aiosqlite</code> already carries engine state.</td><td>&ldquo;SQLite out of the box through a plugin&rdquo;</td></tr>
+          <tr><td>§10</td><td><strong>Workers subsection</strong> — one worker abstraction across all four lanes, pool sizing, cancellation, shared back-pressure.</td><td>&ldquo;Workers&rdquo;</td></tr>
+          <tr><td>§13</td><td><strong>Rich dropped entirely; terminal layer written by hand.</strong> Replaced the reuse argument with single-writer discipline, a descend-only fallback ladder, glyph and width probing, guaranteed restoration, bounded repaint, subprocess quarantine, and <code>--plain</code> / <code>SCLPL_RENDER</code> escape hatches.</td><td>&ldquo;Rich breaks easily&rdquo;</td></tr>
+          <tr><td>§15</td><td><strong>New section: docs &amp; playbooks.</strong> Docs rewritten from zero, reference material generated from code and diffed in CI, four tiered playbooks, every example a test.</td><td>&ldquo;Proper docs, rewritten entirely… playbook for different levels&rdquo;</td></tr>
+          <tr><td>§17, §18</td><td>M3 and M8 exit criteria updated for the hand-written renderer and the bundled plugins; the terminal risk rewritten to state that we now own every terminal bug; a new risk added for modes becoming a shadow language.</td><td>follow-on</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="revlog wide">
+    <header><span class="rt">Rev C — decisions locked, launcher added</span><span class="rd">21 Aug 2026 · current</span></header>
+    <div class="tw" style="border:0;border-radius:0;">
+      <table>
+        <thead><tr><th>Section</th><th>Change</th><th>Asked for by</th></tr></thead>
+        <tbody>
+          <tr><td>§19</td><td><strong>All six decisions answered and locked</strong>, rewritten from open questions into constraints: <code>sclpl</code> as the only name with no alias; bare shorthand kept; pandas as the <code>sclpl[data]</code> extra; SCLPLL v2 with <em>no</em> v1 converter built; history in SQLite; delete outright in M0.</td><td>decisions 1–6</td></tr>
+          <tr><td>§14</td><td><strong>The bare launcher.</strong> <code>sclpl</code> with no arguments opens a numbered menu — run saved, run by path, validate, history, import, rerun last, environments, settings, help, exit — governed by six rules, chiefly that it prints the command it is about to run and only appears on a TTY.</td><td>&ldquo;proper cli options on start, if started bare&rdquo;</td></tr>
+          <tr><td>§14</td><td><strong>Preflight.</strong> Validation now runs by default on every run, with the check table and the failure format; a missing extra is reported here rather than mid-pipeline. <code>--no-validate</code> opts out.</td><td>decision 3</td></tr>
+          <tr><td>§14</td><td><strong>History model.</strong> Retention configurable, default 5; dated, named, and taggable runs; recorded fields; <code>runs search</code> with FTS5 and a <code>LIKE</code> fallback; <code>pin</code>, <code>prune</code>, <code>export</code>.</td><td>decision 5</td></tr>
+          <tr><td>§14</td><td><code>import</code> split into <code>workflow</code> / <code>function</code> / <code>plugin</code> / <code>settings</code>; <code>list</code> extended; run gains <code>--name</code>, <code>--tag</code>, <code>--no-validate</code>.</td><td>&ldquo;import functions, plugins, workflows, settings&rdquo;</td></tr>
+          <tr><td>§04</td><td><code>cli/</code> budget raised 600 → 850 for the launcher; total 6,900 → 7,150.</td><td>follow-on</td></tr>
+          <tr><td>new</td><td><code>docs/cli-rebuild/SPEC.md</code> — the implementation-level specification an agent builds from. <code>HANDOFF.md</code> updated to match.</td><td>&ldquo;a proper detailed version in docs&rdquo;</td></tr>
+        </tbody>
+      </table>
+    </div>
   </div>
 </section>
 

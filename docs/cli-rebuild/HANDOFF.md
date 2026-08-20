@@ -1,7 +1,10 @@
 # SCLPL CLI Rebuild — Handoff
 
-Pick up here. Read this file first, `plan.html` second (it is the full argument; this is the
-operational summary). Nothing has been deleted yet — the rebuild starts at **M0**.
+Pick up here. Read this file first, then **`SPEC.md`** — the normative implementation spec you build
+from. `plan.html` is the full argument with evidence; read it when you need the reasoning behind a
+constraint. Nothing has been deleted yet — the rebuild starts at **M0**.
+
+**All six open decisions were answered on 21 Aug 2026 (§8). M0 is unblocked.**
 
 ---
 
@@ -12,7 +15,8 @@ operational summary). Nothing has been deleted yet — the rebuild starts at **M
 | Baseline commit | `1b1abe0` — full pre-rework tree (TUI + web studio), 369 files |
 | Working branch | `worktree-cli-studio` (created under `.claude/worktrees/cli-studio`) |
 | Original checkout | sits on `feat/cli-studio`, still at the baseline |
-| Plan | `docs/cli-rebuild/plan.html` |
+| Plan (why) | `docs/cli-rebuild/plan.html` |
+| Spec (what to build) | `docs/cli-rebuild/SPEC.md` — normative |
 
 The baseline commit is the only copy of the Textual TUI and the Vue/FastAPI studio once M0 runs.
 Do not delete `main`.
@@ -65,11 +69,11 @@ arguing with the plan — they are all still present at the baseline commit.
 
 ## 5. Size budget (checked in CI)
 
-Target **~6,900 lines** total, against ~33,600 deleted.
+Target **~7,150 lines** total, against ~33,600 deleted.
 
 | Package | Budget | | Package | Budget |
 |---|---:|---|---|---:|
-| `cli/` | 600 | | `expr/` | 800 |
+| `cli/` | 850 | | `expr/` | 800 |
 | `render/` | 900 | | `tables/` | 500 |
 | `catalog/` | 400 | | `ext/` | 400 |
 | `run/` | 1,400 | | `state/` | 400 |
@@ -90,12 +94,12 @@ Each is independently demonstrable. Do them in order; M0–M3 already produce a 
 | **M1** | Typed values and expressions | `@a.body.items[?(price > 10)].id` evaluates; a bad path fails with a suggestion |
 | **M2** | Scheduler and transport | The 7-node graph in plan §10 finishes in critical-path time; 500 steps share one pool; `Ctrl-C` is clean |
 | **M3** | The view | pty snapshots pass at all three rungs; piping, resizing, and `Ctrl-C` each leave a restored terminal |
-| **M4** | Workflow IR, catalogue, modes | `sclpl orders partial in.csv out.csv` runs 12 of 20 steps; pruning a needed producer fails at validate time |
+| **M4** | IR, catalogue, modes, launcher | `sclpl orders partial in.csv out.csv` runs 12 of 20 steps; pruning a needed producer fails at validate time; bare `sclpl` opens the menu |
 | **M5** | Functions and tables | Nested JSON → flattened CSV → Excel in one pipeline, with a schema assertion |
 | **M6** | Control flow and pagination | A 40-page cursor source fans out into a bounded `foreach`, reported as one progress line |
 | **M7** | Memory, lanes, cache | Intermediates at 3× the memory budget complete by spilling; a CPU-bound join auto-lands in a process |
 | **M8** | Plugins and the bundled set | SQLite → join with an API → write back, no config; an external plugin `pip install`s and works |
-| **M9** | Secrets, history, packaging | A new user imports a shared workflow and finishes a paginated API → CSV run from the README in ten minutes |
+| **M9** | Secrets, history, packaging, docs | A new user imports a shared workflow and finishes a paginated API → CSV run from the README in ten minutes |
 
 ---
 
@@ -115,16 +119,25 @@ on demand.
 
 ---
 
-## 8. Open decisions — need the owner's answer
+## 8. Decisions — all locked
 
-1. Command name: `sclpl` (recommended) or keep `sclplapi`?
-2. Bare invocation `sclpl orders partial in.csv out.csv` alongside explicit `sclpl run` — keep? (recommended yes)
-3. pandas as core dependency or `sclpl[data]` extra? (recommended extra)
-4. SCLPLL v2 clean break? (recommended yes; `sclpl convert --from v1` upgrades the four existing examples)
-5. Run history in SQLite? (recommended yes — it also feeds lane auto-tuning — plus an NDJSON log per run)
-6. Delete TUI/web outright on this branch? (recommended yes; baseline preserves them)
+Answered by the owner 21 Aug 2026. These are constraints now; changing one needs an ADR.
 
-Defaults above are what I proceed with absent an answer.
+| # | Decision |
+|---|---|
+| 1 | Command is **`sclpl`**. No `sclplapi` alias. |
+| 2 | Bare shorthand `sclpl orders partial in.csv out.csv` supported; explicit `sclpl run` required in scripts/CI. |
+| 3 | pandas is the **`sclpl[data]` extra**. Missing extras are reported by **preflight**, which runs by default on every run (`--no-validate` opts out) — never mid-pipeline. |
+| 4 | **SCLPLL v2, clean break, no v1 converter is built.** The four example workflows are rewritten by hand. |
+| 5 | Run history in SQLite. **Retention configurable, default 5.** Runs are dated, named, taggable, searchable; pinned runs are exempt. |
+| 6 | TUI / FastAPI / SPA **deleted outright in M0**. Baseline `1b1abe0` is the archive. |
+
+Bare `sclpl` opens a numbered launcher (run saved, run by path, validate, history, import, rerun
+last, environments, settings, help, exit). It prints the command it is about to run, appears only on
+a TTY, and uses plain prompts — see `SPEC.md` §15.
+
+Two further decisions made during planning, most likely to be re-litigated — see §7: the terminal
+layer is hand-written (`rich` is not a dependency), and SQLite ships as a bundled plugin.
 
 ---
 
