@@ -1,0 +1,17 @@
+{
+  "name": "sample-api-plugin",
+  "version": "1.0.0",
+  "description": "Sample SCLPLAPI plugin demonstrating functions, workflows, and hooks",
+  "author": "SCLPLAPI",
+  "functions": ["functions/*.py"],
+  "workflows": ["workflows/*.json"],
+  "hooks": {
+    "pre_request": "hooks/pre_request.py",
+    "post_response": "hooks/post_response.py"
+  },
+  "variables": {
+    "plugin_base_url": "https://api.example.com",
+    "plugin_timeout": "30"
+  },
+  "dependencies": []
+}

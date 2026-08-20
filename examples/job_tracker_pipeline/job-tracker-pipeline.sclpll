@@ -1,0 +1,27 @@
+# Job Application Tracker Pipeline
+# Tracks job applications, checks statuses, generates summary
+
+@workflow job-tracker-pipeline "Job Application Tracker"
+    Track job applications, check status, and generate a summary
+
+@var tracker_url = https://api.example.com/jobs
+
+# Step 1: Fetch all applications
+@step fetch_applications -> applications_raw
+    request GET {{tracker_url}}/applications
+
+# Step 2: Check statuses (parallel with step 1)
+@step check_statuses -> statuses_raw
+    request GET {{tracker_url}}/statuses
+
+# Step 3: Merge data from both steps
+@step merge_data <- fetch_applications, check_statuses
+    func Merge Job Data
+
+# Step 4: Filter active applications
+@step filter_active <- merge_data
+    func Filter Active Jobs
+
+# Step 5: Generate summary
+@step generate_summary <- filter_active
+    func Generate Job Summary

@@ -1,0 +1,84 @@
+{
+  "id": "advanced-logic",
+  "name": "Advanced Logic Pipeline",
+  "description": "Demonstrates complex dependency chains with parallel and sequential stages",
+  "variables": {
+    "api_url": "https://httpbin.org"
+  },
+  "steps": [
+    {
+      "id": "init_config",
+      "name": "1. Initialize Configuration",
+      "type": "request",
+      "config": {
+        "inline_request": {
+          "method": "GET",
+          "url": "{{api_url}}/get?stage=init"
+        }
+      },
+      "output_variable": "config_raw"
+    },
+    {
+      "id": "fetch_users",
+      "name": "2. Fetch Users",
+      "type": "request",
+      "depends_on": ["init_config"],
+      "config": {
+        "inline_request": {
+          "method": "GET",
+          "url": "{{api_url}}/get?resource=users"
+        }
+      },
+      "output_variable": "users_raw"
+    },
+    {
+      "id": "fetch_orders",
+      "name": "3. Fetch Orders",
+      "type": "request",
+      "depends_on": ["init_config"],
+      "config": {
+        "inline_request": {
+          "method": "GET",
+          "url": "{{api_url}}/get?resource=orders"
+        }
+      },
+      "output_variable": "orders_raw"
+    },
+    {
+      "id": "enrich_users",
+      "name": "4. Enrich User Data",
+      "type": "function",
+      "depends_on": ["fetch_users"],
+      "config": {
+        "function_name": "Enrich User Data"
+      }
+    },
+    {
+      "id": "enrich_orders",
+      "name": "5. Enrich Order Data",
+      "type": "function",
+      "depends_on": ["fetch_orders"],
+      "config": {
+        "function_name": "Enrich Order Data"
+      }
+    },
+    {
+      "id": "join_data",
+      "name": "6. Join Users and Orders",
+      "type": "function",
+      "depends_on": ["enrich_users", "enrich_orders"],
+      "config": {
+        "function_name": "Join User Order Data"
+      }
+    },
+    {
+      "id": "generate_dashboard",
+      "name": "7. Generate Dashboard",
+      "type": "function",
+      "depends_on": ["join_data"],
+      "config": {
+        "function_name": "Generate Dashboard"
+      }
+    }
+  ]
+}

@@ -1,0 +1,62 @@
+{
+  "id": "multi-provider-aggregator",
+  "name": "Multi-Provider Aggregator",
+  "description": "Fetch data from multiple providers, normalize, and merge results",
+  "variables": {
+    "provider_a_url": "https://api.provider-a.com/data",
+    "provider_b_url": "https://api.provider-b.com/data"
+  },
+  "steps": [
+    {
+      "id": "fetch_provider_a",
+      "name": "1. Fetch from Provider A",
+      "type": "request",
+      "config": {
+        "inline_request": {
+          "method": "GET",
+          "url": "{{provider_a_url}}"
+        }
+      },
+      "output_variable": "provider_a_raw"
+    },
+    {
+      "id": "fetch_provider_b",
+      "name": "2. Fetch from Provider B",
+      "type": "request",
+      "config": {
+        "inline_request": {
+          "method": "GET",
+          "url": "{{provider_b_url}}"
+        }
+      },
+      "output_variable": "provider_b_raw"
+    },
+    {
+      "id": "normalize_a",
+      "name": "3. Normalize Provider A Data",
+      "type": "function",
+      "depends_on": ["fetch_provider_a"],
+      "config": {
+        "function_name": "Normalize Provider A"
+      }
+    },
+    {
+      "id": "normalize_b",
+      "name": "4. Normalize Provider B Data",
+      "type": "function",
+      "depends_on": ["fetch_provider_b"],
+      "config": {
+        "function_name": "Normalize Provider B"
+      }
+    },
+    {
+      "id": "merge_providers",
+      "name": "5. Merge All Provider Data",
+      "type": "function",
+      "depends_on": ["normalize_a", "normalize_b"],
+      "config": {
+        "function_name": "Merge Provider Data"
+      }
+    }
+  ]
+}

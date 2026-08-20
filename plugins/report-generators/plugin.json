@@ -1,0 +1,12 @@
+{
+  "name": "report-generators",
+  "version": "1.0.0",
+  "description": "Report generation utilities: HTML reports, Markdown reports, and text-based charts",
+  "author": "SCLPLAPI",
+  "category": "reporting",
+  "functions": ["functions/*.py"],
+  "workflows": [],
+  "hooks": {},
+  "variables": {},
+  "dependencies": []
+}

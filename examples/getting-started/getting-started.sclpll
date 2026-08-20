@@ -1,0 +1,38 @@
+@workflow getting-started "Getting Started with SCLPLAPI"
+    A beginner-friendly workflow demonstrating all SCLPLAPI features:
+    parallel requests, dependencies, functions, and data merging.
+    Uses JSONPlaceholder API (no auth needed).
+
+@base_url https://jsonplaceholder.typicode.com
+
+# ── Parallel requests (no dependencies) ──────────────────────────────────
+
+@step fetch_users -> users_data
+    request GET {{base_url}}/users
+
+@step fetch_posts -> posts_data
+    request GET {{base_url}}/posts
+
+@step fetch_todos -> todos_data
+    request GET {{base_url}}/todos
+
+# ── Dependent requests (run after fetch_users) ──────────────────────────
+
+@step fetch_user_detail <- fetch_users -> user_detail
+    request GET {{base_url}}/users/1
+
+@step fetch_user_posts <- fetch_users -> user_posts
+    request GET {{base_url}}/users/1/posts
+
+@step create_post <- fetch_users -> new_post
+    request POST {{base_url}}/posts
+    header Content-Type application/json
+    body {"title": "SCLPLAPI Test", "body": "Created by SCLPLAPI workflow", "userId": 1}
+
+# ── Functions (process data from multiple steps) ────────────────────────
+
+@step merge_data <- fetch_users, fetch_posts, fetch_todos -> merged
+    func merge_all_data
+
+@step generate_report <- merge_data, fetch_user_detail, fetch_user_posts, create_post -> report
+    func generate_report

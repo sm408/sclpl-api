@@ -1,0 +1,62 @@
+{
+  "id": "weather-pipeline",
+  "name": "Weather at 5AM Pipeline",
+  "description": "Get today's weather → extract 5AM data → export to JSON & CSV",
+  "variables": {
+    "city": "NewYork"
+  },
+  "steps": [
+    {
+      "id": "get_weather_today",
+      "name": "1. Get Today's Weather",
+      "type": "request",
+      "config": {
+        "inline_request": {
+          "method": "GET",
+          "url": "https://wttr.in/{{city}}?format=j1"
+        }
+      },
+      "output_variable": "weather_raw"
+    },
+    {
+      "id": "extract_date",
+      "name": "2. Extract Today's Date",
+      "type": "function",
+      "depends_on": ["get_weather_today"],
+      "config": {
+        "function_name": "Extract Date"
+      }
+    },
+    {
+      "id": "get_weather_hourly",
+      "name": "3. Fetch Hourly Weather for {{today}}",
+      "type": "request",
+      "depends_on": ["extract_date"],
+      "config": {
+        "inline_request": {
+          "method": "GET",
+          "url": "https://wttr.in/{{city}}?format=j1"
+        }
+      },
+      "output_variable": "hourly_raw"
+    },
+    {
+      "id": "extract_weather",
+      "name": "4. Extract 5AM Weather Data",
+      "type": "function",
+      "depends_on": ["get_weather_hourly"],
+      "config": {
+        "function_name": "Extract 5AM Weather"
+      }
+    },
+    {
+      "id": "export_data",
+      "name": "5. Export to JSON & CSV",
+      "type": "function",
+      "depends_on": ["extract_weather"],
+      "config": {
+        "function_name": "Export Weather Data"
+      }
+    }
+  ]
+}

@@ -1,0 +1,24 @@
+# Financial Data Pipeline
+# Fetches stock data, computes moving average, generates report
+
+@workflow financial-pipeline "Financial Data Pipeline"
+    Fetch stock data, compute moving average, and export report
+
+@base_url https://query1.finance.yahoo.com
+@var symbol = AAPL
+
+# Step 1: Fetch stock data
+@step fetch_stock_data -> stock_raw
+    request GET {{base_url}}/v8/finance/chart/{{symbol}}?range=1mo&interval=1d
+
+# Step 2: Parse the raw price data
+@step parse_prices <- fetch_stock_data
+    func Parse Stock Prices
+
+# Step 3: Compute 7-day moving average
+@step compute_moving_avg <- parse_prices
+    func Compute Moving Average
+
+# Step 4: Generate summary report
+@step generate_report <- compute_moving_avg
+    func Generate Financial Report

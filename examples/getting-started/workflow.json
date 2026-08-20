@@ -1,0 +1,100 @@
+{
+  "id": "getting-started",
+  "name": "Getting Started with SCLPLAPI",
+  "description": "A beginner-friendly workflow demonstrating all SCLPLAPI features: parallel requests, dependencies, functions, and data merging.",
+  "variables": {
+    "base_url": "https://jsonplaceholder.typicode.com"
+  },
+  "steps": [
+    {
+      "id": "fetch_users",
+      "name": "Fetch all users",
+      "type": "request",
+      "config": {
+        "method": "GET",
+        "url": "{{base_url}}/users"
+      },
+      "depends_on": [],
+      "output_variable": "users_data"
+    },
+    {
+      "id": "fetch_posts",
+      "name": "Fetch all posts",
+      "type": "request",
+      "config": {
+        "method": "GET",
+        "url": "{{base_url}}/posts"
+      },
+      "depends_on": [],
+      "output_variable": "posts_data"
+    },
+    {
+      "id": "fetch_todos",
+      "name": "Fetch all todos",
+      "type": "request",
+      "config": {
+        "method": "GET",
+        "url": "{{base_url}}/todos"
+      },
+      "depends_on": [],
+      "output_variable": "todos_data"
+    },
+    {
+      "id": "fetch_user_detail",
+      "name": "Fetch first user details",
+      "type": "request",
+      "config": {
+        "method": "GET",
+        "url": "{{base_url}}/users/1"
+      },
+      "depends_on": ["fetch_users"],
+      "output_variable": "user_detail"
+    },
+    {
+      "id": "fetch_user_posts",
+      "name": "Fetch first user's posts",
+      "type": "request",
+      "config": {
+        "method": "GET",
+        "url": "{{base_url}}/users/1/posts"
+      },
+      "depends_on": ["fetch_users"],
+      "output_variable": "user_posts"
+    },
+    {
+      "id": "create_post",
+      "name": "Create a new post",
+      "type": "request",
+      "config": {
+        "method": "POST",
+        "url": "{{base_url}}/posts",
+        "headers": {
+          "Content-Type": "application/json"
+        },
+        "body": "{\"title\": \"SCLPLAPI Test\", \"body\": \"This post was created by SCLPLAPI workflow\", \"userId\": 1}"
+      },
+      "depends_on": ["fetch_users"],
+      "output_variable": "new_post"
+    },
+    {
+      "id": "merge_data",
+      "name": "Merge all data",
+      "type": "function",
+      "config": {
+        "function_name": "merge_all_data"
+      },
+      "depends_on": ["fetch_users", "fetch_posts", "fetch_todos"],
+      "output_variable": "merged"
+    },
+    {
+      "id": "generate_report",
+      "name": "Generate summary report",
+      "type": "function",
+      "config": {
+        "function_name": "generate_report"
+      },
+      "depends_on": ["merge_data", "fetch_user_detail", "fetch_user_posts", "create_post"],
+      "output_variable": "report"
+    }
+  ]
+}

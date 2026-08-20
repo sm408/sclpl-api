@@ -1,0 +1,32 @@
+@workflow api-testing "API Testing Workflow"
+    Test multiple API endpoints with parallel requests.
+    Validates responses and generates a test report.
+    Uses JSONPlaceholder API (no auth needed).
+
+@base_url https://jsonplaceholder.typicode.com
+
+# ── Parallel API tests ──────────────────────────────────────────────────
+
+@step test_get_users -> users_response
+    request GET {{base_url}}/users
+
+@step test_get_posts -> posts_response
+    request GET {{base_url}}/posts
+
+@step test_get_comments -> comments_response
+    request GET {{base_url}}/comments
+
+@step test_create_post -> create_response
+    request POST {{base_url}}/posts
+    header Content-Type application/json
+    body {"title": "Test Post", "body": "Test body", "userId": 1}
+
+@step test_update_post -> update_response
+    request PUT {{base_url}}/posts/1
+    header Content-Type application/json
+    body {"id": 1, "title": "Updated Post", "body": "Updated body", "userId": 1}
+
+# ── Validate results ────────────────────────────────────────────────────
+
+@step validate_responses <- test_get_users, test_get_posts, test_get_comments, test_create_post, test_update_post -> validation_result
+    func merge_all_data

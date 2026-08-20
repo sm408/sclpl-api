@@ -1,0 +1,355 @@
+/**
+ * SCLPLAPI Design Tokens
+ *
+ * CSS custom properties for theming (dark, light, high-contrast)
+ * and density (compact, comfortable). Dark-first design with
+ * graphite workbench and indigo/cyan execution accents.
+ *
+ * Usage:
+ *   <html data-theme="dark" data-density="comfortable">
+ *
+ * Reduced motion is handled via media query. All sizing uses rem units
+ * so zoom is handled naturally by the browser.
+ */
+
+/* ── Base reset ──────────────────────────────────────────────────────── */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+/* ── Dark theme (default) ────────────────────────────────────────────── */
+
+[data-theme="dark"],
+:root {
+  /* Surface hierarchy */
+  --surface-ground: #0f1117;
+  --surface-base: #161822;
+  --surface-raised: #1c1f2e;
+  --surface-overlay: #222538;
+  --surface-border: #2a2d3e;
+  --surface-border-subtle: #1f2233;
+
+  /* Text */
+  --text-primary: #e8eaed;
+  --text-secondary: #9aa0b0;
+  --text-tertiary: #6b7185;
+  --text-disabled: #4a4f63;
+  --text-inverse: #0f1117;
+
+  /* Brand / accent */
+  --accent-primary: #6366f1;       /* indigo-500 */
+  --accent-primary-hover: #818cf8; /* indigo-400 */
+  --accent-primary-muted: #3730a3; /* indigo-800 */
+  --accent-secondary: #06b6d4;     /* cyan-500 */
+  --accent-secondary-hover: #22d3ee; /* cyan-400 */
+  --accent-secondary-muted: #155e75; /* cyan-800 */
+
+  /* Semantic */
+  --color-success: #22c55e;
+  --color-success-muted: #14532d;
+  --color-warning: #f59e0b;
+  --color-warning-muted: #78350f;
+  --color-error: #ef4444;
+  --color-error-muted: #7f1d1d;
+  --color-info: #3b82f6;
+  --color-info-muted: #1e3a5f;
+
+  /* Method badges */
+  --method-get: #22c55e;
+  --method-post: #f59e0b;
+  --method-put: #3b82f6;
+  --method-patch: #a855f7;
+  --method-delete: #ef4444;
+  --method-head: #6b7280;
+  --method-options: #6b7280;
+
+  /* Shadows */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.4);
+  --shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.5);
+  --shadow-overlay: 0 20px 25px rgba(0, 0, 0, 0.6);
+
+  /* Focus ring */
+  --focus-ring: 0 0 0 2px var(--surface-ground), 0 0 0 4px var(--accent-primary);
+
+  /* Scrollbar */
+  --scrollbar-track: var(--surface-base);
+  --scrollbar-thumb: var(--surface-border);
+  --scrollbar-thumb-hover: var(--text-tertiary);
+}
+
+/* ── Light theme ─────────────────────────────────────────────────────── */
+
+[data-theme="light"] {
+  --surface-ground: #f8f9fa;
+  --surface-base: #ffffff;
+  --surface-raised: #f1f3f5;
+  --surface-overlay: #ffffff;
+  --surface-border: #dee2e6;
+  --surface-border-subtle: #e9ecef;
+
+  --text-primary: #1a1d23;
+  --text-secondary: #495057;
+  --text-tertiary: #868e96;
+  --text-disabled: #adb5bd;
+  --text-inverse: #ffffff;
+
+  --accent-primary: #4f46e5;
+  --accent-primary-hover: #6366f1;
+  --accent-primary-muted: #e0e7ff;
+  --accent-secondary: #0891b2;
+  --accent-secondary-hover: #06b6d4;
+  --accent-secondary-muted: #cffafe;
+
+  --color-success: #16a34a;
+  --color-success-muted: #dcfce7;
+  --color-warning: #d97706;
+  --color-warning-muted: #fef3c7;
+  --color-error: #dc2626;
+  --color-error-muted: #fee2e2;
+  --color-info: #2563eb;
+  --color-info-muted: #dbeafe;
+
+  --method-get: #16a34a;
+  --method-post: #d97706;
+  --method-put: #2563eb;
+  --method-patch: #9333ea;
+  --method-delete: #dc2626;
+  --method-head: #6b7280;
+  --method-options: #6b7280;
+
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.07);
+  --shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.1);
+  --shadow-overlay: 0 20px 25px rgba(0, 0, 0, 0.12);
+
+  --focus-ring: 0 0 0 2px #ffffff, 0 0 0 4px var(--accent-primary);
+
+  --scrollbar-track: var(--surface-raised);
+  --scrollbar-thumb: var(--surface-border);
+  --scrollbar-thumb-hover: var(--text-tertiary);
+}
+
+/* ── High contrast theme ─────────────────────────────────────────────── */
+
+[data-theme="high-contrast"] {
+  --surface-ground: #000000;
+  --surface-base: #0a0a0a;
+  --surface-raised: #1a1a1a;
+  --surface-overlay: #1a1a1a;
+  --surface-border: #ffffff;
+  --surface-border-subtle: #808080;
+
+  --text-primary: #ffffff;
+  --text-secondary: #e0e0e0;
+  --text-tertiary: #b0b0b0;
+  --text-disabled: #808080;
+  --text-inverse: #000000;
+
+  --accent-primary: #7c7cff;
+  --accent-primary-hover: #9d9dff;
+  --accent-primary-muted: #2a2a5c;
+  --accent-secondary: #00e5ff;
+  --accent-secondary-hover: #4dfff3;
+  --accent-secondary-muted: #004d5c;
+
+  --color-success: #00ff00;
+  --color-success-muted: #003300;
+  --color-warning: #ffff00;
+  --color-warning-muted: #333300;
+  --color-error: #ff0000;
+  --color-error-muted: #330000;
+  --color-info: #00aaff;
+  --color-info-muted: #002244;
+
+  --method-get: #00ff00;
+  --method-post: #ffff00;
+  --method-put: #00aaff;
+  --method-patch: #cc66ff;
+  --method-delete: #ff0000;
+  --method-head: #b0b0b0;
+  --method-options: #b0b0b0;
+
+  --shadow-sm: 0 0 0 1px #ffffff;
+  --shadow-md: 0 0 0 1px #ffffff;
+  --shadow-lg: 0 0 0 2px #ffffff;
+  --shadow-overlay: 0 0 0 2px #ffffff;
+
+  --focus-ring: 0 0 0 3px #ffff00;
+
+  --scrollbar-track: #0a0a0a;
+  --scrollbar-thumb: #ffffff;
+  --scrollbar-thumb-hover: #cccccc;
+}
+
+/* ── Density: comfortable (default) ──────────────────────────────────── */
+
+[data-density="comfortable"],
+:root {
+  --density-font-xs: 0.6875rem;   /* 11px */
+  --density-font-sm: 0.75rem;     /* 12px */
+  --density-font-base: 0.8125rem; /* 13px */
+  --density-font-md: 0.875rem;    /* 14px */
+  --density-font-lg: 1rem;        /* 16px */
+  --density-font-xl: 1.25rem;     /* 20px */
+
+  --density-space-1: 0.25rem;  /* 4px */
+  --density-space-2: 0.5rem;   /* 8px */
+  --density-space-3: 0.75rem;  /* 12px */
+  --density-space-4: 1rem;     /* 16px */
+  --density-space-5: 1.5rem;   /* 24px */
+  --density-space-6: 2rem;     /* 32px */
+
+  --density-radius-sm: 4px;
+  --density-radius-md: 6px;
+  --density-radius-lg: 8px;
+  --density-radius-full: 9999px;
+
+  --density-rail-width: 48px;
+  --density-topbar-height: 40px;
+  --density-tab-height: 36px;
+  --density-input-height: 32px;
+  --density-button-height: 32px;
+  --density-explorer-indent: 20px;
+}
+
+/* ── Density: compact ────────────────────────────────────────────────── */
+
+[data-density="compact"] {
+  --density-font-xs: 0.625rem;    /* 10px */
+  --density-font-sm: 0.6875rem;   /* 11px */
+  --density-font-base: 0.75rem;   /* 12px */
+  --density-font-md: 0.8125rem;   /* 13px */
+  --density-font-lg: 0.875rem;    /* 14px */
+  --density-font-xl: 1rem;        /* 16px */
+
+  --density-space-1: 0.125rem; /* 2px */
+  --density-space-2: 0.25rem;  /* 4px */
+  --density-space-3: 0.5rem;   /* 8px */
+  --density-space-4: 0.75rem;  /* 12px */
+  --density-space-5: 1rem;     /* 16px */
+  --density-space-6: 1.5rem;   /* 24px */
+
+  --density-radius-sm: 2px;
+  --density-radius-md: 4px;
+  --density-radius-lg: 6px;
+  --density-radius-full: 9999px;
+
+  --density-rail-width: 40px;
+  --density-topbar-height: 32px;
+  --density-tab-height: 30px;
+  --density-input-height: 28px;
+  --density-button-height: 28px;
+  --density-explorer-indent: 16px;
+}
+
+/* ── Typography ──────────────────────────────────────────────────────── */
+
+:root {
+  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', 'Consolas', monospace;
+}
+
+/* ── Transitions ─────────────────────────────────────────────────────── */
+
+:root {
+  --transition-fast: 100ms ease;
+  --transition-normal: 200ms ease;
+  --transition-slow: 300ms ease;
+}
+
+/* ── Reduced motion ──────────────────────────────────────────────────── */
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ── Forced reduced motion via data attribute ────────────────────────── */
+
+[data-motion="reduced"] *,
+[data-motion="reduced"] *::before,
+[data-motion="reduced"] *::after {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.01ms !important;
+  scroll-behavior: auto !important;
+}
+
+/* ── Scrollbar styling ───────────────────────────────────────────────── */
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--scrollbar-track);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--scrollbar-thumb);
+  border-radius: var(--density-radius-full);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--scrollbar-thumb-hover);
+}
+
+/* Firefox scrollbar */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
+}
+
+/* ── Base body styles ────────────────────────────────────────────────── */
+
+body {
+  font-family: var(--font-sans);
+  font-size: var(--density-font-base);
+  line-height: 1.5;
+  color: var(--text-primary);
+  background: var(--surface-ground);
+}
+
+/* ── Focus visible ───────────────────────────────────────────────────── */
+
+:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+/* ── Selection ───────────────────────────────────────────────────────── */
+
+::selection {
+  background: var(--accent-primary-muted);
+  color: var(--text-primary);
+}
+
+/* Minimum touch target sizes for accessibility */
+button,
+[role="button"],
+a,
+input,
+select,
+textarea {
+  min-height: 24px;
+  min-width: 24px;
+}

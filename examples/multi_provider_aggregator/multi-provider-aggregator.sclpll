@@ -1,0 +1,28 @@
+# Multi-Provider Aggregator Pipeline
+# Fetches from multiple providers, normalizes, and merges
+
+@workflow multi-provider-aggregator "Multi-Provider Aggregator"
+    Fetch data from multiple providers, normalize, and merge results
+
+@var provider_a_url = https://api.provider-a.com/data
+@var provider_b_url = https://api.provider-b.com/data
+
+# Step 1: Fetch from provider A (independent)
+@step fetch_provider_a -> provider_a_raw
+    request GET {{provider_a_url}}
+
+# Step 2: Fetch from provider B (independent, parallel)
+@step fetch_provider_b -> provider_b_raw
+    request GET {{provider_b_url}}
+
+# Step 3: Normalize provider A data
+@step normalize_a <- fetch_provider_a
+    func Normalize Provider A
+
+# Step 4: Normalize provider B data
+@step normalize_b <- fetch_provider_b
+    func Normalize Provider B
+
+# Step 5: Merge all normalized data
+@step merge_providers <- normalize_a, normalize_b
+    func Merge Provider Data

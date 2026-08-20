@@ -1,0 +1,50 @@
+{
+  "id": "financial-pipeline",
+  "name": "Financial Data Pipeline",
+  "description": "Fetch stock data, compute moving average, and export report",
+  "variables": {
+    "symbol": "AAPL",
+    "base_url": "https://query1.finance.yahoo.com"
+  },
+  "steps": [
+    {
+      "id": "fetch_stock_data",
+      "name": "1. Fetch Stock Data",
+      "type": "request",
+      "config": {
+        "inline_request": {
+          "method": "GET",
+          "url": "{{base_url}}/v8/finance/chart/{{symbol}}?range=1mo&interval=1d"
+        }
+      },
+      "output_variable": "stock_raw"
+    },
+    {
+      "id": "parse_prices",
+      "name": "2. Parse Price Data",
+      "type": "function",
+      "depends_on": ["fetch_stock_data"],
+      "config": {
+        "function_name": "Parse Stock Prices"
+      }
+    },
+    {
+      "id": "compute_moving_avg",
+      "name": "3. Compute 7-Day Moving Average",
+      "type": "function",
+      "depends_on": ["parse_prices"],
+      "config": {
+        "function_name": "Compute Moving Average"
+      }
+    },
+    {
+      "id": "generate_report",
+      "name": "4. Generate Summary Report",
+      "type": "function",
+      "depends_on": ["compute_moving_avg"],
+      "config": {
+        "function_name": "Generate Financial Report"
+      }
+    }
+  ]
+}
