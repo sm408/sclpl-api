@@ -1,151 +1,81 @@
-# SCLPLAPI
+# sclpl
 
-<p align="center">
-  <code>S C L P L A P I</code><br>
-  <strong>API Workflow Studio · Python-First · Local-First</strong>
-</p>
+A command-line pipeline runner for HTTP APIs.
 
-<p align="center">
-  <img src="https://img.shields.io/badge/python-3.10+-blue?logo=python&logoColor=white" alt="Python 3.10+">
-  <img src="https://img.shields.io/badge/tests-392%20passing-brightgreen?logo=pytest&logoColor=white" alt="Tests">
-  <img src="https://img.shields.io/badge/license-MIT-green" alt="License">
-  <img src="https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey" alt="Platform">
-</p>
+`sclpl` reads a workflow, resolves a dependency graph from the references in it, runs the graph as
+fast as the remote allows, and writes CSV, JSON, NDJSON, Parquet, Excel, or SQLite. No TUI, no web
+UI, no server.
 
----
+> **Status: M0 of a rewrite.** The command below works today. Workflows, the expression language,
+> the scheduler, and the rest of the surface land in M1–M9 — see
+> [`docs/cli-rebuild/SPEC.md`](docs/cli-rebuild/SPEC.md) §17 for the milestone list, and
+> [`docs/cli-rebuild/HANDOFF.md`](docs/cli-rebuild/HANDOFF.md) to pick the work up.
 
-SCLPLAPI is a programmable, local-first API workflow studio with Python-native extensibility.
-
-| Role | What it does |
-|------|-------------|
-| **API Client** | Send HTTP requests with variable resolution |
-| **Workflow Runner** | Chain steps with dependencies and parallelism |
-| **Transformation Engine** | Process responses with Python functions |
-| **Live Monitor** | Watch APIs in background, get notified on events |
-| **Export Workbench** | Output results to JSON, CSV, or reports |
-
-## Quick Start
+## Install
 
 ```bash
-# Clone and install
-git clone https://github.com/sm408/sclpl-api.git && cd sclpl-api
-pip install -e .
-
-# Launch the TUI
-python -m app
-
-# Or double-click sclplapi.bat (Windows) / ./sclplapi.sh (Linux/macOS)
+pip install -e ".[dev]"
 ```
 
-### Run an Example
+Extras: `[data]` for pandas and Excel, `[keyring]` for OS-keyring secrets, `[dev]` for the toolchain.
+
+## Use
 
 ```bash
-python -m app.core.engine.sclpll_cli run examples/weather_pipeline/weather-pipeline.sclpll
+sclpl call GET https://httpbin.org/json      # body to stdout, progress to stderr
+sclpl call GET https://api.test/v1/orders -H "Authorization: Bearer $TOKEN"
 ```
 
-## Features
-
-### Textual TUI
-
-Modern terminal interface built with Textual:
-
-- **Keyboard-first** — Ctrl+P command palette, Ctrl+T/R/W shortcuts
-- **Panel layout** — Sidebar, workspace tabs, status bar
-- **12 tabs** — Request, Collections, History, Workflows, Environments, Functions, Plugins, Monitors, Batch, Import/Export, Diff, Logs, Settings
-
-### Live API Monitor
-
-Watch APIs in the background while you work:
-
-```
-[Monitors] tab → New → Enter URL, interval, condition → Start
-Continue working... → Notification when condition met
-```
-
-Conditions: `status == 200`, `body.price > 100`, `body.status == "active"`
-
-### SCLPLL Scripting
-
-| Feature | Syntax |
-|---------|--------|
-| Define workflow | `@workflow id "Name"` |
-| Set base URL | `@base_url https://api.example.com` |
-| HTTP request | `@step id -> var` + `request GET url` |
-| Python function | `@step id <- deps -> var` + `func Name` |
-| Dependencies | `@step id <- dep1, dep2 -> var` |
-| Parallel | Steps with no `<-` run in parallel |
-| Loops | `@foreach {{collection}} as item` |
-| Conditions | `@when {{var}} == value` |
-
-### TUI Shortcuts
-
-| Key | Action |
-|-----|--------|
-| Ctrl+P | Command Palette |
-| Ctrl+T | New Request |
-| Ctrl+R | Run Request |
-| Ctrl+W | Close Tab |
-| Ctrl+B | Batch Mode |
-| Ctrl+M | Monitors |
-| F1 | Help |
-| F2 | Toggle Theme |
-| F5 | Refresh |
-
-## Examples
-
-| Example | Steps | Description |
-|---------|-------|-------------|
-| [Weather Pipeline](examples/weather_pipeline/) | 5 | Fetch weather, extract data, export |
-
-## Documentation
-
-| Document | Description |
-|----------|-------------|
-| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Backend architecture |
-| [docs/SCLPLL_LANGUAGE.md](docs/SCLPLL_LANGUAGE.md) | Language reference |
-| [docs/PLUGIN_SYSTEM.md](docs/PLUGIN_SYSTEM.md) | Plugin development |
-| [docs/WORKFLOW_ENGINE.md](docs/WORKFLOW_ENGINE.md) | Workflow engine |
-| [docs/TEST_PLAN.md](docs/TEST_PLAN.md) | Test plan |
-| [docs/TEST_RESULTS.md](docs/TEST_RESULTS.md) | Test results |
-
-## Testing
+Because stdout carries only data, it pipes:
 
 ```bash
-# Run all tests
-pytest tests/ -v
-
-# Run specific test suite
-pytest tests/test_textual_tui.py -v
-pytest tests/test_tui_features.py -v
-pytest tests/test_tui_comprehensive.py -v
-pytest tests/test_tui_advanced.py -v
-pytest tests/test_tui_error_handling.py -v
+sclpl call GET https://httpbin.org/json | jq .slideshow.title
 ```
 
-**392 tests** covering:
-- Unit tests (202)
-- Textual UI tests (26)
-- Feature tests (56)
-- Comprehensive tests (49)
-- Advanced tests (39)
-- Error handling tests (20)
+### Output control
 
-## Architecture
+| Flag | Effect |
+|---|---|
+| `-q` / `-qq` | Errors and summary only / total silence |
+| `-v` … `-vvv` | Step lines, then timings and retries, then scheduler detail |
+| `--json` | NDJSON events on stderr; the human view is suppressed |
+| `--plain` | One line per event, no escape sequences |
+| `--no-color` | Keep the layout, drop the colour (`NO_COLOR` does the same) |
 
+`SCLPL_RENDER=plain|simple|full` overrides the auto-detected renderer.
+
+### Exit codes
+
+`0` success · `1` step failure · `2` usage · `3` validation · `4` assertion · `5` cache miss under
+`--offline` · `6` unknown workflow or mode · `130` interrupted.
+
+## Design
+
+Ten invariants govern the code; they are listed in
+[`docs/cli-rebuild/SPEC.md`](docs/cli-rebuild/SPEC.md) §3. The two that shape most of what you will
+read:
+
+- **stdout is data, stderr is interface.** Progress never touches stdout.
+- **One writer to the terminal.** Every worker and plugin emits an event to a single queue; exactly
+  one task holds the stderr handle.
+
+The terminal layer is hand-written — `rich` is deliberately not a dependency. Dependencies are
+`httpx`, `typer`, `pydantic`, `aiosqlite`, and `pyarrow`.
+
+## Development
+
+```bash
+python -m ruff check sclpl tests scripts
+python -m ruff format --check sclpl tests scripts
+python -m mypy
+python -m pytest -q
+python scripts/check_budget.py      # per-package line budget, SPEC §19
 ```
-app/
-  core/            Engine, models, contracts
-  services/        Business logic
-  storage/         SQLite database
-  ui/              Textual TUI
-    screens/       Request, Collections, History, etc.
-    widgets/       Sidebar, Command Palette, JSON Viewer
-    adapter.py     UI abstraction layer
-functions/         Python extension functions
-plugins/           Plugin packages
-examples/          Example workflows
-```
 
-## License
+All four run in CI. The budget check is a gate, not a report: exceeding it means deleting something
+or moving the number in the SPEC on purpose.
 
-MIT
+## History
+
+The Textual TUI and the Vue/FastAPI studio this replaces are archived at commit `1b1abe0`. Their
+documentation, examples, and workflows are under `docs/attic/`.

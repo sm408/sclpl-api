@@ -3,59 +3,63 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "sclplapi"
+name = "sclpl"
 version = "0.1.0"
-description = "Local-first, Python-first API workflow studio"
+description = "A command-line pipeline runner for HTTP APIs"
+readme = "README.md"
 requires-python = ">=3.11"
+license = { text = "MIT" }
 dependencies = [
-    "httpx>=0.27,<1",
+    "httpx[http2]>=0.27,<1",
+    "typer>=0.12,<1",
     "pydantic>=2.5,<3",
     "aiosqlite>=0.20,<1",
-    "typer>=0.12,<1",
-    "rich>=13,<14",
-    "textual>=0.40,<1",
+    "pyarrow>=16,<21",
 ]
+
+# `rich` is deliberately absent: the terminal layer is hand-written (SPEC decision 7).
+# `textual`, `fastapi`, and `uvicorn` went with the TUI and the web studio (decision 6).
 
 [project.scripts]
-sclplapi = "app.ui.cli:app"
+sclpl = "sclpl.cli.app:app"
 
 [project.optional-dependencies]
-web = [
-    "fastapi>=0.115,<1",
-    "uvicorn>=0.32,<1",
-]
-excel = [
+data = [
+    "pandas>=2.2,<3",
     "openpyxl>=3.1,<4",
 ]
-all = [
-    "fastapi>=0.115,<1",
-    "uvicorn>=0.32,<1",
-    "openpyxl>=3.1,<4",
+keyring = [
+    "keyring>=25,<26",
+    "cryptography>=42,<46",
 ]
 dev = [
     "pytest>=8,<9",
-    "pytest-asyncio>=0.24,<1",
-    "ruff>=0.5,<1",
-    "fastapi>=0.115,<1",
-    "uvicorn>=0.32,<1",
-    "openpyxl>=3.1,<4",
-    "textual>=0.40,<1",
-    "cryptography>=42,<44",
+    "pytest-asyncio>=0.24,<2",
+    "ruff>=0.6,<1",
+    "mypy>=1.11,<2",
 ]
 
 [tool.hatch.build.targets.wheel]
-packages = ["app"]
-
-[tool.hatch.build.targets.wheel.force-include]
-# Include built SPA assets in the wheel
-"app/web/static" = "app/web/static"
+packages = ["sclpl"]
 
 [tool.ruff]
 target-version = "py311"
 line-length = 100
+extend-exclude = ["docs/attic"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "SIM"]
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+files = ["sclpl", "tests"]
+exclude = "docs/attic"
+warn_unreachable = true
+
+[[tool.mypy.overrides]]
+module = ["aiosqlite.*", "pyarrow.*", "pandas.*"]
+ignore_missing_imports = true
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

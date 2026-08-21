@@ -1,79 +1,66 @@
-# SCLPLAPI - Master Goal
+# sclpl — working agreement
 
-## Product Vision
+## What this is
 
-SCLPLAPI is a programmable, local-first API workflow studio with Python-native extensibility. It provides:
+`sclpl` is a **CLI-only** pipeline runner for HTTP APIs. It reads a workflow (JSON or SCLPLL v2) by
+name or path, compiles it to a typed DAG, executes it with continuous dependency-driven scheduling,
+and writes CSV / JSON / NDJSON / Parquet / Excel / SQLite.
 
-- **API Client** — Send HTTP requests with variable resolution
-- **Workflow Runner** — Chain steps with dependencies and parallelism
-- **Transformation Engine** — Process responses with Python functions
-- **Live Monitor** — Watch APIs in background, get notified on events
-- **Export Workbench** — Output results to JSON, CSV, or reports
+**Non-goals: no TUI, no web UI, no server, no daemon, no accounts.** The Textual TUI and the
+Vue/FastAPI studio were deleted in M0; commit `1b1abe0` is the archive.
 
-## Architecture
+## Read these first
 
-```
-Textual TUI  →  UI Adapter  →  Service Layer  →  Core Engine  →  Storage (SQLite)
-    ↓              ↓               ↓                ↓                ↓
-  Screens       Abstract        Collections      Workflow         SQLite
-  Widgets       Interface       Environments     SCLPLL           Migrations
-  Commands      (future GUI)    History          Functions
-                                Monitors         Plugins
-                                Export           Event Bus
-```
+| Document | Role |
+|---|---|
+| `docs/cli-rebuild/SPEC.md` | **Normative.** What to build. Wins any disagreement. |
+| `docs/cli-rebuild/HANDOFF.md` | Where the work stands, and what to pick up next. |
+| `docs/cli-rebuild/plan.html` | The argument and the evidence behind the constraints. |
 
-## Technology Stack
+## Invariants — a violation is a review block, not a style note
 
-| Layer | Technology |
-|-------|-----------|
-| TUI | Python, Textual, Rich |
-| Core | Python, Pydantic, httpx |
-| Storage | SQLite, aiosqlite |
-| Workflows | SCLPLL (custom DSL) |
-| Plugins | Python modules with plugin.json manifests |
-| Monitors | Background polling with condition evaluation |
+1. **stdout is data, stderr is interface.** Progress never touches stdout.
+2. **Values keep their Python type end to end.** Stringify only at an interpolation boundary.
+3. **The DAG is inferred from references.** Reading `@orders` creates the dependency; dependency
+   lists are never hand-maintained.
+4. **One writer to the terminal.** Everything emits to a single queue; one task holds the handle.
+5. **The render ladder only descends:** `full` → `simple` → `plain`. Never back up.
+6. **Modes only subtract steps and override scalars.** Never add, never rewire.
+7. **Expressions evaluate over an allowlisted AST.** Never `eval()` or `exec()`.
+8. **No abstraction until the second caller.** The old `contracts/` package had one implementation
+   per interface. Do not recreate it.
+9. **Secrets never reach a log, a label, or a trace.** Redaction lives in the reporter.
+10. **`docs/reference/` is generated.** Hand-editing it fails CI.
 
-## Key Components
+## Locked decisions
 
-### TUI (`app/ui/`)
-- `textual_app.py` — Main Textual application
-- `adapter.py` — Abstract UIAdapter base class
-- `screens/` — Request, Collections, History, Workflows, Environments, Functions, Plugins, Monitors, Batch, Import/Export, Diff, Logs, Settings
-- `widgets/` — Sidebar, Command Palette, JSON Viewer, Method Badge
-- `commands.py` — Command registry for palette
+Changing one of these needs an ADR in `docs/adr/` recording date, reason, and migration impact.
 
-### Services (`app/services/`)
-- `collection_service.py` — Collection and request CRUD
-- `environment_service.py` — Environment management
-- `history_service.py` — Request history
-- `monitor_service.py` — Monitor CRUD
-- `monitor_runner.py` — Background API polling
-- `export_service.py` — JSON/CSV/Excel export
-- `full_export_service.py` — Full workspace backup
-- `full_import_service.py` — Full workspace restore
-- `request_executor.py` — HTTP execution
-- `batch_runner.py` — Batch request execution
+1. The command is `sclpl`. No `sclplapi` alias.
+2. Bare shorthand `sclpl <wf> [mode] [in…] [out…]` is supported; scripts and CI use `sclpl run`.
+3. pandas and Excel ship as the `[data]` extra; missing extras are reported by preflight, never
+   mid-run.
+4. SCLPLL v2 is a clean break. No v1 converter.
+5. Run history in SQLite, retention default 5, pinned runs exempt.
+6. TUI / FastAPI / SPA are deleted, not deprecated.
+7. **The terminal layer is hand-written. `rich` is not a dependency.** A live region must survive a
+   worker pool writing underneath it, and a terminal bug in a user's shell is not reproducible.
+8. SQLite ships as a bundled *plugin*, not core — which is how we know the plugin API is sufficient.
 
-### Core (`app/core/`)
-- `engine/` — Workflow, SCLPLL compiler, parallel execution, plugins, event bus
-- `models/` — Request, Workflow, Context, Collection, Environment, History, Monitor, Plugin, Export
-- `contracts/` — Abstract interfaces
+## Layout
 
-### Storage (`app/storage/`)
-- `db.py` — SQLite connection
-- `migrations/` — Schema migrations (4 total)
+`sclpl/` holds `cli/ render/ catalog/ run/ values/ expr/ tables/ ext/ state/ plugins_bundled/`.
+The full tree, package by package, is SPEC §4.
 
-## Development Philosophy
+## Rules of the road
 
-- Python owns all execution
-- TUI is the primary interface
-- No web frontend dependencies required
-- Services are UI-agnostic (CLI, TUI, future GUI all use same services)
-- Event-driven architecture for real-time updates
-
-## Backend Rules
-
-- SQLite for storage, Pydantic for validation
-- All async operations through service layer
-- Event bus for cross-component communication
-- Background tasks for monitors and batch execution
+- **Dependencies:** `httpx`, `typer`, `pydantic`, `aiosqlite`, `pyarrow`. Adding a sixth needs a
+  reason in the commit message. Each existing one does three or four jobs.
+- **Size budget:** per-package line budgets in SPEC §19, enforced by `scripts/check_budget.py` in
+  CI. Deleting counts as progress; say what shrank in the commit message.
+- **Gates:** `ruff check`, `ruff format --check`, `mypy` (strict), `pytest`, and the budget check.
+  All five must pass before a commit.
+- **Tests:** no network in CI except the local mock server in `tests/integration/conftest.py`.
+  Secrets never appear in a fixture, a snapshot, or a log.
+- **Nothing is stubbed.** If `--help` lists a command, that command works. A milestone registers its
+  surface when it implements it.

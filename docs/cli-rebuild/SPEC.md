@@ -573,13 +573,13 @@ base64.** Redaction happens in the reporter, keyed on the set of resolved secret
 
 Do these in order. Each is independently demonstrable.
 
-### M0 — Strip and skeleton
-- [ ] Delete `app/ui/`, `app/web/`, `web/`, `tests/test_tui*.py`, `tests/test_web*.py`, `tests/test_*_api.py`
-- [ ] Move `docs/plan/` → `docs/attic/`; delete `start-web.*`, `sclplapi.bat/.sh`, `openapi_snapshot.json`, stray logs
-- [ ] Create `sclpl/` per §4; `pyproject.toml` with `[data]`, `[keyring]`, `[dev]` extras; entry point `sclpl = sclpl.cli.app:app`
-- [ ] Reporter facade + all four sinks + event dataclasses (engine emits, never prints)
-- [ ] CI: ruff, mypy strict, pytest, line-budget check
-- **Exit:** `sclpl call GET https://httpbin.org/json` works and honours `-q`, `-v`, `--json`
+### M0 — Strip and skeleton — **done, 21 Aug 2026**
+- [x] Deleted the whole of `app/` (not separable — `services/` imported `app.web.errors`), plus `web/`, `tools/`, `scripts/`, and the v1 tests: 250 files, 59,093 lines
+- [x] Moved `docs/plan/`, the v1 docs, examples, workflows, functions, and plugins to `docs/attic/`; carry-overs preserved at `docs/attic/carried/`; deleted `start-web.*`, `sclplapi.bat/.sh`, `openapi_snapshot.json`, stray logs
+- [x] Created `sclpl/` per §4; `pyproject.toml` with `[data]`, `[keyring]`, `[dev]`; entry point `sclpl = sclpl.cli.app:app`; `rich` and `textual` gone
+- [x] Reporter facade + all four sinks + event dataclasses + redaction (engine emits, never prints)
+- [x] CI: ruff, ruff format, mypy strict, pytest, line-budget check — on 3.11 and 3.13
+- **Exit met:** `sclpl call GET https://httpbin.org/json` works and honours `-q`, `-v`, `--json`
 
 ### M1 — Typed values and expressions
 - [ ] `ValueStore`, `Binding`, digests; `ValueRef` stub (spill lands in M7)

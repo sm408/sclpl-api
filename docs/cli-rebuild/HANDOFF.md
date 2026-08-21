@@ -2,9 +2,9 @@
 
 Pick up here. Read this file first, then **`SPEC.md`** — the normative implementation spec you build
 from. `plan.html` is the full argument with evidence; read it when you need the reasoning behind a
-constraint. Nothing has been deleted yet — the rebuild starts at **M0**.
+constraint.
 
-**All six open decisions were answered on 21 Aug 2026 (§8). M0 is unblocked.**
+**M0 is done (21 Aug 2026). Start at M1 — see §10 for the state it left behind.**
 
 ---
 
@@ -18,8 +18,8 @@ constraint. Nothing has been deleted yet — the rebuild starts at **M0**.
 | Plan (why) | `docs/cli-rebuild/plan.html` |
 | Spec (what to build) | `docs/cli-rebuild/SPEC.md` — normative |
 
-The baseline commit is the only copy of the Textual TUI and the Vue/FastAPI studio once M0 runs.
-Do not delete `main`.
+The baseline commit is now the only copy of the Textual TUI and the Vue/FastAPI studio — M0 deleted
+them from the working tree. Do not delete `main`.
 
 ---
 
@@ -90,7 +90,7 @@ Each is independently demonstrable. Do them in order; M0–M3 already produce a 
 
 | | Milestone | Exit criterion |
 |---|---|---|
-| **M0** | Strip and skeleton | `sclpl call GET https://httpbin.org/json` works and honours `-q` / `-v` / `--json` |
+| ~~**M0**~~ | ~~Strip and skeleton~~ | **Done.** `sclpl call GET https://httpbin.org/json` works and honours `-q` / `-v` / `--json` |
 | **M1** | Typed values and expressions | `@a.body.items[?(price > 10)].id` evaluates; a bad path fails with a suggestion |
 | **M2** | Scheduler and transport | The 7-node graph in plan §10 finishes in critical-path time; 500 steps share one pool; `Ctrl-C` is clean |
 | **M3** | The view | pty snapshots pass at all three rungs; piping, resizing, and `Ctrl-C` each leave a restored terminal |
@@ -144,17 +144,53 @@ layer is hand-written (`rich` is not a dependency), and SQLite ships as a bundle
 ## 9. Start here
 
 ```bash
-git log --oneline -1          # expect 1b1abe0 or later on worktree-cli-studio
+python -m pip install -e ".[dev]"
+python -m pytest -q && python scripts/check_budget.py
+sclpl call GET https://httpbin.org/json | head
 ```
 
-Then M0, in this order:
-
-1. Delete `app/ui/`, `app/web/`, `web/`, `tests/test_tui*.py`, `tests/test_web*.py`,
-   `tests/test_*_api.py`. Move `docs/plan/` to `docs/attic/`.
-2. Create the `sclpl/` package per plan §04. Keep `app/core/engine/sclpll_compiler.py` and
-   `app/storage/` — they are the two pieces worth carrying over.
-3. Stand up the Typer command tree and the reporter facade with all four sinks before any engine
-   work, so every later milestone has somewhere to report to.
-4. CI: ruff, mypy strict, pytest, and the line-budget check from §5.
+Then **M1** (SPEC §17): `ValueStore` and typed bindings, the path resolver with nearest-key
+suggestions, the expression lexer/parser/AST, and the dispatch table with scalar and list overloads.
+Exit criterion: `@a.body.items[?(price > 10)].id` evaluates, and a bad path fails with a suggestion.
 
 Commit messages say what shrank. If a milestone adds a feature and the total drops, say so.
+
+---
+
+## 10. What M0 left behind
+
+**Deleted: 250 files, 59,093 lines** — the Textual TUI, the FastAPI backend, the Vue SPA, and the
+`app/` package they were entangled with. Written: ~1,000 lines of code across `sclpl/cli/` and
+`sclpl/render/`, plus 77 tests.
+
+The whole of `app/` went, not just `app/ui/` and `app/web/`. It was not separable: `services/`
+imported `app.web.errors`, `sclpll_compiler` imported `app.ui.app`. SPEC §4 describes the tree with
+no `app/` in it, so the deletion is what the spec already called for. The two named carry-overs are
+preserved at `docs/attic/carried/` — `sclpll_v1_compiler.py` for M4's SCLPLL work and `storage/` for
+M9's `state/db.py`. Baseline `1b1abe0` remains the full archive; v1 docs, examples, workflows,
+functions, and plugins are under `docs/attic/`.
+
+**What exists now**
+
+| | |
+|---|---|
+| `sclpl/render/` | `events.py` (9 event types + the verbosity policy), `reporter.py` (single-writer queue, fan-out, redaction), `term.py` (probe, descend-only ladder, triple restore), `human.py`, `plain.py`, `jsonl.py`, `redact.py` |
+| `sclpl/cli/` | `app.py` (Typer root, global flags), `options.py` (exit codes, verbosity), `run.py` (`call`) |
+| Gates | `ruff check`, `ruff format --check`, `mypy` strict, `pytest`, `scripts/check_budget.py`; all five in `.github/workflows/ci.yml` on 3.11 and 3.13 |
+
+**Three things to know before M1**
+
+1. **`render/` is at 790 of its 900-line budget**, and M3's live region has not been written yet.
+   Either that budget moves in SPEC §19 on purpose, or the live region has to be very tight. Decide
+   before M3, not during it.
+2. **The budget checker excludes docstrings** — it counts code only. Charging prose against the same
+   budget as implementation buys less of the thing that is harder to recover later. If you disagree,
+   the rule is one function in `scripts/check_budget.py`.
+3. **`HumanSink.descend()` is the ladder's only live implementation.** The reporter calls it when a
+   sink raises. M3's live region must keep that contract: a write failure descends one rung, never
+   climbs, never goes silent.
+
+**Not done, deliberately:** the bare-invocation launcher prints help and exits `2` (the documented
+non-TTY behaviour); the menu is M4's, alongside the catalogue it lists. `run`, `validate`, `explain`,
+`fmt`, and `convert` are not registered at all rather than stubbed — `--help` never advertises
+something that does not work.

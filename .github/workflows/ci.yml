@@ -1,0 +1,50 @@
+name: CI
+
+on:
+  push:
+    branches: [main, "feat/**", "worktree-**"]
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # No network in CI except the local mock server (SPEC section 18). The plain rung is
+  # also what a log-after-the-fact reader wants.
+  SCLPL_RENDER: plain
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.13"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[dev]"
+
+      - name: Lint
+        run: |
+          python -m ruff check sclpl tests scripts
+          python -m ruff format --check sclpl tests scripts
+
+      - name: Types
+        run: python -m mypy
+
+      - name: Tests
+        run: python -m pytest -q
+
+      - name: Line budget
+        run: python scripts/check_budget.py
