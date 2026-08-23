@@ -21,7 +21,7 @@ dependencies = [
 # `textual`, `fastapi`, and `uvicorn` went with the TUI and the web studio (decision 6).
 
 [project.scripts]
-sclpl = "sclpl.cli.app:app"
+sclpl = "sclpl.cli.app:entrypoint"
 
 [project.optional-dependencies]
 data = [

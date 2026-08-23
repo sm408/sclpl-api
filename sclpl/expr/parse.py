@@ -93,7 +93,15 @@ def parse_interpolated(source: str) -> Expr:
     A string that is exactly one hole (`"{{@a.id}}"`) yields that expression directly,
     so the value keeps its type (invariant 2). Anything else becomes an
     `Interpolation`, where stringification happens at the boundary and nowhere else.
+
+    A string that is a bare reference (`"@orders.body"`) is also an expression. Reading
+    it as literal text would be worse than useless: no `@name` would be collected, so
+    no dependency edge would exist (invariant 3), and the step would run before its
+    input and then interpolate the reference's own source text into the request.
     """
+    if "{{" not in source and source.lstrip().startswith("@"):
+        return parse(source)
+
     parts: list[str | Node] = []
     index = 0
     while index < len(source):

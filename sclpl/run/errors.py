@@ -109,45 +109,57 @@ class UnknownTarget(SclplError):
 def nearest(name: str, candidates: Iterable[object], *, limit: int = 3) -> list[str]:
     """Candidate names closest to ``name``, best first.
 
-    Used everywhere a user can mistype an identifier. Levenshtein, with the cap derived
-    from *both* lengths: 'pric' and 'id' are three edits apart, which is within budget
-    for a four-character typo but well outside it for a two-character name. Judging on
-    the typo alone lets short unrelated names in, and a suggestion the user has to
-    dismiss is worse than no suggestion.
+    Used everywhere a user can mistype an identifier. Damerau-Levenshtein, with a
+    budget that grows in steps with the length of the *shorter* of the two words:
+    one edit up to four characters, two up to eight, three beyond.
+
+    Counting a transposition as one edit rather than two is what makes this work at a
+    tight budget. Transpositions are the most common typo there is -- 'stpe' for
+    'step', 'itmes' for 'items' -- and under plain Levenshtein they cost two, which
+    forces a budget loose enough to also admit 'lane' for 'tags'. A suggestion the user
+    has to stop and dismiss is worse than no suggestion.
     """
     names = [str(item) for item in candidates]
     if not names:
         return []
     scored: list[tuple[int, str]] = []
     for candidate in names:
-        ceiling = max(1, min(len(name), len(candidate)) // 2 + 1)
-        distance = _levenshtein(name.lower(), candidate.lower())
+        shorter = min(len(name), len(candidate))
+        ceiling = 1 if shorter <= 4 else 2 if shorter <= 8 else 3
+        distance = _damerau(name.lower(), candidate.lower())
         if distance <= ceiling:
             scored.append((distance, candidate))
     scored.sort(key=lambda pair: (pair[0], pair[1]))
     return [candidate for _, candidate in scored[:limit]]
 
 
-def _levenshtein(left: str, right: str) -> int:
+def _damerau(left: str, right: str) -> int:
+    """Optimal string alignment distance: insert, delete, substitute, or transpose."""
     if left == right:
         return 0
     if not left:
         return len(right)
     if not right:
         return len(left)
-    previous = list(range(len(right) + 1))
-    for i, lchar in enumerate(left, start=1):
-        current = [i]
-        for j, rchar in enumerate(right, start=1):
-            current.append(
-                min(
-                    previous[j] + 1,
-                    current[j - 1] + 1,
-                    previous[j - 1] + (lchar != rchar),
-                )
+
+    rows, columns = len(left) + 1, len(right) + 1
+    grid = [[0] * columns for _ in range(rows)]
+    for i in range(rows):
+        grid[i][0] = i
+    for j in range(columns):
+        grid[0][j] = j
+
+    for i in range(1, rows):
+        for j in range(1, columns):
+            cost = 0 if left[i - 1] == right[j - 1] else 1
+            grid[i][j] = min(
+                grid[i - 1][j] + 1,  # delete
+                grid[i][j - 1] + 1,  # insert
+                grid[i - 1][j - 1] + cost,  # substitute
             )
-        previous = current
-    return previous[-1]
+            if i > 1 and j > 1 and left[i - 1] == right[j - 2] and left[i - 2] == right[j - 1]:
+                grid[i][j] = min(grid[i][j], grid[i - 2][j - 2] + 1)  # transpose
+    return grid[-1][-1]
 
 
 def did_you_mean(name: str, candidates: Iterable[object]) -> str | None:
