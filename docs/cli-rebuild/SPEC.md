@@ -660,18 +660,23 @@ No network in CI except the local mock server. Secrets never appear in a fixture
 
 ## 19. Size budget
 
-Target **~7,150 lines**, against ~33,600 deleted. Enforced in CI.
+Revised by **ADR 0001** (23 Aug 2026): the original ~7,150 was estimated before any code
+existed and omitted `expr/ops/` and `plugins_bundled/` entirely. Current target
+**~14,200 lines**, against ~59,100 deleted. Enforced in CI by `scripts/check_budget.py`,
+which counts code and excludes docstrings.
 
 | Package | Budget | | Package | Budget |
 |---|---:|---|---|---:|
-| `cli/` | 850 | | `expr/` | 800 |
-| `render/` | 900 | | `tables/` | 500 |
-| `catalog/` | 400 | | `ext/` | 400 |
-| `run/` | 1,400 | | `state/` | 400 |
-| `values/` | 600 | | built-in functions | 900 |
+| `cli/` | 1,400 | | `expr/` | 1,300 |
+| `render/` | 1,300 | | `expr/ops/` | 1,400 |
+| `catalog/` | 500 | | `tables/` | 900 |
+| `run/` | 3,200 | | `ext/` | 700 |
+| `values/` | 1,000 | | `state/` | 900 |
+| built-in functions | 1,200 | | `plugins_bundled/` | 600 |
 
-Dependencies, each doing three or four jobs: `httpx`, `typer`, `pydantic`, `aiosqlite`, `pyarrow`.
-Extras: `[data]` (pandas), `[keyring]`, `[dev]`. **`rich` is not a dependency.**
+Dependencies, each doing three or four jobs: `httpx`, `typer`, `pydantic`, `aiosqlite`,
+`pyarrow`. Extras: `[data]` (pandas, openpyxl), `[keyring]`, `[dev]`. **`rich` is not a
+dependency.**
 
 Rules: no abstraction until the second caller; reuse before writing; one mechanism per concept;
 deleting counts as progress and is stated in the commit message.

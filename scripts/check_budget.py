@@ -26,21 +26,26 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 PACKAGE = ROOT / "sclpl"
 
-# SPEC section 19. Keep this table and the document in step.
+# SPEC section 19, as revised by ADR 0001. A key with a "/" is a sub-package, counted
+# on its own and excluded from its parent -- `expr/ops` is a catalogue of operators,
+# which grows with the language surface, while `expr` proper is the machinery that
+# reads it. Holding them to one number would let either hide growth in the other.
 BUDGETS: dict[str, int] = {
-    "cli": 850,
-    "render": 900,
-    "catalog": 400,
-    "run": 1400,
-    "values": 600,
-    "expr": 800,
-    "tables": 500,
-    "ext": 400,
-    "state": 400,
-    "functions": 900,
+    "cli": 1400,
+    "render": 1300,
+    "catalog": 500,
+    "run": 3200,
+    "values": 1000,
+    "expr": 1300,
+    "expr/ops": 1400,
+    "tables": 900,
+    "ext": 700,
+    "state": 900,
+    "functions": 1200,
+    "plugins_bundled": 600,
 }
 
-TOTAL_BUDGET = 7150
+TOTAL_BUDGET = 14200
 
 _HAS_DOCSTRING = (ast.Module, ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef)
 
@@ -82,10 +87,17 @@ def count_lines(path: Path) -> int:
 
 
 def count_package(name: str) -> int:
+    """Lines in ``name``, excluding any sub-package that has its own budget."""
     directory = PACKAGE / name
     if not directory.is_dir():
         return 0
-    return sum(count_lines(path) for path in sorted(directory.rglob("*.py")))
+    nested = [PACKAGE / key for key in BUDGETS if key != name and key.startswith(f"{name}/")]
+    total = 0
+    for path in sorted(directory.rglob("*.py")):
+        if any(path.is_relative_to(child) for child in nested):
+            continue
+        total += count_lines(path)
+    return total
 
 
 def count_loose() -> int:
@@ -105,8 +117,9 @@ def main() -> int:
     over: list[str] = []
     used_total = count_loose()
 
-    print(f"{'package':<12} {'code':>6} {'budget':>7} {'left':>7}")
-    print("-" * 35)
+    width = max(12, max(len(name) for name in BUDGETS) + 1)
+    print(f"{'package':<{width}} {'code':>6} {'budget':>7} {'left':>7}")
+    print("-" * (width + 23))
     for name, budget in BUDGETS.items():
         used = count_package(name)
         used_total += used
@@ -114,10 +127,10 @@ def main() -> int:
         if used > budget:
             marker = "  OVER"
             over.append(f"sclpl/{name}: {used} lines against a budget of {budget}")
-        print(f"{name:<12} {used:>6} {budget:>7} {budget - used:>7}{marker}")
+        print(f"{name:<{width}} {used:>6} {budget:>7} {budget - used:>7}{marker}")
 
-    print("-" * 35)
-    print(f"{'total':<12} {used_total:>6} {TOTAL_BUDGET:>7} {TOTAL_BUDGET - used_total:>7}")
+    print("-" * (width + 23))
+    print(f"{'total':<{width}} {used_total:>6} {TOTAL_BUDGET:>7} {TOTAL_BUDGET - used_total:>7}")
 
     if used_total > TOTAL_BUDGET:
         over.append(f"total: {used_total} lines against a budget of {TOTAL_BUDGET}")
