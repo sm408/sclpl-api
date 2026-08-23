@@ -1,0 +1,400 @@
+"""HTTP transport: one pooled client per host profile, for the process lifetime.
+
+Defect 3 from the plan lives here. The engine this replaces constructed a new
+`AsyncClient` for every request, which meant a new TCP connection and a new TLS
+handshake for every request -- two round trips of pure overhead before any work, and no
+HTTP/2 multiplexing ever. A pool keyed by host profile fixes both.
+
+A *profile* is (scheme, host, port, auth mode, proxy, verify). Two requests that differ
+in any of those cannot share a connection, and two that match in all of them always
+should.
+"""
+
+from __future__ import annotations
+
+import asyncio
+import contextlib
+import time
+from dataclasses import dataclass, field
+from types import TracebackType
+from typing import Any
+
+import httpx
+
+from sclpl.render.events import StepRetrying
+from sclpl.render.reporter import Reporter
+from sclpl.run.errors import StepFailed
+from sclpl.run.retry import (
+    Adaptive,
+    Breaker,
+    Retry,
+    is_retryable_error,
+    response_retry_after,
+    summarise_reason,
+)
+
+
+@dataclass(frozen=True, slots=True)
+class Profile:
+    """What makes two requests able to share a connection."""
+
+    scheme: str
+    host: str
+    port: int | None = None
+    auth: str = ""
+    proxy: str | None = None
+    verify: bool = True
+
+    @classmethod
+    def of(
+        cls, url: str, *, auth: str = "", proxy: str | None = None, verify: bool = True
+    ) -> Profile:
+        parsed = httpx.URL(url)
+        return cls(
+            scheme=parsed.scheme,
+            host=parsed.host,
+            port=parsed.port,
+            auth=auth,
+            proxy=proxy,
+            verify=verify,
+        )
+
+    def __str__(self) -> str:
+        port = f":{self.port}" if self.port else ""
+        return f"{self.scheme}://{self.host}{port}"
+
+
+def _http2_available() -> bool:
+    """Whether `h2` is importable.
+
+    It is a declared dependency (`httpx[http2]`), but an environment can end up with
+    plain httpx -- an older lockfile, a partial install. Asking httpx for HTTP/2 then
+    is an ImportError at the first request, which is a crash rather than an answer.
+    Falling back to HTTP/1.1 costs multiplexing and nothing else.
+    """
+    try:
+        import h2  # noqa: F401
+    except ImportError:
+        return False
+    return True
+
+
+HTTP2_AVAILABLE = _http2_available()
+
+
+@dataclass(slots=True)
+class TransportLimits:
+    """Connection-pool sizing and timeouts."""
+
+    max_connections: int = 32
+    max_keepalive: int = 16
+    keepalive_expiry: float = 30.0
+    timeout: float = 30.0
+    connect_timeout: float = 10.0
+    http2: bool = True
+    follow_redirects: bool = True
+    verify: bool = True
+
+    @property
+    def use_http2(self) -> bool:
+        return self.http2 and HTTP2_AVAILABLE
+
+
+@dataclass(slots=True)
+class Attempt:
+    """One completed request, with what it cost."""
+
+    response: httpx.Response
+    attempts: int
+    duration_ms: int
+    retried: bool = False
+
+
+class Pool:
+    """Pooled clients, per-host breakers, and adaptive limits.
+
+    Owned by the run and closed with it. `aclose` is idempotent and closes every client
+    even if one of them raises, because a leaked connection outlives the process that
+    made it only in the sense that the remote keeps it open waiting.
+    """
+
+    __slots__ = (
+        "_clients",
+        "_limits",
+        "_breakers",
+        "_adaptive",
+        "_retry",
+        "_lock",
+        "_closed",
+        "_adaptive_on",
+    )
+
+    def __init__(
+        self,
+        limits: TransportLimits | None = None,
+        retry: Retry | None = None,
+        *,
+        adaptive: bool = True,
+    ) -> None:
+        self._limits = limits if limits is not None else TransportLimits()
+        self._retry = retry if retry is not None else Retry()
+        self._clients: dict[Profile, httpx.AsyncClient] = {}
+        self._breakers: dict[str, Breaker] = {}
+        self._adaptive: dict[str, Adaptive] = {}
+        self._adaptive_on = adaptive
+        self._lock = asyncio.Lock()
+        self._closed = False
+
+    async def client(self, profile: Profile) -> httpx.AsyncClient:
+        """The client for this profile, created once."""
+        existing = self._clients.get(profile)
+        if existing is not None:
+            return existing
+        async with self._lock:
+            # Re-check: another task may have created it while we waited.
+            existing = self._clients.get(profile)
+            if existing is not None:
+                return existing
+            created = httpx.AsyncClient(
+                http2=self._limits.use_http2,
+                verify=profile.verify and self._limits.verify,
+                follow_redirects=self._limits.follow_redirects,
+                timeout=httpx.Timeout(
+                    self._limits.timeout,
+                    connect=self._limits.connect_timeout,
+                ),
+                limits=httpx.Limits(
+                    max_connections=self._limits.max_connections,
+                    max_keepalive_connections=self._limits.max_keepalive,
+                    keepalive_expiry=self._limits.keepalive_expiry,
+                ),
+                proxy=profile.proxy,
+            )
+            self._clients[profile] = created
+            return created
+
+    def breaker(self, host: str) -> Breaker:
+        existing = self._breakers.get(host)
+        if existing is None:
+            existing = Breaker()
+            self._breakers[host] = existing
+        return existing
+
+    def adaptive(self, host: str, ceiling: int) -> Adaptive:
+        existing = self._adaptive.get(host)
+        if existing is None:
+            existing = Adaptive(ceiling=ceiling)
+            self._adaptive[host] = existing
+        return existing
+
+    async def request(
+        self,
+        method: str,
+        url: str,
+        *,
+        reporter: Reporter | None = None,
+        step: str = "request",
+        retry: Retry | None = None,
+        **kwargs: Any,
+    ) -> Attempt:
+        """Send a request, retrying per policy. Returns the final response.
+
+        A non-2xx status is *not* an exception: an API that answers 404 has answered,
+        and the workflow may well want to branch on it. Only exhausting the retries, or
+        an open circuit, raises.
+        """
+        policy = retry if retry is not None else self._retry
+        profile = Profile.of(url, verify=self._limits.verify)
+        breaker = self.breaker(profile.host)
+        client = await self.client(profile)
+        started = time.perf_counter()
+
+        if not breaker.allows():
+            raise StepFailed(
+                f"circuit open for {profile.host}: {breaker.threshold} consecutive failures",
+                remedies=[
+                    f"it will try again in about {breaker.reset_after:.0f}s",
+                    "check the host is up, or raise --retries",
+                ],
+            )
+
+        last_error: BaseException | None = None
+        for attempt in range(policy.max + 1):
+            attempt_started = time.perf_counter()
+            try:
+                response = await client.request(method, url, **kwargs)
+            except Exception as error:  # noqa: BLE001 - classified just below
+                last_error = error
+                breaker.record_failure()
+                if attempt >= policy.max or not is_retryable_error(error, policy):
+                    raise self._exhausted(method, url, attempt, error, None) from error
+                await self._wait(reporter, step, attempt, policy, None, error, None)
+                continue
+
+            latency = time.perf_counter() - attempt_started
+            self._observe(profile.host, latency, response.status_code)
+
+            if policy.should_retry_status(response.status_code) and attempt < policy.max:
+                breaker.record_failure()
+                await self._wait(
+                    reporter,
+                    step,
+                    attempt,
+                    policy,
+                    response.status_code,
+                    None,
+                    response_retry_after(response),
+                )
+                continue
+
+            if response.status_code >= 500:
+                breaker.record_failure()
+            else:
+                breaker.record_success()
+            return Attempt(
+                response=response,
+                attempts=attempt + 1,
+                duration_ms=int((time.perf_counter() - started) * 1000),
+                retried=attempt > 0,
+            )
+
+        raise self._exhausted(method, url, policy.max, last_error, None)
+
+    def _observe(self, host: str, latency: float, status: int) -> None:
+        if not self._adaptive_on:
+            return
+        self.adaptive(host, self._limits.max_connections).record(latency, status)
+
+    async def _wait(
+        self,
+        reporter: Reporter | None,
+        step: str,
+        attempt: int,
+        policy: Retry,
+        status: int | None,
+        error: BaseException | None,
+        retry_after: float | None,
+    ) -> None:
+        delay = policy.delay_for(attempt, retry_after)
+        if reporter is not None:
+            reporter.emit(
+                StepRetrying(
+                    id=step,
+                    attempt=attempt + 1,
+                    max=policy.max,
+                    reason=summarise_reason(error, status),
+                    delay_s=delay,
+                )
+            )
+        await asyncio.sleep(delay)
+
+    def _exhausted(
+        self,
+        method: str,
+        url: str,
+        attempts: int,
+        error: BaseException | None,
+        status: int | None,
+    ) -> StepFailed:
+        reason = summarise_reason(error, status)
+        remedies = ["raise --retries, or --timeout if it is timing out"]
+        if isinstance(error, httpx.ConnectError):
+            remedies = ["check the host name and that it is reachable"]
+        elif isinstance(error, httpx.TimeoutException):
+            remedies = ["raise --timeout, or lower --concurrency if you are saturating it"]
+        return StepFailed(
+            f"{method} {url} failed after {attempts + 1} attempt"
+            f"{'' if attempts == 0 else 's'}: {reason}",
+            remedies=remedies,
+        )
+
+    def stats(self) -> dict[str, Any]:
+        return {
+            "profiles": len(self._clients),
+            "hosts": sorted({profile.host for profile in self._clients}),
+            "breakers": {host: breaker.state for host, breaker in self._breakers.items()},
+            "limits": {host: control.limit for host, control in self._adaptive.items()},
+        }
+
+    async def aclose(self) -> None:
+        if self._closed:
+            return
+        self._closed = True
+        for client in list(self._clients.values()):
+            # Close every one even if one of them fails.
+            with contextlib.suppress(Exception):
+                await client.aclose()
+        self._clients.clear()
+
+    async def __aenter__(self) -> Pool:
+        return self
+
+    async def __aexit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc: BaseException | None,
+        tb: TracebackType | None,
+    ) -> None:
+        await self.aclose()
+
+
+@dataclass(slots=True)
+class Request:
+    """A request as a workflow describes it, before variables are resolved."""
+
+    method: str = "GET"
+    url: str = ""
+    headers: dict[str, str] = field(default_factory=dict)
+    query: dict[str, Any] = field(default_factory=dict)
+    body: Any = None
+    json_body: Any = None
+    timeout: float | None = None
+
+    def kwargs(self) -> dict[str, Any]:
+        """The httpx keyword arguments for this request."""
+        out: dict[str, Any] = {}
+        if self.headers:
+            out["headers"] = self.headers
+        if self.query:
+            out["params"] = self.query
+        if self.json_body is not None:
+            out["json"] = self.json_body
+        elif self.body is not None:
+            out["content"] = self.body
+        if self.timeout is not None:
+            out["timeout"] = self.timeout
+        return out
+
+
+def decode(response: httpx.Response) -> Any:
+    """Turn a response body into a typed value.
+
+    JSON becomes real Python objects, which is what the whole engine is built on. A
+    body that claims to be JSON and is not raises rather than silently arriving as a
+    string, because a downstream `@a.body.items` would then fail somewhere much less
+    obvious.
+    """
+    content_type = response.headers.get("content-type", "")
+    if "json" in content_type:
+        try:
+            return response.json()
+        except ValueError as error:
+            raise StepFailed(
+                f"{response.request.url} claimed {content_type} but the body is not JSON",
+                remedies=[
+                    "look at the raw body with -vvv",
+                    "the server may be returning an error page with the wrong header",
+                ],
+            ) from error
+    if content_type.startswith("text/") or not content_type:
+        return response.text
+    return response.content
+
+
+def summarise(response: httpx.Response, attempts: int) -> str:
+    """The step-line summary for a completed request."""
+    from sclpl.render.plain import format_bytes
+
+    size = format_bytes(len(response.content))
+    tail = f" after {attempts} attempts" if attempts > 1 else ""
+    return f"{response.status_code} {response.reason_phrase} {size}{tail}"

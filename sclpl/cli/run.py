@@ -1,12 +1,12 @@
 """Request and workflow commands.
 
-M0 implements `call` — one request, one pooled client, results on stdout and progress
-on stderr. It exists this early because it exercises the whole reporter path end to
-end, which is what every later milestone reports through.
+`call` sends one request through the same pooled transport a workflow uses, so its
+retry behaviour, its timeouts, and its diagnostics are the ones a one-step workflow
+would get. That is the point of it being here rather than being a separate little
+client.
 
-`run`, `validate`, `explain`, `fmt`, and `convert` need the IR and the scheduler; they
-are registered in M2 and M4 rather than stubbed here, so `--help` never advertises
-something that does not work.
+`run`, `validate`, `explain`, `fmt`, and `convert` arrive with the IR in M4; they are
+not registered until they work, so `--help` never advertises something that does not.
 """
 
 from __future__ import annotations
@@ -14,21 +14,19 @@ from __future__ import annotations
 import asyncio
 import sys
 import time
-from typing import Annotated
+from typing import Annotated, Any
 
 import httpx
 import typer
 
 from sclpl.cli.options import EXIT_STEP_FAILED, EXIT_USAGE, options_of
 from sclpl.render.events import RunFinished, RunStarted, StepFinished, StepStarted
-from sclpl.render.plain import format_bytes
 from sclpl.render.reporter import Reporter, build_reporter
+from sclpl.run.errors import SclplError
+from sclpl.run.retry import Retry
+from sclpl.run.transport import Pool, TransportLimits, summarise
 
 METHODS = ("GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS")
-
-#: One request has no pool to share, but the ceilings are the ones `run` will use, so
-#: `call` and a one-step workflow behave identically against a fussy server.
-LIMITS = httpx.Limits(max_connections=32, max_keepalive_connections=16, keepalive_expiry=30.0)
 
 
 def register(app: typer.Typer) -> None:
@@ -45,13 +43,20 @@ def call(
         list[str] | None,
         typer.Option("--header", "-H", help="Request header as 'Name: value'. Repeatable."),
     ] = None,
+    data: Annotated[
+        str | None,
+        typer.Option("--data", "-d", help="Request body. Sent as JSON when it parses as JSON."),
+    ] = None,
+    retries: Annotated[
+        int, typer.Option("--retries", help="Attempts after the first, on 429/5xx and timeouts.")
+    ] = 2,
+    timeout: Annotated[
+        float, typer.Option("--timeout", help="Seconds to wait per attempt.")
+    ] = 30.0,
 ) -> None:
     verb = method.upper()
     if verb not in METHODS:
-        typer.echo(
-            f"unknown method {method!r}: expected one of {', '.join(METHODS)}",
-            err=True,
-        )
+        typer.echo(f"unknown method {method!r}: expected one of {', '.join(METHODS)}", err=True)
         raise typer.Exit(EXIT_USAGE)
     if "://" not in url:
         typer.echo(f"{url!r} is not an absolute URL: it needs a scheme, e.g. https://", err=True)
@@ -70,7 +75,7 @@ def call(
         plain=options.plain,
         no_color=options.no_color,
     )
-    exit_code = asyncio.run(_call(reporter, verb, url, headers))
+    exit_code = asyncio.run(_call(reporter, verb, url, headers, data, Retry(max=retries), timeout))
     if exit_code:
         raise typer.Exit(exit_code)
 
@@ -85,44 +90,76 @@ def _parse_headers(raw: list[str]) -> dict[str, str]:
     return headers
 
 
-async def _call(reporter: Reporter, method: str, url: str, headers: dict[str, str]) -> int:
+def _body_kwargs(data: str | None) -> dict[str, Any]:
+    """Send a body as JSON when it is JSON, and as bytes otherwise.
+
+    Guessing is right here: someone passing `-d '{"a":1}'` means JSON, and making them
+    also pass a Content-Type would be ceremony.
+    """
+    if data is None:
+        return {}
+    import json
+
+    try:
+        return {"json": json.loads(data)}
+    except json.JSONDecodeError:
+        return {"content": data.encode()}
+
+
+async def _call(
+    reporter: Reporter,
+    method: str,
+    url: str,
+    headers: dict[str, str],
+    data: str | None,
+    retry: Retry,
+    timeout: float,
+) -> int:
     host = httpx.URL(url).host
+    step = method.lower()
     started = time.perf_counter()
     async with reporter:
         reporter.emit(RunStarted(workflow="call", steps_total=1, hosts=(host,)))
-        reporter.emit(StepStarted(id=method.lower(), kind="http"))
+        reporter.emit(StepStarted(id=step, kind="http"))
         step_started = time.perf_counter()
-        try:
-            async with httpx.AsyncClient(limits=LIMITS, follow_redirects=True) as client:
-                response = await client.request(method, url, headers=headers)
-        except httpx.HTTPError as error:
-            elapsed = _ms(step_started)
-            reporter.emit(
-                StepFinished(
-                    id=method.lower(),
-                    status="failed",
-                    duration_ms=elapsed,
-                    summary=f"{type(error).__name__}: {error}",
-                )
-            )
-            reporter.emit(
-                RunFinished(
-                    status="failed",
-                    duration_ms=_ms(started),
-                    counts={"failed": 1},
-                    exit_code=EXIT_STEP_FAILED,
-                )
-            )
-            return EXIT_STEP_FAILED
 
+        async with Pool(TransportLimits(timeout=timeout), retry) as pool:
+            try:
+                attempt = await pool.request(
+                    method,
+                    url,
+                    reporter=reporter,
+                    step=step,
+                    headers=headers or None,
+                    **_body_kwargs(data),
+                )
+            except (SclplError, httpx.HTTPError) as error:
+                reporter.emit(
+                    StepFinished(
+                        id=step,
+                        status="failed",
+                        duration_ms=_ms(step_started),
+                        summary=_summarise_error(error),
+                    )
+                )
+                reporter.emit(
+                    RunFinished(
+                        status="failed",
+                        duration_ms=_ms(started),
+                        counts={"failed": 1},
+                        exit_code=EXIT_STEP_FAILED,
+                    )
+                )
+                return EXIT_STEP_FAILED
+
+        response = attempt.response
         body = response.content
-        summary = f"{response.status_code} {response.reason_phrase} {format_bytes(len(body))}"
         reporter.emit(
             StepFinished(
-                id=method.lower(),
+                id=step,
                 status="ok",
-                duration_ms=_ms(step_started),
-                summary=summary,
+                duration_ms=attempt.duration_ms,
+                summary=summarise(response, attempt.attempts),
             )
         )
         reporter.emit(
@@ -135,6 +172,12 @@ async def _call(reporter: Reporter, method: str, url: str, headers: dict[str, st
             sys.stdout.buffer.write(b"\n")
         sys.stdout.buffer.flush()
     return 0
+
+
+def _summarise_error(error: BaseException) -> str:
+    if isinstance(error, SclplError):
+        return error.diagnostic.message
+    return f"{type(error).__name__}: {error}"
 
 
 def _ms(since: float) -> int:
