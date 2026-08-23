@@ -124,6 +124,7 @@ def probe(stream: TextIO | None = None) -> Caps:
     if width < 40 or height < 8:
         # Too small for a live region to be anything but noise.
         caps = replace(caps, rung="plain", color=caps.color)
+    remember(caps)
     return caps
 
 
@@ -202,6 +203,47 @@ def _enable_windows_vt(stream: TextIO) -> bool:
         return bool(kernel32.SetConsoleMode(handle, mode.value | enable_vt))
     except Exception:
         return False
+
+
+def on_resize(callback: Callable[[Caps], None]) -> Callable[[], None]:
+    """Call ``callback`` with fresh capabilities whenever the terminal is resized.
+
+    Returns a function that unregisters it. SIGWINCH does not exist on Windows, where
+    this is a no-op -- the pane simply keeps its last known geometry, which is wrong
+    only until the next repaint reads the size again.
+    """
+    signum = getattr(signal, "SIGWINCH", None)
+    if signum is None:
+        return lambda: None
+
+    def handler(_signum: int, _frame: FrameType | None) -> None:
+        width, height = _size()
+        callback(replace(_LAST_CAPS[0], width=width, height=height))
+
+    try:
+        previous = signal.getsignal(signum)
+        signal.signal(signum, handler)
+    except (ValueError, OSError):
+        return lambda: None
+
+    def unregister() -> None:
+        with contextlib.suppress(ValueError, OSError):
+            signal.signal(signum, previous)
+
+    return unregister
+
+
+#: The most recent probe, so a resize can rebuild capabilities without re-probing the
+#: things that never change (colour support, glyphs, the rung).
+_LAST_CAPS: list[Caps] = [Caps()]
+
+
+def remember(caps: Caps) -> None:
+    _LAST_CAPS[0] = caps
+
+
+def current_size() -> tuple[int, int]:
+    return _size()
 
 
 def display_width(text: str) -> int:

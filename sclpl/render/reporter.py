@@ -81,6 +81,12 @@ class Reporter:
     async def __aenter__(self) -> Reporter:
         if self._guard is not None:
             self._guard.arm()
+        for sink in self._sinks:
+            # A sink that owns terminal rows claims them here, inside the guard, so
+            # every exit path already has restoration armed.
+            start = getattr(sink, "start", None)
+            if callable(start):
+                start()
         self._pump = asyncio.create_task(self._run_pump(), name="sclpl-reporter")
         return self
 

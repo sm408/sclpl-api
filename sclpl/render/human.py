@@ -1,14 +1,18 @@
 """The ``full`` and ``simple`` rungs — the interactive view.
 
-M0 ships the line half of this sink: colour, glyphs, and truncation, all measured
-against the probed width. The live region (DECSTBM scroll region, aggregate bar,
-bounded repaint) lands in M3 and attaches here; the event stream and the capability
-handling it needs are already in place, so nothing below has to move for it.
+Two halves, deliberately separate. **Step lines** scroll: one per event, styled and
+truncated to the probed width. The **live region** does not: a fixed pane at the bottom
+holding the aggregate bar and the instrument line (see `live.py`).
+
+Both are fed the same event. The pane summarises what the lines detail, so a user who
+has scrolled back through a long run still has the totals in front of them.
 """
 
 from __future__ import annotations
 
+import contextlib
 import sys
+from collections.abc import Callable
 from typing import TextIO
 
 from sclpl.render.events import (
@@ -24,8 +28,9 @@ from sclpl.render.events import (
     ValueFreed,
     visible_at,
 )
+from sclpl.render.live import LiveRegion
 from sclpl.render.plain import PlainSink, format_bytes, format_counts, format_duration, plural
-from sclpl.render.term import Caps, truncate
+from sclpl.render.term import Caps, on_resize, truncate
 
 _STATUS_STYLE: dict[str, tuple[str, str]] = {
     "ok": ("ok", "green"),
@@ -43,31 +48,68 @@ _LEVEL_STYLE: dict[str, str] = {
 
 
 class HumanSink:
-    """Styled step lines for an interactive terminal."""
+    """Styled step lines above a live region."""
 
-    __slots__ = ("_stream", "_caps", "_verbosity")
+    __slots__ = ("_stream", "_caps", "_verbosity", "_live", "_unregister_resize")
 
     def __init__(
         self,
         caps: Caps,
         stream: TextIO | None = None,
         verbosity: int = 0,
+        *,
+        live: bool = True,
     ) -> None:
         self._caps = caps
         self._stream = stream if stream is not None else sys.stderr
         self._verbosity = verbosity
+        self._live: LiveRegion | None = None
+        self._unregister_resize: Callable[[], None] | None = None
+        if live and caps.rung != "plain" and verbosity >= 0:
+            # `-q` asks for silence on success; a progress pane is the opposite of that.
+            self._live = LiveRegion(caps, self._stream)
 
-    def handle(self, event: Event) -> None:
-        if not visible_at(event, self._verbosity):
+    # -- lifecycle ---------------------------------------------------------------
+
+    def start(self) -> None:
+        """Claim the pane's rows and begin listening for resizes."""
+        if self._live is None:
             return
-        line = self.render(event)
-        if line is None:
-            return
-        self._stream.write(truncate(line, self._caps.width) + "\n")
-        self._stream.flush()
+        self._live.install()
+        self._unregister_resize = on_resize(self._on_resize)
 
     def close(self) -> None:
-        self._stream.flush()
+        if self._unregister_resize is not None:
+            self._unregister_resize()
+            self._unregister_resize = None
+        if self._live is not None:
+            self._live.uninstall()
+        # The stream can already be gone -- a closed pipe, a terminal that vanished.
+        with contextlib.suppress(ValueError, OSError):
+            self._stream.flush()
+
+    def _on_resize(self, caps: Caps) -> None:
+        self._caps = caps
+        if self._live is not None:
+            self._live.resize(caps)
+
+    # -- output ------------------------------------------------------------------
+
+    def handle(self, event: Event) -> None:
+        line = self.render(event) if visible_at(event, self._verbosity) else None
+        if line is not None:
+            if self._live is not None:
+                # At the `simple` rung the pane shares the bottom line, so erase it
+                # before a step line lands on top of it.
+                self._live.clear_line()
+            self._stream.write(truncate(line, self._caps.width) + "\n")
+            self._stream.flush()
+        if self._live is not None:
+            self._live.update(event)
+            if isinstance(event, RunFinished):
+                # The summary is the last thing printed; give the rows back rather than
+                # leave a pane nobody needs sitting under it.
+                self._live.uninstall()
 
     def descend(self) -> HumanSink | PlainSink:
         """One rung down, never up (invariant 5).
@@ -76,10 +118,16 @@ class HumanSink:
         pipe, a console that lied about its capabilities. `simple` still styles;
         `plain` gives up the terminal entirely and cannot fail the same way.
         """
+        if self._live is not None:
+            # Hand the rows back against the geometry we still believe in, before the
+            # replacement claims anything.
+            self._live.uninstall()
         lowered = self._caps.descend()
         if lowered.rung == "plain":
             return PlainSink(self._stream, self._verbosity)
-        return HumanSink(lowered, self._stream, self._verbosity)
+        replacement = HumanSink(lowered, self._stream, self._verbosity)
+        replacement.start()
+        return replacement
 
     def render(self, event: Event) -> str | None:
         caps = self._caps
