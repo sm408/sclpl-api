@@ -112,6 +112,8 @@ def _step(step: Step, depth: int) -> list[str]:
     header = f"{pad}@step {step.id}" if depth == 0 else f"{pad}step {step.id}"
     if step.needs:
         header += " <- " + " ".join(step.needs)
+    if step.writes:
+        header += f" -> {step.writes}"
     lines = [header]
     body = INDENT * (depth + 1)
 

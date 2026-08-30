@@ -285,3 +285,69 @@ def test_a_top_level_array_is_refused() -> None:
 
 def test_json_output_is_valid_json(doc: WorkflowDoc) -> None:
     assert json.loads(compile_json.dumps(doc))["name"] == "orders"
+
+
+# -- output ports, JSON arguments, and `let` -------------------------------------
+
+
+def test_a_step_can_name_the_output_port_it_writes() -> None:
+    doc = parse("@workflow w\n\n@output report:csv\n\n@step save -> report\n  save_csv @a\n")
+    assert doc.steps[0].writes == "report"
+
+
+def test_the_written_port_survives_a_round_trip() -> None:
+    source = "@workflow w\n\n@output report:csv\n\n@step save -> report\n  save_csv @a\n"
+    assert parse(emit(parse(source))).steps[0].writes == "report"
+
+
+def test_dependencies_and_the_written_port_coexist() -> None:
+    doc = parse(
+        "@workflow w\n\n@output r:csv\n\n@step b <- a -> r\n  save_csv @a\n@step a\n  let 1\n"
+    )
+    step = doc.step("b")
+    assert step is not None
+    assert step.needs == ["a"]
+    assert step.writes == "r"
+
+
+def test_naming_two_output_ports_is_refused() -> None:
+    with pytest.raises(ValidationError) as caught:
+        parse("@workflow w\n\n@step save -> one two\n  save_csv @a\n")
+    assert "exactly one output port" in str(caught.value)
+
+
+def test_a_json_object_argument_stays_one_argument() -> None:
+    """`rename @p {"a": "b"}` is two arguments; splitting on the space loses the map."""
+    doc = parse('@workflow w\n\n@step r\n  rename @p {"a": "b"}\n')
+    assert doc.steps[0].config.args == ["@p", {"a": "b"}]  # type: ignore[union-attr]
+
+
+def test_a_json_list_argument_stays_one_argument() -> None:
+    doc = parse("@workflow w\n\n@step s\n  select @p [1, 2]\n")
+    assert doc.steps[0].config.args == ["@p", [1, 2]]  # type: ignore[union-attr]
+
+
+def test_an_interpolation_is_still_opaque_to_the_splitter() -> None:
+    doc = parse("@workflow w\n\n@step s\n  get https://x/{{ @a.id }}\n")
+    assert doc.steps[0].config.url == "https://x/{{ @a.id }}"  # type: ignore[union-attr]
+
+
+def test_a_let_keeps_a_keyword_argument_containing_an_equals() -> None:
+    """Splitting on the first `=` used to take `by=` out of the expression."""
+    doc = parse('@workflow w\n\n@step total\n  let sum(@rows, by="price")\n')
+    assert doc.steps[0].config.expr == 'sum(@rows, by="price")'  # type: ignore[union-attr]
+
+
+def test_a_let_keeps_a_comparison() -> None:
+    doc = parse("@workflow w\n\n@step ok\n  let count(@rows) == 3\n")
+    assert doc.steps[0].config.expr == "count(@rows) == 3"  # type: ignore[union-attr]
+
+
+def test_a_let_still_drops_a_leading_name() -> None:
+    doc = parse("@workflow w\n\n@step total\n  let total = sum(@rows)\n")
+    assert doc.steps[0].config.expr == "sum(@rows)"  # type: ignore[union-attr]
+
+
+def test_a_named_let_may_still_compare() -> None:
+    doc = parse("@workflow w\n\n@step ok\n  let ok = @a.status == 200\n")
+    assert doc.steps[0].config.expr == "@a.status == 200"  # type: ignore[union-attr]

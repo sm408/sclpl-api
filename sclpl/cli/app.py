@@ -10,7 +10,7 @@ import sys
 
 import typer
 
-from sclpl import __version__
+from sclpl import __version__, bootstrap
 from sclpl.cli import catalog_cmd, launcher, workflow_cmd
 from sclpl.cli import run as call_cmd
 from sclpl.cli.options import (
@@ -23,6 +23,10 @@ from sclpl.cli.options import (
     VerboseOption,
     resolve_verbosity,
 )
+
+# Built-ins and plugins register before any command can be routed, so `--help`,
+# completion, and preflight all see the same set a run would.
+bootstrap.load()
 
 app = typer.Typer(
     name="sclpl",

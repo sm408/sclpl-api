@@ -5,6 +5,7 @@
 
 @input customers:csv
 @output report:csv
+@output archive:json
 
 @limits concurrency=8 host_concurrency=4 timeout=20
 
@@ -45,27 +46,27 @@
   tag api
 
 @step shape_orders
-  flatten @fetch_orders.body
+  explode @fetch_orders.body lines
 
 @step shape_customers
   flatten @fetch_customers.body
 
 @step shape_products
-  flatten @fetch_products.body
+  rename @fetch_products.body {"sku": "lines_sku"}
 
 @step shape_regions
-  flatten @fetch_regions.body
+  rename @fetch_regions.body {"region_id": "customer_region_id"}
 
 @step merge_orders
-  merge @shape_orders @shape_customers
+  join @shape_orders @shape_customers customer_id how=left
 
 @step merge_products
-  merge @merge_orders @shape_products
+  join @merge_orders @shape_products lines_sku how=left
 
 @step merge_regions
-  merge @merge_products @shape_regions
+  join @merge_products @shape_regions customer_region_id how=left
 
-@step write_report
+@step write_report -> report
   save_csv @merge_regions
   keep
 
@@ -95,5 +96,5 @@
   body {"text": "{{@report_footer}}"}
   tag api
 
-@step archive
+@step archive -> archive
   save_json @report_assemble

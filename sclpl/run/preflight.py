@@ -120,8 +120,9 @@ def preflight(
     # 4. Expressions parse.
     report.problems.extend(_check_expressions(doc, report.resolved))
 
-    # 5. Functions exist.
+    # 5. Functions exist, and every `-> port` names one.
     report.problems.extend(_check_functions(doc, report.resolved))
+    report.problems.extend(_check_writes(doc, report.resolved))
 
     # 6. Files: inputs readable, output directories present. Never writes.
     if check_files and report.bindings is not None:
@@ -133,6 +134,7 @@ def preflight(
 
     # 7. Optional extras the workflow will need.
     report.notes.extend(_check_extras(doc, report.resolved))
+    report.notes.extend(_check_pagination(doc, report.resolved))
 
     if hosts(doc):
         report.notes.append(f"hosts: {', '.join(hosts(doc))}")
@@ -237,6 +239,49 @@ def _check_functions(doc: WorkflowDoc, resolved: Resolved) -> list[ValidationErr
         problems.append(
             ValidationError(
                 f"step {step.id!r} calls {name!r}, which is not registered", remedies=remedies
+            )
+        )
+    return problems
+
+
+def _check_pagination(doc: WorkflowDoc, resolved: Resolved) -> list[str]:
+    """Say so while `paginate` is parsed but not yet followed.
+
+    Silently returning page one is the worst available behaviour: the run succeeds and
+    the data is short. Until the paginators land (M6) this is said out loud, before the
+    first request rather than after the last.
+    """
+    paginated = sorted(
+        step.id
+        for step in doc.all_steps()
+        if step.id in resolved.keep and getattr(step.config, "paginate", None) is not None
+    )
+    if not paginated:
+        return []
+    names = ", ".join(paginated)
+    return [f"pagination is not followed yet -- {names} will return the first page only"]
+
+
+def _check_writes(doc: WorkflowDoc, resolved: Resolved) -> list[ValidationError]:
+    """Every `-> port` on a kept step names a declared output port."""
+    declared = [port.name for port in doc.outputs]
+    problems: list[ValidationError] = []
+    for step in doc.all_steps():
+        if step.id not in resolved.keep or not step.writes or step.writes in declared:
+            continue
+        remedies = []
+        suggestion = did_you_mean(step.writes, declared)
+        if suggestion:
+            remedies.append(suggestion)
+        remedies.append(
+            f"declared outputs: {', '.join(declared)}"
+            if declared
+            else "this workflow declares no outputs"
+        )
+        problems.append(
+            ValidationError(
+                f"step {step.id!r} writes to {step.writes!r}, which is not an output port",
+                remedies=remedies,
             )
         )
     return problems

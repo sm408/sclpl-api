@@ -4,7 +4,7 @@ Pick up here. Read this file first, then **`SPEC.md`** — the normative impleme
 from. `plan.html` is the full argument with evidence; read it when you need the reasoning behind a
 constraint.
 
-**M0 is done (21 Aug 2026). Start at M1 — see §10 for the state it left behind.**
+**M0–M5 are done (31 Aug 2026). Start at M6 — see §10 for the state they left behind.**
 
 ---
 
@@ -146,51 +146,74 @@ layer is hand-written (`rich` is not a dependency), and SQLite ships as a bundle
 ```bash
 python -m pip install -e ".[dev]"
 python -m pytest -q && python scripts/check_budget.py
-sclpl call GET https://httpbin.org/json | head
+python -m sclpl validate examples/orders.sclpll
 ```
 
-Then **M1** (SPEC §17): `ValueStore` and typed bindings, the path resolver with nearest-key
-suggestions, the expression lexer/parser/AST, and the dispatch table with scalar and list overloads.
-Exit criterion: `@a.body.items[?(price > 10)].id` evaluates, and a bad path fails with a suggestion.
+Then **M6** (SPEC §17): the five paginators streaming into the scheduler, and `foreach` / `if` /
+`while` / `do_while` / `gate` / `parallel` as runtime-injected subgraphs. Exit criterion: a 40-page
+cursor source fans out into a bounded `foreach`, reported as one progress line.
+
+**Start with pagination, and start by deleting the warning.** `paginate` already parses into
+`HttpConfig.paginate`; `run/execute.py:_http` ignores it. Preflight says so out loud
+(`_check_pagination`) because a run that quietly returns page one succeeds with short data — the
+worst available failure. That note is a placeholder for the implementation, and removing it is how
+you know M6's first half is done.
 
 Commit messages say what shrank. If a milestone adds a feature and the total drops, say so.
 
 ---
 
-## 10. What M0 left behind
+## 10. What M0–M5 left behind
 
-**Deleted: 250 files, 59,093 lines** — the Textual TUI, the FastAPI backend, the Vue SPA, and the
-`app/` package they were entangled with. Written: ~1,000 lines of code across `sclpl/cli/` and
-`sclpl/render/`, plus 77 tests.
+**Deleted in M0: 250 files, 59,093 lines** — the Textual TUI, the FastAPI backend, the Vue SPA, and
+the `app/` package they were entangled with. The whole of `app/` went, not just `app/ui/` and
+`app/web/`: it was not separable (`services/` imported `app.web.errors`), and SPEC §4 describes the
+tree with no `app/` in it. Carry-overs are at `docs/attic/carried/`; baseline `1b1abe0` is the
+archive.
 
-The whole of `app/` went, not just `app/ui/` and `app/web/`. It was not separable: `services/`
-imported `app.web.errors`, `sclpll_compiler` imported `app.ui.app`. SPEC §4 describes the tree with
-no `app/` in it, so the deletion is what the spec already called for. The two named carry-overs are
-preserved at `docs/attic/carried/` — `sclpll_v1_compiler.py` for M4's SCLPLL work and `storage/` for
-M9's `state/db.py`. Baseline `1b1abe0` remains the full archive; v1 docs, examples, workflows,
-functions, and plugins are under `docs/attic/`.
+**Written since: ~8,900 lines of code and 518 tests.** All five gates green at every commit.
+
+| Milestone | Commit | What landed |
+|---|---|---|
+| M0 | `5a19bcc` | `render/` + `cli/` skeleton; the deletion |
+| M1 | `f6c18da` | `values/`, `expr/` — typed values, the expression engine |
+| M2 | `87a0a5a` | `run/{plan,schedule,retry,transport}.py` — continuous scheduling, pooled transport |
+| M3 | `41d7745` | `render/live.py` — the live region |
+| M4 | `773e747` | IR, both surfaces, catalogue, modes, ports, launcher |
+| M5 | (this one) | `tables/`, `functions/`, `ext/functions.py`, `bootstrap.py` |
 
 **What exists now**
 
 | | |
 |---|---|
-| `sclpl/render/` | `events.py` (9 event types + the verbosity policy), `reporter.py` (single-writer queue, fan-out, redaction), `term.py` (probe, descend-only ladder, triple restore), `human.py`, `plain.py`, `jsonl.py`, `redact.py` |
-| `sclpl/cli/` | `app.py` (Typer root, global flags), `options.py` (exit codes, verbosity), `run.py` (`call`) |
-| Gates | `ruff check`, `ruff format --check`, `mypy` strict, `pytest`, `scripts/check_budget.py`; all five in `.github/workflows/ci.yml` on 3.11 and 3.13 |
+| `sclpl/render/` | events + verbosity policy, single-writer reporter with redaction, capability probe and descend-only ladder, human/plain/jsonl sinks, the live region |
+| `sclpl/cli/` | Typer root, global flags, `call`, `run`, `validate`, `explain`, `show`, `fmt`, `convert`, the catalogue commands, the bare launcher |
+| `sclpl/values/`, `sclpl/expr/` | `ValueStore` with refcounts, path resolver with nearest-key suggestions, lexer/parser/AST, `(name, type)` dispatch with MRO walk-up |
+| `sclpl/run/` | IR (pydantic, `extra="forbid"`), both surfaces, modes, ports, preflight, plan, scheduler, retry, transport, execute |
+| `sclpl/tables/`, `sclpl/functions/`, `sclpl/ext/` | `Table` + backend protocol + pandas backend, format dispatch, the §10 flattening semantics, 37 built-ins, the `@function` registry |
 
-**Three things to know before M1**
+**Five things to know before M6**
 
-1. **`render/` is at 790 of its 900-line budget**, and M3's live region has not been written yet.
-   Either that budget moves in SPEC §19 on purpose, or the live region has to be very tight. Decide
-   before M3, not during it.
-2. **The budget checker excludes docstrings** — it counts code only. Charging prose against the same
-   budget as implementation buys less of the thing that is harder to recover later. If you disagree,
-   the rule is one function in `scripts/check_budget.py`.
-3. **`HumanSink.descend()` is the ladder's only live implementation.** The reporter calls it when a
-   sink raises. M3's live region must keep that contract: a write failure descends one rung, never
-   climbs, never goes silent.
+1. **`bootstrap.load()` is how anything gets registered.** Built-ins first, then plugins, so a
+   plugin that shadows one is doing it deliberately. Tests that touch the catalogue call it; the CLI
+   calls it once at import.
+2. **Three names are owned by the catalogue, not by `expr/ops/`** — `join`, `flatten`, `merge`. Each
+   means two things (a list into a string *and* two tables on a key; nested lists *and* nested
+   objects), and the first argument is the same type either way, so the dispatch table cannot
+   separate them. The implementations still live in `expr/ops/` as `join_text`, `flatten_lists`,
+   `merge_objects`; the catalogue picks between them. Do not re-register any of the three.
+3. **`tables/flatten.py:records_of()` is the single definition of "the records".** The writers and
+   the function catalogue both call it, which is what stops `save_csv(@x)` and `flatten(@x)`
+   disagreeing about what a row is. It reaches one level through `data`/`items`/`results`/
+   `records`/`rows`.
+4. **`@step name -> port` is how a writer gets its path.** The workflow says what it writes, the
+   caller says where. Preflight checks the port is declared; `execute.py:_bind_output` supplies it,
+   and a path written in the step still wins.
+5. **The budget moved again, and got sharper.** ADR 0002 split `run/sclpll/` (a lexer, parser, and
+   emitter, which grow with the grammar) out of `run/` (which grows with what the runner does).
+   Totals are in SPEC §19. A third revision needs a better reason than the first two.
 
-**Not done, deliberately:** the bare-invocation launcher prints help and exits `2` (the documented
-non-TTY behaviour); the menu is M4's, alongside the catalogue it lists. `run`, `validate`, `explain`,
-`fmt`, and `convert` are not registered at all rather than stubbed — `--help` never advertises
-something that does not work.
+**Not done, deliberately:** pagination is parsed but not followed (M6, and preflight says so);
+`foreach`/`while`/`parallel`/`use` parse and raise a named error rather than silently doing nothing;
+`state/` and `plugins_bundled/` are empty directories with budgets, not stubs. `--help` still never
+advertises anything that does not work.

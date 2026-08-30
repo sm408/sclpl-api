@@ -6,6 +6,7 @@ from typing import Any
 
 import pytest
 
+from sclpl import bootstrap
 from sclpl.expr import Context, evaluate, parse, parse_interpolated, unparse
 from sclpl.expr.ast import Call, Literal, Ref
 from sclpl.run.errors import ExpressionError, PathError, TypeDispatchError, UnknownReference
@@ -23,6 +24,16 @@ RESPONSE: dict[str, Any] = {
     },
     "status": 200,
 }
+
+
+@pytest.fixture(autouse=True, scope="module")
+def _catalogue() -> None:
+    """A few operator names -- join, merge, flatten -- live in the built-in catalogue.
+
+    They mean two things each and the dispatch table cannot tell the shapes apart, so
+    one registration owns both. Loading the catalogue is what a run does anyway.
+    """
+    bootstrap.load(plugins=False)
 
 
 @pytest.fixture

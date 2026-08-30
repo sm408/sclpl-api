@@ -115,9 +115,14 @@ def slug(value: str) -> str:
     return cleaned.strip("-")
 
 
-@generic("join", summary="Joins a list into a string with a separator.")
-def join(values: Any, separator: str = ",") -> str:
-    """Joins a list into a string with a separator."""
+def join_text(values: Any, separator: str = ",") -> str:
+    """Joins a list into a string with a separator.
+
+    Not registered here. `join` is one name over two shapes -- a list into a string,
+    and two tables on a key -- and the first argument is a list either way, so the
+    dispatch table cannot tell them apart. The built-in catalogue owns the name and
+    calls this for the string shape.
+    """
     from sclpl.expr.eval import stringify
 
     if isinstance(values, str):

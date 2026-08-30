@@ -223,6 +223,10 @@ class Step(Base):
     cache: CacheSpec = Field(default_factory=CacheSpec)
     lane: Lane | None = Field(default=None, description="Inferred when null.")
     keep: bool = Field(default=False, description="Exempt from disposal.")
+    #: The output port this step fills, from `@step name -> port`. A writer that names
+    #: a port takes its path from the binding, so the same workflow writes wherever the
+    #: caller says without the path being spelled inside it.
+    writes: str | None = None
 
     model_config = ConfigDict(extra="forbid", populate_by_name=True)
 

@@ -252,3 +252,82 @@ def test_a_mistyped_subcommand_is_not_taken_for_a_workflow() -> None:
     result = run_cli("valdate", "something")
     assert result.returncode != 0
     assert "workflow" in result.stderr or "No such command" in result.stderr
+
+
+# -- writing through a bound output port -----------------------------------------
+
+WRITER = """
+@workflow writer "Fetch, flatten, and write where the caller says"
+
+@var base = "{base}"
+
+@output report:csv
+
+@step fetch
+  get {{{{base}}}}/json
+
+@step rows
+  let @fetch.body.slideshow.slides
+
+@step write -> report
+  save_csv @rows
+"""
+
+
+@pytest.fixture
+def writer(tmp_path: Path, server_url: str) -> Path:
+    path = tmp_path / "writer.sclpll"
+    path.write_text(WRITER.format(base=server_url), encoding="utf-8")
+    return path
+
+
+def test_a_step_writes_to_the_file_bound_to_its_output_port(writer: Path, tmp_path: Path) -> None:
+    """The workflow says what it writes; the caller says where."""
+    out = tmp_path / "out.csv"
+    result = run_cli("run", str(writer), str(out))
+    assert result.returncode == 0, result.stderr
+    assert out.exists()
+    assert "title" in out.read_text(encoding="utf-8").splitlines()[0]
+
+
+def test_the_same_workflow_writes_somewhere_else_on_request(writer: Path, tmp_path: Path) -> None:
+    other = tmp_path / "other.csv"
+    result = run_cli("run", str(writer), "--out", f"report={other}")
+    assert result.returncode == 0, result.stderr
+    assert other.exists()
+
+
+def test_binding_an_output_into_a_directory_that_does_not_exist_is_caught(
+    writer: Path, tmp_path: Path
+) -> None:
+    """A mistyped directory is a typo worth catching before any request is paid for."""
+    result = run_cli("run", str(writer), "--out", f"report={tmp_path / 'nope' / 'x.csv'}")
+    assert result.returncode == EXIT_VALIDATION
+    assert "does not exist" in result.stderr
+    assert "mkdir" in result.stderr
+
+
+def test_writing_to_a_port_that_is_not_declared_is_caught_before_the_run(
+    tmp_path: Path, server_url: str
+) -> None:
+    path = tmp_path / "typo.sclpll"
+    path.write_text(
+        WRITER.format(base=server_url).replace("-> report", "-> repot"), encoding="utf-8"
+    )
+    result = run_cli("validate", str(path))
+    assert result.returncode == EXIT_VALIDATION
+    assert "not an output port" in result.stderr
+    assert "report" in result.stderr
+
+
+def test_pagination_that_is_not_followed_yet_says_so(tmp_path: Path, server_url: str) -> None:
+    """Silently returning page one would be a run that succeeds with short data."""
+    path = tmp_path / "paged.sclpll"
+    path.write_text(
+        f"@workflow paged\n\n@step fetch\n  get {server_url}/json\n"
+        "  paginate cursor cursor_path=next param=cursor\n",
+        encoding="utf-8",
+    )
+    result = run_cli("validate", str(path))
+    assert result.returncode == 0
+    assert "first page only" in result.stderr

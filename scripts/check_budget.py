@@ -34,9 +34,10 @@ BUDGETS: dict[str, int] = {
     "cli": 1400,
     "render": 1300,
     "catalog": 500,
-    "run": 3200,
+    "run": 3600,
+    "run/sclpll": 1200,
     "values": 1000,
-    "expr": 1300,
+    "expr": 1500,
     "expr/ops": 1400,
     "tables": 900,
     "ext": 700,
@@ -45,7 +46,7 @@ BUDGETS: dict[str, int] = {
     "plugins_bundled": 600,
 }
 
-TOTAL_BUDGET = 14200
+TOTAL_BUDGET = 16000
 
 _HAS_DOCSTRING = (ast.Module, ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef)
 

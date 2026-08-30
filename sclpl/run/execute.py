@@ -14,7 +14,7 @@ from sclpl.expr import Context, evaluate, parse, parse_interpolated
 from sclpl.expr.eval import _truthy
 from sclpl.render.events import StepProgress
 from sclpl.render.reporter import Reporter
-from sclpl.run.errors import AssertionFailed, StepFailed, ValidationError
+from sclpl.run.errors import AssertionFailed, SclplError, StepFailed, ValidationError
 from sclpl.run.ir import (
     FnConfig,
     ForeachConfig,
@@ -50,6 +50,9 @@ class Runtime:
     frame: Frame = field(default_factory=Frame)
     #: Values standing in for pruned producers, from the mode's `stub` block.
     stubs: dict[str, Any] = field(default_factory=dict)
+    #: Output port name -> the path bound to it. A step declaring `-> port` writes
+    #: there without the path appearing in the workflow.
+    outputs: dict[str, str] = field(default_factory=dict)
     max_pages: int | None = None
 
     def context(self, frame: Frame | None = None) -> Context:
@@ -172,7 +175,42 @@ async def _fn(step: Step, config: FnConfig, runtime: Runtime) -> Any:
             f"step {step.id!r} calls {config.name!r}, which is not registered",
             remedies=["run 'sclpl fn list' to see what is available"],
         )
-    return await dispatch.apply(config.name, args, kwargs)
+    args, kwargs = _bind_output(step, args, kwargs, runtime)
+    try:
+        return await dispatch.apply(config.name, args, kwargs)
+    except SclplError:
+        # Already carries a message and remedies aimed at the workflow author.
+        raise
+    except Exception as error:
+        # Anything else came out of the function's own internals, where the exception
+        # text names Python rather than the workflow. Say which step and which call, so
+        # the reader has somewhere to look.
+        raise StepFailed(
+            f"step {step.id!r} failed inside {config.name}(): {type(error).__name__}: {error}",
+            remedies=[f"check what {config.name}() was given -- -vv shows the resolved arguments"],
+        ) from error
+
+
+def _bind_output(
+    step: Step, args: list[Any], kwargs: dict[str, Any], runtime: Runtime
+) -> tuple[list[Any], dict[str, Any]]:
+    """Supply the path from the output port a step declares with `-> port`.
+
+    A workflow says what it writes, the caller says where. `save_csv @rows -> report`
+    with no path takes it from the binding; a path written in the step still wins, so
+    naming a port never silently redirects a file someone spelled out.
+    """
+    if not step.writes:
+        return args, kwargs
+    path = runtime.outputs.get(step.writes)
+    if path is None:
+        raise StepFailed(
+            f"step {step.id!r} writes to the port {step.writes!r}, which is not bound",
+            remedies=[f"give it a file: --out {step.writes}=<path>"],
+        )
+    if "path" in kwargs or len(args) >= 2:
+        return args, kwargs
+    return [*args, path], kwargs
 
 
 async def _let(config: LetConfig, runtime: Runtime) -> Any:

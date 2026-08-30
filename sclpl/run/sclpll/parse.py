@@ -253,8 +253,20 @@ class _Parser:
     # -- steps -------------------------------------------------------------------
 
     def step(self, token: Token) -> dict[str, Any]:
-        """`@step name <- dep1 dep2` followed by an indented body."""
+        """`@step name <- dep1 dep2 -> port` followed by an indented body."""
         header = token.rest
+        writes: str | None = None
+        if "->" in header:
+            header, _, target = header.partition("->")
+            names = split_args(target.strip())
+            if len(names) != 1:
+                raise self.error(
+                    "`->` names exactly one output port",
+                    token,
+                    ["e.g. `@step write_report -> report`"],
+                )
+            writes = names[0]
+
         needs: list[str] = []
         if "<-" in header:
             header, _, dependencies = header.partition("<-")
@@ -271,7 +283,7 @@ class _Parser:
                 token,
                 ["indent at least one line under it, e.g. `get https://…`"],
             )
-        return self.assemble(step_id, needs, body, token)
+        return self.assemble(step_id, needs, body, token, writes)
 
     def block(self) -> list[Token]:
         """The indented lines beneath a directive, nested blocks included."""
@@ -295,7 +307,12 @@ class _Parser:
         return lines
 
     def assemble(
-        self, step_id: str, needs: list[str], body: list[Token], token: Token
+        self,
+        step_id: str,
+        needs: list[str],
+        body: list[Token],
+        token: Token,
+        writes: str | None = None,
     ) -> dict[str, Any]:
         """Turn a step's body lines into a `Step` dict.
 
@@ -304,6 +321,8 @@ class _Parser:
         a function call. Later lines configure whatever the first line chose.
         """
         step: dict[str, Any] = {"id": step_id, "tags": [], "needs": needs}
+        if writes is not None:
+            step["writes"] = writes
         first = body[0]
         head = first.head.lower()
 
@@ -314,10 +333,7 @@ class _Parser:
             step["config"] = HttpConfig.model_validate(config).model_dump(exclude_defaults=True)
         elif head == "let":
             step["kind"] = "let"
-            _, _, expression = first.rest.partition("=")
-            step["config"] = LetConfig(expr=expression.strip() or first.rest.strip()).model_dump(
-                exclude_defaults=True
-            )
+            step["config"] = LetConfig(expr=_binding(first.rest)).model_dump(exclude_defaults=True)
             self._common_body(step, body[1:])
         elif head == "foreach":
             step["kind"] = "foreach"
@@ -535,6 +551,29 @@ class _Parser:
         )
 
 
+def _binding(rest: str) -> str:
+    """The expression from a `let` line, whether or not it names the value first.
+
+    `let total = sum(@rows)` and `let sum(@rows)` both mean the same thing -- the step
+    id is the name either way. Splitting on the first `=` would take `by=` out of
+    `sum(@rows, by="total")` and `==` out of a comparison, so the `=` only separates a
+    name when what precedes it is a bare identifier and the `=` stands alone.
+    """
+    rest = rest.strip()
+    index = rest.find("=")
+    while index != -1:
+        pair = rest[index : index + 2]
+        if pair != "==" and (index == 0 or rest[index - 1] not in "!<>="):
+            break
+        index = rest.find("=", index + 2 if pair == "==" else index + 1)
+    if index == -1:
+        return rest
+    name = rest[:index].strip()
+    if not name.isidentifier():
+        return rest
+    return rest[index + 1 :].strip() or rest
+
+
 def _literal(text: str) -> Any:
     """Read a bare token as the value it obviously is.
 
@@ -561,12 +600,16 @@ def _literal(text: str) -> Any:
         return float(text)
     except ValueError:
         pass
-    if text.startswith("[") and text.endswith("]"):
+    if (text.startswith("[") and text.endswith("]")) or (
+        text.startswith("{") and text.endswith("}")
+    ):
         import json
 
         try:
             return json.loads(text)
         except json.JSONDecodeError:
+            # Not JSON after all -- most often a `{{...}}` interpolation, which the
+            # expression layer resolves later. Leaving it a string is what lets it.
             pass
     return text
 

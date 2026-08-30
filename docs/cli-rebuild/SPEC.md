@@ -602,17 +602,17 @@ Do these in order. Each is independently demonstrable.
 
 ### M4 — IR, catalogue, modes, launcher
 - [ ] pydantic IR; JSON compiler; SCLPLL v2 lexer/parser/emitter; property round-trip tests
-- [ ] Catalogue: `import`, versioning by content hash, `list`, `show`, `remove`, name resolution order
-- [ ] Modes: extends, selectors, pruning, closure check with the three remedies
-- [ ] Ports: declaration, positional and named binding, globs, `-`, format inference
-- [ ] Preflight; `validate`, `explain`, `fmt`, `convert`; the bare launcher
-- **Exit:** `sclpl orders partial in.csv out.csv` runs 12 of 20 steps; pruning a needed producer fails at validate time with a named fix
+- [x] Catalogue: `import`, versioning by content hash, `list`, `show`, `remove`, name resolution order
+- [x] Modes: extends, selectors, pruning, closure check with the three remedies
+- [x] Ports: declaration, positional and named binding, globs, `-`, format inference, and `@step … -> port` so a writer takes its path from the binding
+- [x] Preflight; `validate`, `explain`, `fmt`, `convert`; the bare launcher
+- **Exit:** met — `examples/orders.sclpll` in `partial` runs 12 of its 21 steps against a live server; pruning a needed producer fails at validate time with a named fix
 
 ### M5 — Functions and tables
-- [ ] `Table` wrapper + `TableBackend` protocol + pandas backend; `[data]` extra with preflight message
-- [ ] `io.py` format dispatch; `flatten.py` with the reference semantics in §10
-- [ ] Built-in catalogue; `@function` decorator, registry, schema generation
-- **Exit:** nested JSON → flattened CSV → Excel in one pipeline, with a schema assertion
+- [x] `Table` wrapper + `TableBackend` protocol + pandas backend; `[data]` extra with preflight message
+- [x] `io.py` format dispatch; `flatten.py` with the reference semantics in §10
+- [x] Built-in catalogue (37 functions); `@function` decorator, registry, schema generation
+- **Exit:** met — nested JSON → flattened CSV → Excel in one pipeline, with a schema assertion
 
 ### M6 — Control flow and pagination
 - [ ] Five paginators streaming into the scheduler; `into`, `max_pages`, `stop_when`, `concurrent`
@@ -661,18 +661,24 @@ No network in CI except the local mock server. Secrets never appear in a fixture
 ## 19. Size budget
 
 Revised by **ADR 0001** (23 Aug 2026): the original ~7,150 was estimated before any code
-existed and omitted `expr/ops/` and `plugins_bundled/` entirely. Current target
-**~14,200 lines**, against ~59,100 deleted. Enforced in CI by `scripts/check_budget.py`,
-which counts code and excludes docstrings.
+existed and omitted `expr/ops/` and `plugins_bundled/` entirely. Revised again by
+**ADR 0002** (31 Aug 2026), which split `run/sclpll/` -- a lexer, parser, and emitter
+that grows with the *grammar* -- out of `run/`, which grows with what the runner *does*.
+Current target **~16,000 lines**, against ~59,100 deleted. Enforced in CI by
+`scripts/check_budget.py`, which counts code and excludes docstrings.
 
 | Package | Budget | | Package | Budget |
 |---|---:|---|---|---:|
-| `cli/` | 1,400 | | `expr/` | 1,300 |
+| `cli/` | 1,400 | | `expr/` | 1,500 |
 | `render/` | 1,300 | | `expr/ops/` | 1,400 |
 | `catalog/` | 500 | | `tables/` | 900 |
-| `run/` | 3,200 | | `ext/` | 700 |
-| `values/` | 1,000 | | `state/` | 900 |
-| built-in functions | 1,200 | | `plugins_bundled/` | 600 |
+| `run/` | 3,600 | | `ext/` | 700 |
+| `run/sclpll/` | 1,200 | | `state/` | 900 |
+| `values/` | 1,000 | | `plugins_bundled/` | 600 |
+| built-in functions | 1,200 | | | |
+
+A `parent/child` key is counted on its own and excluded from its parent, so `expr/ops/`
+and `run/sclpll/` cannot absorb growth belonging to `expr/` or `run/`, nor the reverse.
 
 Dependencies, each doing three or four jobs: `httpx`, `typer`, `pydantic`, `aiosqlite`,
 `pyarrow`. Extras: `[data]` (pandas, openpyxl), `[keyring]`, `[dev]`. **`rich` is not a

@@ -122,6 +122,7 @@ async def run_workflow(doc: WorkflowDoc, options: Options, reporter: Reporter) -
             pool=pool,
             vars=variables,
             stubs=dict(report.resolved.stubs),
+            outputs=_output_paths(report),
         )
         for name, value in report.resolved.stubs.items():
             # A stub stands in for a producer the mode pruned. It is pinned, because
@@ -148,6 +149,17 @@ async def run_workflow(doc: WorkflowDoc, options: Options, reporter: Reporter) -
         )
     )
     return Result(outcome=outcome, report=report, store=store, exit_code=exit_code)
+
+
+def _output_paths(report: Report) -> dict[str, str]:
+    """Where each bound output port points, for the steps that declare `-> port`."""
+    if report.bindings is None:
+        return {}
+    return {
+        name: str(binding.path)
+        for name, binding in report.bindings.outputs.items()
+        if binding.path is not None
+    }
 
 
 def _limits(doc: WorkflowDoc, options: Options) -> Limits:

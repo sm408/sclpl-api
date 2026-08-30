@@ -113,14 +113,20 @@ def _indent_width(raw: str, tab_width: int = 4) -> int:
 
 
 def split_args(rest: str) -> list[str]:
-    """Split a line's arguments, respecting quotes and braces.
+    """Split a line's arguments, respecting quotes, interpolation, and JSON.
 
     `header Authorization: Bearer {{@auth.token}}` is three tokens, not five: the
-    interpolation is opaque and the quoted string is one unit.
+    interpolation is opaque and the quoted string is one unit. A JSON literal is one
+    unit too -- `rename @products {"sku": "code"}` is two arguments, not three -- so a
+    mapping or a list can be written where one is wanted.
+
+    `{{` is read as interpolation before a bare `{`, so an object literal cannot start
+    with another object. Write a space -- `{ {"a": 1} }` -- in the rare case it must.
     """
     args: list[str] = []
     current: list[str] = []
     depth = 0
+    brackets = 0
     quote: str | None = None
     index = 0
 
@@ -147,7 +153,11 @@ def split_args(rest: str) -> list[str]:
             current.append("}}")
             index += 2
             continue
-        if char.isspace() and depth == 0:
+        if char in "{[":
+            brackets += 1
+        elif char in "}]" and brackets:
+            brackets -= 1
+        if char.isspace() and depth == 0 and brackets == 0:
             if current:
                 args.append("".join(current))
                 current = []

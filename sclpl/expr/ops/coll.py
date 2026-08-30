@@ -84,15 +84,19 @@ def reverse(values: list[Any]) -> list[Any]:
     return list(reversed(values))
 
 
-@overload("flatten", list, summary="Collapses nested lists into one.")
-def flatten(values: list[Any], depth: int = 1) -> list[Any]:
-    """Collapses nested lists into one."""
+def flatten_lists(values: list[Any], depth: int = 1) -> list[Any]:
+    """Collapses nested lists into one.
+
+    Not registered here. `flatten` also means "nested objects into underscore columns",
+    and both shapes arrive as a list, so the catalogue owns the name and picks by what
+    the list holds.
+    """
     if depth <= 0:
         return list(values)
     out: list[Any] = []
     for item in values:
         if isinstance(item, (list, tuple)):
-            out.extend(flatten(list(item), depth - 1))
+            out.extend(flatten_lists(list(item), depth - 1))
         else:
             out.append(item)
     return out
@@ -190,9 +194,11 @@ def omit(value: dict[Any, Any], *fields: str) -> dict[Any, Any]:
     return {key: item for key, item in value.items() if key not in unwanted}
 
 
-@overload("merge", dict, summary="Merges objects; later ones win.")
-def merge(first_value: dict[Any, Any], *rest: Any) -> dict[Any, Any]:
-    """Merges objects; later ones win."""
+def merge_objects(first_value: dict[Any, Any], *rest: Any) -> dict[Any, Any]:
+    """Merges objects; later ones win.
+
+    Not registered here; the catalogue's `merge` covers objects and record sets alike.
+    """
     out = dict(first_value)
     for item in rest:
         if not isinstance(item, dict):
