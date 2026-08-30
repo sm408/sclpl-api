@@ -1,0 +1,7 @@
+# Obsidian keeps per-user state next to the shared settings. Which panes are open and
+# where the cursor was are not facts about the project, and committing them means every
+# person who opens the vault produces a diff.
+.obsidian/workspace.json
+.obsidian/workspace-mobile.json
+.obsidian/cache
+.trash/
