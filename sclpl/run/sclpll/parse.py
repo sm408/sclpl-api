@@ -17,12 +17,14 @@ from sclpl.run.errors import ValidationError, did_you_mean
 from sclpl.run.ir import (
     FnConfig,
     ForeachConfig,
+    GateConfig,
     HttpConfig,
     IfConfig,
     LetConfig,
     Limits,
     ModeSpec,
     Pagination,
+    ParallelConfig,
     Port,
     Retry,
     Step,
@@ -341,9 +343,16 @@ class _Parser:
         elif head == "when":
             step["kind"] = "if"
             step["config"] = self._conditional(first, body[1:], step)
-        elif head == "while":
-            step["kind"] = "while"
+        elif head in ("while", "do_while"):
+            step["kind"] = head
             step["config"] = self._loop(first, body[1:], step)
+        elif head == "parallel":
+            step["kind"] = "parallel"
+            step["config"] = self._parallel(first, body[1:], step)
+        elif head == "gate":
+            step["kind"] = "gate"
+            step["config"] = GateConfig(reason=first.rest.strip()).model_dump(exclude_defaults=True)
+            self._common_body(step, body[1:])
         else:
             step["kind"] = "fn"
             args = split_args(first.rest)
@@ -406,14 +415,34 @@ class _Parser:
         return spec
 
     def _foreach(self, first: Token, lines: list[Token], step: dict[str, Any]) -> dict[str, Any]:
-        """`foreach row in @rows`."""
+        """`foreach row in @rows`, `foreach @rows as row`, or `foreach @rows`.
+
+        Both namings are accepted because both are what people write. What is not
+        accepted is a third shape: `foreach @rows row` would otherwise be read as the
+        expression `@rows row`, bind `item`, and fail much later with `@row` unknown.
+        """
         args = split_args(first.rest)
+        if not args:
+            raise self.error("foreach needs a collection", first)
+
         if len(args) >= 3 and args[1] == "in":
             variable, over = args[0], " ".join(args[2:])
-        elif args:
-            variable, over = "item", " ".join(args)
+        elif len(args) >= 3 and args[-2] == "as":
+            variable, over = args[-1], " ".join(args[:-2])
+        elif len(args) == 1:
+            variable, over = "item", args[0]
         else:
-            raise self.error("foreach needs a collection", first)
+            raise self.error(
+                f"cannot tell what {first.rest.strip()!r} loops over",
+                first,
+                [
+                    "foreach row in @rows",
+                    "foreach @rows as row",
+                    "foreach @rows          (binds `item`)",
+                ],
+            )
+        if not variable.isidentifier():
+            raise self.error(f"{variable!r} is not a usable name for the loop variable", first)
         body, rest = self._nested(lines, step)
         config: dict[str, Any] = {"over": over, "var": variable, "body": body}
         for line in rest:
@@ -426,11 +455,11 @@ class _Parser:
     def _conditional(
         self, first: Token, lines: list[Token], step: dict[str, Any]
     ) -> dict[str, Any]:
-        body, rest = self._nested(lines, step)
+        body, rest = self._nested(lines, step, frozenset({"otherwise"}))
         otherwise: list[dict[str, Any]] = []
-        for line in rest:
+        for index, line in enumerate(rest):
             if line.head == "otherwise":
-                otherwise, _ = self._nested(rest[rest.index(line) + 1 :], step)
+                otherwise, _ = self._nested(rest[index + 1 :], step)
                 break
         config: dict[str, Any] = {
             "condition": first.rest.strip(),
@@ -440,6 +469,26 @@ class _Parser:
         IfConfig.model_validate(config)
         return config
 
+    def _parallel(self, first: Token, lines: list[Token], step: dict[str, Any]) -> dict[str, Any]:
+        """`parallel` with an indented `branch` per independent path."""
+        branches: list[list[dict[str, Any]]] = []
+        rest = lines
+        while rest:
+            if rest[0].head != "branch":
+                raise self.error(
+                    f"a parallel holds branches, not {rest[0].head!r}",
+                    rest[0],
+                    ["indent each path under its own `branch` line"],
+                )
+            found, rest = self._nested(rest[1:], step, frozenset({"branch"}))
+            if found:
+                branches.append(found)
+        if not branches:
+            raise self.error("a parallel needs at least one branch", first)
+        config: dict[str, Any] = {"branches": branches}
+        ParallelConfig.model_validate(config)
+        return config
+
     def _loop(self, first: Token, lines: list[Token], step: dict[str, Any]) -> dict[str, Any]:
         body, _ = self._nested(lines, step)
         config: dict[str, Any] = {"condition": first.rest.strip(), "body": body}
@@ -447,31 +496,46 @@ class _Parser:
         return config
 
     def _nested(
-        self, lines: list[Token], step: dict[str, Any]
+        self,
+        lines: list[Token],
+        step: dict[str, Any],
+        stop_at: frozenset[str] = frozenset(),
     ) -> tuple[list[dict[str, Any]], list[Token]]:
-        """Split a control-flow body into nested steps and trailing clauses.
+        """Split a control-flow body into nested steps and everything after it.
 
         A nested step is introduced by a `step` line inside the block; anything before
         the first one configures the control step itself.
+
+        ``stop_at`` names the words that end the block -- `otherwise` for a `when`,
+        `branch` for a `parallel`. Without it those words land inside the last nested
+        step's body and are reported as an unknown clause on that step, which points at
+        the wrong line and does not mention the structure that actually went wrong.
         """
         nested: list[dict[str, Any]] = []
         trailing: list[Token] = []
         current: list[Token] = []
         current_id: str | None = None
 
-        for line in lines:
+        def close(at: Token) -> None:
+            if current_id is not None and current:
+                nested.append(self.assemble(current_id, [], current, at))
+
+        for index, line in enumerate(lines):
+            if line.head in stop_at:
+                close(line)
+                current_id = None
+                trailing.extend(lines[index:])
+                break
             if line.head == "step":
-                if current_id is not None and current:
-                    nested.append(self.assemble(current_id, [], current, line))
+                close(line)
                 current_id = split_args(line.rest)[0] if line.rest else f"body{len(nested)}"
                 current = []
             elif current_id is None:
                 trailing.append(line)
             else:
                 current.append(line)
-
-        if current_id is not None and current:
-            nested.append(self.assemble(current_id, [], current, lines[-1]))
+        else:
+            close(lines[-1] if lines else Token(kind=Kind.LINE))
         return nested, trailing
 
     def _common_body(self, step: dict[str, Any], lines: list[Token]) -> None:

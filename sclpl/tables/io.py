@@ -7,18 +7,24 @@ explicitly is for when the extension is wrong or absent.
 
 from __future__ import annotations
 
+import io
 import json
+import sys
+import tempfile
 from pathlib import Path
 from typing import Any
 
 from sclpl.run.errors import ValidationError, did_you_mean
-from sclpl.run.ports import BY_EXTENSION
+from sclpl.run.ports import BY_EXTENSION, STDIO
 from sclpl.tables.base import Table, as_table
 from sclpl.tables.flatten import flatten_records, records_of
 
 #: Formats that hold tabular data. `json` and `ndjson` can be either, and are decided
 #: by what is actually in the file.
 TABULAR = frozenset({"csv", "parquet", "xlsx"})
+
+#: Formats whose bytes are not readable in a terminal.
+_BINARY = frozenset({"parquet", "xlsx", "sqlite"})
 
 FORMATS = frozenset(BY_EXTENSION.values()) | {"json", "ndjson"}
 
@@ -80,7 +86,14 @@ def read(path: Path, fmt: str | None = None, **options: Any) -> Any:
 
 
 def write(value: Any, path: Path, fmt: str | None = None, **options: Any) -> Path:
-    """Write a value out, coercing it to the shape the format needs."""
+    """Write a value out, coercing it to the shape the format needs.
+
+    A path of `-` means stdout, which is the other half of invariant 1: progress goes to
+    stderr precisely so that this can be piped.
+    """
+    if str(path) == STDIO:
+        return _to_stdout(value, path, fmt, **options)
+
     resolved = format_of(path, fmt)
     path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -103,6 +116,51 @@ def write(value: Any, path: Path, fmt: str | None = None, **options: Any) -> Pat
             )
         case _:
             _tabular(value, **options).write(path, resolved, **_write_options(options))
+    return path
+
+
+def _to_stdout(value: Any, path: Path, fmt: str | None, **options: Any) -> Path:
+    """Write to stdout, in the format the caller named.
+
+    `-` carries no extension, so the format has to come from somewhere else: `save_csv`
+    and a port declared `:csv` both supply it. Without one there is nothing to infer
+    from, and guessing JSON would be a silent choice about someone's data.
+    """
+    if not fmt or fmt == "auto":
+        raise ValidationError(
+            "writing to stdout needs the format named -- '-' has no extension to read",
+            remedies=[
+                "use a format-specific writer: save_csv(@rows, '-')",
+                "or declare it on the port: @output report:csv",
+            ],
+        )
+    resolved = format_of(path, fmt)
+
+    if resolved in _BINARY and sys.stdout.isatty():
+        raise ValidationError(
+            f"{resolved} is binary and stdout is a terminal",
+            remedies=["redirect it: sclpl run … --out report=- > out." + resolved],
+        )
+
+    buffer = io.BytesIO()
+    if resolved == "json":
+        payload = value.to_records() if isinstance(value, Table) else value
+        text = json.dumps(payload, indent=options.get("indent", 2), default=str) + "\n"
+        buffer.write(text.encode("utf-8"))
+    elif resolved == "ndjson":
+        rows = value.to_records() if isinstance(value, Table) else records_of(value)
+        for row in rows:
+            buffer.write((json.dumps(row, default=str) + "\n").encode("utf-8"))
+    else:
+        with tempfile.TemporaryDirectory() as scratch:
+            # The table backends write to a path, not a handle. A scratch file keeps
+            # that contract rather than making every backend learn about streams.
+            staged = Path(scratch) / f"out.{resolved}"
+            _tabular(value, **options).write(staged, resolved, **_write_options(options))
+            buffer.write(staged.read_bytes())
+
+    sys.stdout.buffer.write(buffer.getvalue())
+    sys.stdout.buffer.flush()
     return path
 
 

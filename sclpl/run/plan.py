@@ -37,6 +37,14 @@ class Node:
     critical_path: float = 0.0
     #: What one run of this step is expected to cost, for critical-path weighting.
     weight: float = 1.0
+    #: The store name this node's value is published under. None means its own id.
+    #: A `foreach` publishes nothing useful itself -- the barrier after its iterations
+    #: publishes the loop's result under the loop's name -- which is what this is for.
+    binds: str | None = None
+
+    @property
+    def publishes(self) -> str:
+        return self.binds if self.binds is not None else self.id
 
 
 @dataclass(slots=True)

@@ -15,11 +15,12 @@ from sclpl.render.events import RunFinished, RunStarted
 from sclpl.render.reporter import Reporter
 from sclpl.run.compile_plan import hosts
 from sclpl.run.errors import SclplError
-from sclpl.run.execute import SKIPPED, Runtime, run_step
+from sclpl.run.execute import SKIPPED, Runtime, collect, run_injected, run_step
 from sclpl.run.ir import WorkflowDoc
 from sclpl.run.plan import Node
+from sclpl.run.ports import STDIO
 from sclpl.run.preflight import Report, preflight
-from sclpl.run.schedule import Limits, Outcome, Scheduler
+from sclpl.run.schedule import JOIN_SUFFIX, Limits, Outcome, Scheduler
 from sclpl.run.transport import Pool, TransportLimits
 from sclpl.values.store import ValueStore
 
@@ -130,6 +131,15 @@ async def run_workflow(doc: WorkflowDoc, options: Options, reporter: Reporter) -
             store.put(name, value, readers=report.plan.readers_of(name), pinned=True)
 
         async def runner(node: Node) -> Any:
+            # Three kinds of node reach here. Most are steps someone wrote. The rest the
+            # run grew for itself: a copy of a loop body, and the barrier that gathers
+            # one. Only the first kind is in the document.
+            if node.id.endswith(JOIN_SUFFIX):
+                return collect(node.id[: -len(JOIN_SUFFIX)], runtime)
+            if node.id in runtime.injected:
+                value = await run_injected(node.id, runtime)
+                return None if value is SKIPPED else value
+
             step = doc.step(node.id)
             if step is None:  # pragma: no cover - the plan is built from these steps
                 raise SclplError(f"no such step {node.id!r}")
@@ -137,6 +147,7 @@ async def run_workflow(doc: WorkflowDoc, options: Options, reporter: Reporter) -
             return None if value is SKIPPED else value
 
         scheduler = Scheduler(report.plan, store, reporter, limits)
+        runtime.expand = scheduler.expand
         outcome = await scheduler.run(runner)
 
     exit_code = _exit_code(outcome)
@@ -152,14 +163,20 @@ async def run_workflow(doc: WorkflowDoc, options: Options, reporter: Reporter) -
 
 
 def _output_paths(report: Report) -> dict[str, str]:
-    """Where each bound output port points, for the steps that declare `-> port`."""
+    """Where each bound output port points, for the steps that declare `-> port`.
+
+    `-` is a destination like any other here; `tables/io.py` is the one place that knows
+    it means stdout.
+    """
     if report.bindings is None:
         return {}
-    return {
-        name: str(binding.path)
-        for name, binding in report.bindings.outputs.items()
-        if binding.path is not None
-    }
+    paths: dict[str, str] = {}
+    for name, binding in report.bindings.outputs.items():
+        if binding.is_stdio:
+            paths[name] = STDIO
+        elif binding.path is not None:
+            paths[name] = str(binding.path)
+    return paths
 
 
 def _limits(doc: WorkflowDoc, options: Options) -> Limits:

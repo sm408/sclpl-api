@@ -47,8 +47,21 @@ def compile_plan(
     keep: set[str] | None = None,
     available: set[str] | None = None,
 ) -> Plan:
-    """Build the executable graph for ``doc``, restricted to ``keep`` if given."""
-    steps = [step for step in doc.all_steps() if keep is None or step.id in keep]
+    """Build the executable graph for ``doc``, restricted to ``keep`` if given.
+
+    A nested body step is *not* a node. It becomes one when its parent runs and knows
+    how many copies of it there are -- once per element for a `foreach`, once per
+    iteration for a `while`, not at all for the branch an `if` did not take. The parent
+    stands in for it in the graph, which is why `_spec` records the body's names under
+    `produces`: a later step reading `@double` waits for the loop, which is the only
+    honest answer before the loop has run.
+    """
+    nested = {child.id for step in doc.all_steps() for child in step.children()}
+    steps = [
+        step
+        for step in doc.all_steps()
+        if step.id not in nested and (keep is None or step.id in keep)
+    ]
     external = set(available or set()) | set(doc.vars) | set(doc.rules)
 
     specs = [_spec(step, doc) for step in steps]
@@ -56,6 +69,7 @@ def compile_plan(
 
 
 def _spec(step: Step, doc: WorkflowDoc) -> StepSpec:
+    del doc
     return StepSpec(
         id=step.id,
         reads=frozenset(references(step)),
@@ -64,23 +78,49 @@ def _spec(step: Step, doc: WorkflowDoc) -> StepSpec:
         host=host_of(step),
         lane=step.lane,
         weight=WEIGHTS.get(step.kind, 1.0),
-        produces=frozenset(child.id for child in step.children()),
+        produces=frozenset(descendants(step)),
     )
 
 
-def references(step: Step) -> set[str]:
-    """Every `@name` reachable in a step's configuration and its clauses.
+def descendants(step: Step) -> set[str]:
+    """Every name produced inside a step's body, at any depth."""
+    out: set[str] = set()
+    for child in step.children():
+        out.add(child.id)
+        out |= descendants(child)
+    return out
 
-    Nested bodies are deliberately excluded: a child step is its own node with its own
-    references, and folding them into the parent would make the parent depend on things
-    only the child needs.
+
+def references(step: Step) -> set[str]:
+    """Every `@name` a step needs before it can run, its body included.
+
+    A body step is not a node of its own (see `compile_plan`), so its references are the
+    parent's references -- otherwise `foreach @ids` whose body reads `@config` would run
+    before `config` existed, and invariant 3 would hold only for steps that happen not
+    to be nested.
+
+    Two kinds of name are subtracted, because the body supplies them itself: the loop
+    variable, and the ids of sibling steps inside the same body.
     """
     found: set[str] = set()
     _scan(_config_without_bodies(step), found)
     for clause in (step.assert_, step.skip_if, step.retry_if):
         if clause:
             _scan(clause, found)
-    return found
+
+    inner: set[str] = set()
+    for child in step.children():
+        inner |= references(child)
+    return (found | inner) - descendants(step) - _bound_by(step)
+
+
+def _bound_by(step: Step) -> set[str]:
+    """Names a control-flow step binds for its own body."""
+    match step.config:
+        case ForeachConfig() as config:
+            return {config.var, "index"}
+        case _:
+            return set()
 
 
 def _config_without_bodies(step: Step) -> Any:

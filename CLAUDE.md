@@ -16,6 +16,12 @@ Vue/FastAPI studio were deleted in M0; commit `1b1abe0` is the archive.
 | `docs/cli-rebuild/SPEC.md` | **Normative.** What to build. Wins any disagreement. |
 | `docs/cli-rebuild/HANDOFF.md` | Where the work stands, and what to pick up next. |
 | `docs/cli-rebuild/plan.html` | The argument and the evidence behind the constraints. |
+| `docs/vault/` | **Obsidian vault.** How it works and why it is shaped this way. Start at `Start Here`. |
+
+**Keep the vault current.** Every major decision gets an entry in `docs/vault/Decision Log.md`
+in the same change that makes it — not later, and not only in a commit message. A commit
+message is read once; a note is read when someone is about to undo the decision. The rules
+are in `docs/vault/Maintaining This Vault.md`; `python scripts/check_vault.py` checks the links.
 
 ## Invariants — a violation is a review block, not a style note
 

@@ -14,6 +14,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from sclpl.run import paginate
 from sclpl.run.compile_plan import compile_plan, function_names, hosts
 from sclpl.run.errors import ValidationError, did_you_mean
 from sclpl.run.ir import WorkflowDoc
@@ -120,9 +121,11 @@ def preflight(
     # 4. Expressions parse.
     report.problems.extend(_check_expressions(doc, report.resolved))
 
-    # 5. Functions exist, and every `-> port` names one.
+    # 5. Every step's own configuration is coherent: the function exists, the `-> port`
+    #    names a declared output, and each paginator has what its strategy needs.
     report.problems.extend(_check_functions(doc, report.resolved))
     report.problems.extend(_check_writes(doc, report.resolved))
+    report.problems.extend(_check_pagination(doc, report.resolved))
 
     # 6. Files: inputs readable, output directories present. Never writes.
     if check_files and report.bindings is not None:
@@ -134,7 +137,6 @@ def preflight(
 
     # 7. Optional extras the workflow will need.
     report.notes.extend(_check_extras(doc, report.resolved))
-    report.notes.extend(_check_pagination(doc, report.resolved))
 
     if hosts(doc):
         report.notes.append(f"hosts: {', '.join(hosts(doc))}")
@@ -244,22 +246,30 @@ def _check_functions(doc: WorkflowDoc, resolved: Resolved) -> list[ValidationErr
     return problems
 
 
-def _check_pagination(doc: WorkflowDoc, resolved: Resolved) -> list[str]:
-    """Say so while `paginate` is parsed but not yet followed.
+def _check_pagination(doc: WorkflowDoc, resolved: Resolved) -> list[ValidationError]:
+    """Every `paginate` line has what its strategy needs to follow anything.
 
-    Silently returning page one is the worst available behaviour: the run succeeds and
-    the data is short. Until the paginators land (M6) this is said out loud, before the
-    first request rather than after the last.
+    An offset paginator with no page size cannot advance, and a cursor paginator with
+    no path cannot find its token. Both fail identically at runtime -- one page, then
+    nothing -- which reads as "the API only had one page" rather than as a mistake.
     """
-    paginated = sorted(
-        step.id
-        for step in doc.all_steps()
-        if step.id in resolved.keep and getattr(step.config, "paginate", None) is not None
-    )
-    if not paginated:
-        return []
-    names = ", ".join(paginated)
-    return [f"pagination is not followed yet -- {names} will return the first page only"]
+    problems: list[ValidationError] = []
+    for step in doc.all_steps():
+        if step.id not in resolved.keep:
+            continue
+        spec = getattr(step.config, "paginate", None)
+        if spec is None:
+            continue
+        try:
+            paginate.check(spec)
+        except ValidationError as error:
+            problems.append(
+                ValidationError(
+                    f"step {step.id!r}: {error.diagnostic.message}",
+                    remedies=error.diagnostic.remedies,
+                )
+            )
+    return problems
 
 
 def _check_writes(doc: WorkflowDoc, resolved: Resolved) -> list[ValidationError]:

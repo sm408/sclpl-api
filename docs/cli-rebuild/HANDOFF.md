@@ -4,6 +4,10 @@ Pick up here. Read this file first, then **`SPEC.md`** — the normative impleme
 from. `plan.html` is the full argument with evidence; read it when you need the reasoning behind a
 constraint.
 
+**`docs/vault/` is an Obsidian vault** covering how the thing works and why it is shaped that way —
+open it as a vault, or read it as plain Markdown starting at `docs/vault/Start Here.md`. It is kept
+current as the work goes: every major decision lands in `docs/vault/Decision Log.md`.
+
 **M0–M5 are done (31 Aug 2026). Start at M6 — see §10 for the state they left behind.**
 
 ---

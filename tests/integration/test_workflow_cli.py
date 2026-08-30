@@ -320,14 +320,32 @@ def test_writing_to_a_port_that_is_not_declared_is_caught_before_the_run(
     assert "report" in result.stderr
 
 
-def test_pagination_that_is_not_followed_yet_says_so(tmp_path: Path, server_url: str) -> None:
-    """Silently returning page one would be a run that succeeds with short data."""
+def test_a_paginator_missing_what_it_needs_is_caught_before_running(
+    tmp_path: Path, server_url: str
+) -> None:
+    """Offset paging with no page size cannot advance, and fails like a short source."""
     path = tmp_path / "paged.sclpll"
     path.write_text(
         f"@workflow paged\n\n@step fetch\n  get {server_url}/json\n"
-        "  paginate cursor cursor_path=next param=cursor\n",
+        "  paginate offset param=offset\n",
         encoding="utf-8",
     )
     result = run_cli("validate", str(path))
-    assert result.returncode == 0
-    assert "first page only" in result.stderr
+    assert result.returncode == EXIT_VALIDATION
+    assert "page size" in result.stderr
+    assert "size=" in result.stderr
+
+
+def test_a_cursor_paginator_with_no_path_is_caught_before_running(
+    tmp_path: Path, server_url: str
+) -> None:
+    path = tmp_path / "nocursor.sclpll"
+    path.write_text(
+        f"@workflow nocursor\n\n@step fetch\n  get {server_url}/json\n"
+        "  paginate cursor param=cursor\n",
+        encoding="utf-8",
+    )
+    result = run_cli("validate", str(path))
+    assert result.returncode == EXIT_VALIDATION
+    assert "cursor_path" in result.stderr
+    assert "link_header" in result.stderr

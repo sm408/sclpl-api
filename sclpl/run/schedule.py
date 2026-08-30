@@ -36,6 +36,23 @@ from sclpl.values.store import ValueStore
 #: What a worker calls to run one node. Returns the value the node produced.
 Runner = Callable[[Node], Awaitable[Any]]
 
+#: Appended to a control-flow node's id to name the barrier `expand` puts after it.
+#: `::` cannot appear in a step id (the IR refuses it), so an injected name can never
+#: collide with one someone wrote.
+JOIN_SUFFIX = "::join"
+
+
+@dataclass(slots=True)
+class ExpandSpec:
+    """One node a running step wants added to the graph beneath it."""
+
+    id: str
+    reads: frozenset[str] = frozenset()
+    tags: frozenset[str] = frozenset()
+    host: str | None = None
+    lane: str | None = None
+    weight: float = 1.0
+
 
 @dataclass(slots=True)
 class Limits:
@@ -276,10 +293,11 @@ class Scheduler:
         # A leaf is pinned: nothing downstream reads it, but it is what the run
         # produced. "No consumer in the graph" is not the same as "nobody wants it",
         # and freeing the answer the moment it arrives is not a memory saving.
+        published = node.publishes
         self._store.put(
-            node.id,
+            published,
             value,
-            readers=self._plan.readers_of(node.id),
+            readers=self._plan.readers_of(published),
             pinned=not node.dependents,
         )
         self._outcome.succeeded.append(node.id)
@@ -304,6 +322,88 @@ class Scheduler:
             if self._indegree[dependent] == 0:
                 self._push(dependent)
         self._wakeup.set()
+
+    # -- runtime expansion -------------------------------------------------------
+
+    def expand(self, parent: str, specs: list[ExpandSpec]) -> None:
+        """Add a subgraph beneath a running node, and make its dependents wait for it.
+
+        This is invariant 3 and SPEC §12 meeting each other. A `foreach` cannot know how
+        many iterations it has until the collection it reads exists, so the graph has to
+        grow at runtime -- but growing it *here*, rather than calling `gather` inside the
+        step, is what keeps the global concurrency ceiling honest. Twenty iterations
+        against a host limited to four take four at a time, exactly as twenty separate
+        steps would.
+
+        The wiring, given a parent P with dependents D and new nodes N₁..Nₙ:
+
+        - each Nᵢ waits for P, so it starts as soon as P produces the collection
+        - a join node waits for P and every Nᵢ
+        - every D now waits for the join instead of for P -- same indegree, later edge
+
+        P then settles normally. Nothing downstream can observe the loop half-finished,
+        and nothing had to block a worker to arrange it.
+        """
+        node = self._plan.nodes[parent]
+        join_id = f"{parent}{JOIN_SUFFIX}"
+        made = [spec.id for spec in specs]
+
+        made_set = {spec.id for spec in specs}
+        for spec in specs:
+            # A spec's `reads` name earlier nodes in the same copy of a body, which is
+            # where a body's written order becomes graph edges. Anything else it reads
+            # was produced before the parent ran and is already in the store.
+            within = spec.reads & made_set
+            self._plan.nodes[spec.id] = Node(
+                id=spec.id,
+                reads=spec.reads,
+                needs=frozenset({parent}) | within,
+                tags=spec.tags,
+                host=spec.host,
+                lane=spec.lane,
+                weight=spec.weight,
+                critical_path=node.critical_path,
+            )
+            self._plan.order.append(spec.id)
+            self._indegree[spec.id] = 1 + len(within)
+
+        # The barrier publishes under the loop's own name, and the loop itself under a
+        # private one that nothing reads and the store frees at once. `@loop` downstream
+        # is therefore the finished result, and there is no moment at which it is the
+        # half-built one -- which is the difference between a loop you can depend on and
+        # a race.
+        self._plan.nodes[join_id] = Node(
+            id=join_id,
+            needs=frozenset({parent, *made}),
+            dependents=node.dependents,
+            critical_path=node.critical_path,
+            binds=parent,
+        )
+        node.binds = f"{parent}{JOIN_SUFFIX}::pending"
+        self._plan.order.append(join_id)
+        self._indegree[join_id] = 1 + len(made)
+
+        for dependent in node.dependents:
+            waiting = self._plan.nodes[dependent]
+            waiting.needs = (waiting.needs - {parent}) | {join_id}
+
+        for made_id in made:
+            made_node = self._plan.nodes[made_id]
+            followers = {
+                other.id
+                for other in (self._plan.nodes[name] for name in made)
+                if made_id in other.needs
+            }
+            made_node.dependents = frozenset({join_id, *followers})
+        node.dependents = frozenset({join_id, *made})
+
+    def joined(self, parent: str) -> list[str]:
+        """The ids `expand` created beneath ``parent``, in the order they were made."""
+        join_id = f"{parent}{JOIN_SUFFIX}"
+        node = self._plan.nodes.get(join_id)
+        if node is None:
+            return []
+        return [name for name in node.needs if name != parent]
 
     def _push(self, node_id: str) -> None:
         """Queue a node, ordered by remaining critical path -- longest chain first."""

@@ -7,13 +7,15 @@ only place invariant 2 permits a value to become a string.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from collections.abc import Callable
+from dataclasses import dataclass, field, replace
 from typing import Any
 
 from sclpl.expr import Context, evaluate, parse, parse_interpolated
 from sclpl.expr.eval import _truthy
 from sclpl.render.events import StepProgress
 from sclpl.render.reporter import Reporter
+from sclpl.run import control, paginate
 from sclpl.run.errors import AssertionFailed, SclplError, StepFailed, ValidationError
 from sclpl.run.ir import (
     FnConfig,
@@ -30,6 +32,7 @@ from sclpl.run.ir import (
 )
 from sclpl.run.plan import Node
 from sclpl.run.retry import Retry
+from sclpl.run.schedule import ExpandSpec
 from sclpl.run.transport import Pool, decode
 from sclpl.values.store import Frame, ValueStore
 
@@ -54,6 +57,19 @@ class Runtime:
     #: there without the path appearing in the workflow.
     outputs: dict[str, str] = field(default_factory=dict)
     max_pages: int | None = None
+    #: Nodes the run grew for itself -- loop iterations, taken branches -- and the scope
+    #: each one runs in. Populated by the control-flow kinds, read by the runner.
+    injected: dict[str, control.Injected] = field(default_factory=dict)
+    #: How a running step adds nodes beneath itself. Supplied by the scheduler.
+    expand: Callable[[str, list[ExpandSpec]], None] | None = None
+    #: Iteration key -> the node holding that iteration's result, per control step.
+    results: dict[str, dict[str, str]] = field(default_factory=dict)
+    #: Loops that finished without expanding, and what they produced instead.
+    settled: dict[str, Any] = field(default_factory=dict)
+    #: How many times each `while` has gone round, so `max_iterations` can be enforced.
+    iterations: dict[str, int] = field(default_factory=dict)
+    #: Barrier node -> how to turn its copies' values into the control step's own.
+    joins: dict[str, str] = field(default_factory=dict)
 
     def context(self, frame: Frame | None = None) -> Context:
         return Context(
@@ -63,19 +79,24 @@ class Runtime:
         )
 
 
-async def run_step(step: Step, node: Node, runtime: Runtime) -> Any:
-    """Execute one step and return the value it produced."""
+async def run_step(step: Step, node: Node, runtime: Runtime, *, node_id: str = "") -> Any:
+    """Execute one step and return the value it produced.
+
+    ``node_id`` is the graph name, which differs from the step id for anything the run
+    grew for itself -- a loop body copy, or a `while`'s continuation. Control flow needs
+    the graph name, because that is what it expands beneath.
+    """
     if step.skip_if and await _condition(step.skip_if, runtime, step):
         return SKIPPED
 
-    value = await _dispatch(step, node, runtime)
+    value = await _dispatch(step, node, runtime, node_id or node.id)
 
     if step.assert_:
         await _assert(step, value, runtime)
     return value
 
 
-async def _dispatch(step: Step, node: Node, runtime: Runtime) -> Any:
+async def _dispatch(step: Step, node: Node, runtime: Runtime, node_id: str) -> Any:
     match step.config:
         case HttpConfig() as config:
             return await _http(step, config, node, runtime)
@@ -84,15 +105,23 @@ async def _dispatch(step: Step, node: Node, runtime: Runtime) -> Any:
         case LetConfig() as config:
             return await _let(config, runtime)
         case IfConfig() as config:
-            return await _if(config, runtime)
-        case GateConfig():
-            return None
-        case ForeachConfig() | WhileConfig() | ParallelConfig() | UseConfig():
-            # These expand into the graph in M6; until then the planner never emits
-            # them as leaf work, so reaching here is a bug rather than a user error.
+            return await _if(node_id, step, config, runtime)
+        case ForeachConfig() as config:
+            return await _foreach(node_id, step, config, runtime)
+        case WhileConfig() as config:
+            return await _while(node_id, step, config, runtime)
+        case ParallelConfig() as config:
+            return await _parallel(node_id, step, config, runtime)
+        case GateConfig() as config:
+            # A barrier does nothing. Its value is that everything before it is in the
+            # store by the time anything after it starts, which the graph already
+            # guarantees -- the step exists so the author can say where that matters.
+            return control.gate_reason(config)
+        case UseConfig():
             raise StepFailed(
-                f"step {step.id!r} is a {step.kind}, which needs the control-flow "
-                "expansion that lands in M6"
+                f"step {step.id!r} calls another workflow, which lands in M8 with the "
+                "plugin and catalogue work it shares a resolution path with",
+                remedies=["inline the steps for now, or run the two workflows in sequence"],
             )
         case _:
             raise StepFailed(f"step {step.id!r} has an unsupported kind {step.kind!r}")
@@ -129,29 +158,125 @@ async def _http(step: Step, config: HttpConfig, node: Node, runtime: Runtime) ->
         kwargs["timeout"] = config.timeout
 
     retry = Retry(max=step.retry.max, base_delay=step.retry.base_delay)
-    attempt = await runtime.pool.request(
-        config.method,
-        url,
-        reporter=runtime.reporter,
-        step=step.id,
-        retry=retry,
-        **kwargs,
-    )
-    response = attempt.response
-    result = {
-        "status": response.status_code,
-        "ok": 200 <= response.status_code < 300,
-        "headers": dict(response.headers),
-        "body": decode(response),
-        "url": str(response.url),
-        "elapsed_ms": attempt.duration_ms,
-    }
+
+    async def fetch(
+        extra_query: dict[str, Any], extra_headers: dict[str, str], override: str | None
+    ) -> paginate.Page:
+        """One request. The paginator supplies what differs between pages."""
+        call = dict(kwargs)
+        if extra_query:
+            merged = {**query, **extra_query}
+            call["params"] = {key: _query_value(value) for key, value in merged.items()}
+        if extra_headers:
+            call["headers"] = {**headers, **extra_headers}
+        attempt = await runtime.pool.request(
+            config.method,
+            override or url,
+            reporter=runtime.reporter,
+            step=step.id,
+            retry=retry,
+            **call,
+        )
+        response = attempt.response
+        return paginate.Page(
+            body=decode(response),
+            status=response.status_code,
+            headers=dict(response.headers),
+            url=str(response.url),
+            elapsed_ms=attempt.duration_ms,
+        )
+
     del node
+    if config.paginate is None:
+        page = await fetch({}, {}, None)
+        result = _response(page)
+    else:
+        result = await _paginated(step, config, fetch, runtime)
+
     if config.extract:
         return await evaluate(
             parse(config.extract), Context(store=runtime.store, frame=Frame({"response": result}))
         )
     return result
+
+
+def _response(page: paginate.Page, *, pages: int = 1, truncated: bool = False) -> dict[str, Any]:
+    """The shape a step's HTTP result always has, paginated or not.
+
+    One page or forty, `@fetch.status` and `@fetch.body` mean the same thing. The two
+    extra fields only appear when paging happened, so an unpaginated step's result is
+    byte-for-byte what it was before.
+    """
+    result: dict[str, Any] = {
+        "status": page.status,
+        "ok": 200 <= page.status < 300,
+        "headers": page.headers,
+        "body": page.body,
+        "url": page.url,
+        "elapsed_ms": page.elapsed_ms,
+    }
+    if pages != 1 or truncated:
+        result["pages"] = pages
+        result["truncated"] = truncated
+    return result
+
+
+async def _paginated(
+    step: Step, config: HttpConfig, fetch: paginate.Fetch, runtime: Runtime
+) -> dict[str, Any]:
+    """Follow a paginated source and present the whole of it as one result."""
+    assert config.paginate is not None
+    spec = config.paginate
+
+    ignored = paginate.unsupported_concurrency(spec)
+    if ignored:
+        runtime.reporter.log("warning", ignored, step.id)
+
+    async def stop(page: paginate.Page) -> bool:
+        if not spec.stop_when:
+            return False
+        frame = Frame({"response": _response(page), "page": page.body})
+        return _truthy(await evaluate(parse(spec.stop_when), runtime.context(frame)))
+
+    def announce(number: int, page: paginate.Page) -> None:
+        runtime.reporter.emit(
+            StepProgress(
+                id=step.id,
+                detail="pages",
+                current=number,
+                total=spec.max_pages if spec.max_pages is not None else runtime.max_pages,
+            )
+        )
+
+    followed = await paginate.follow(
+        spec,
+        fetch,
+        stop_when=stop if spec.stop_when else None,
+        max_pages=runtime.max_pages,
+        on_page=announce,
+    )
+
+    if followed.truncated:
+        runtime.reporter.log(
+            "warning",
+            f"stopped at {followed.count} pages ({followed.reason}); there may be more",
+            step.id,
+        )
+
+    last = followed.pages[-1]
+    result = _response(last, pages=followed.count, truncated=followed.truncated)
+    result["body"] = paginate.merge(followed.pages, spec.into, _extract_path)
+    return result
+
+
+def _extract_path(body: Any, path: str) -> Any:
+    """Where the items are in one page's body.
+
+    A plain dotted path rather than the expression language: `into` names a location,
+    and a page that does not have it has no items rather than an error -- the last page
+    of a source that stops sending the key is normal.
+    """
+    return paginate.dig(body, path.lstrip("@").lstrip("."))
 
 
 def _query_value(value: Any) -> Any:
@@ -214,14 +339,166 @@ def _bind_output(
 
 
 async def _let(config: LetConfig, runtime: Runtime) -> Any:
-    if config.expr is not None:
-        return await evaluate(parse(config.expr), runtime.context())
-    return await _resolve(config.value, runtime)
+    """Bind the value of an expression.
+
+    A `let` whose expression is a quoted string containing `{{...}}` is a template, not
+    a literal. The expression parser is right to read `"a {{b}}"` as a string -- that is
+    what it is -- but a step that produced the characters `{{@total}}` would be the
+    exact failure the rewrite exists to remove, so the two-step reading happens here:
+    evaluate, and if the answer is a string still carrying an interpolation, fill it in.
+    """
+    if config.expr is None:
+        return await _resolve(config.value, runtime)
+
+    value = await evaluate(parse(config.expr), runtime.context())
+    if isinstance(value, str) and "{{" in value:
+        return await evaluate(parse_interpolated(value), runtime.context())
+    return value
 
 
-async def _if(config: IfConfig, runtime: Runtime) -> Any:
-    """Evaluate the condition; the branches themselves are graph nodes (M6)."""
-    return await evaluate(parse(config.condition), runtime.context())
+async def _if(node: str, step: Step, config: IfConfig, runtime: Runtime) -> Any:
+    """Take one branch. The steps in it become nodes; the other branch's never exist."""
+    taken = _truthy(await evaluate(parse(config.condition), runtime.context()))
+    return _grow(node, control.expand_branch(step, config, taken, runtime), runtime)
+
+
+async def _foreach(node: str, step: Step, config: ForeachConfig, runtime: Runtime) -> Any:
+    """Fan out over a collection, one copy of the body per element."""
+    items = await evaluate(parse(config.over), runtime.context())
+    if isinstance(items, dict):
+        # Looping over an object means its entries, which is what a reader expects.
+        # Treating it as one element would be a loop that runs once and looks fine.
+        items = [{"key": key, "value": value} for key, value in items.items()]
+    if not isinstance(items, list):
+        raise StepFailed(
+            f"step {step.id!r} loops over {config.over}, which is "
+            f"{type(items).__name__}, not a collection",
+            remedies=["check the path -- -vv shows what it resolved to"],
+        )
+    return _grow(node, control.expand_foreach(step, config, items, runtime), runtime)
+
+
+async def _while(node: str, step: Step, config: WhileConfig, runtime: Runtime) -> Any:
+    """Run the body while the condition holds, one iteration of graph at a time.
+
+    Each pass injects its body *and* a continuation node that re-evaluates the
+    condition. The continuation expands in turn, so the chain grows exactly as far as
+    the condition allows and no worker is held waiting for it. Because `expand` hands a
+    node's dependents to the barrier it creates, the first pass's barrier inherits the
+    whole chain -- nothing downstream can start until the loop is genuinely done.
+
+    `do_while` differs in one place only: the first pass is unconditional. That is the
+    right shape for "fetch, then decide whether to fetch again", where the thing the
+    condition asks about does not exist until the body has run once.
+
+    A loop produces its **last** pass's value, not a list of them. A loop that runs
+    until something is true is asking for the state at the end; the intermediate states
+    are what it was getting past.
+    """
+    passes = runtime.iterations.get(step.id, 0)
+    if passes >= config.max_iterations:
+        raise StepFailed(
+            f"step {step.id!r} hit max_iterations ({config.max_iterations})",
+            remedies=[
+                "raise max_iterations if the loop is meant to run that long",
+                "check that the condition goes false -- it is re-evaluated each pass",
+            ],
+        )
+
+    unconditional = step.kind == "do_while" and passes == 0
+    if not unconditional and not _truthy(await _loop_condition(config, runtime, passes)):
+        return runtime.settled.get(step.id)
+
+    runtime.iterations[step.id] = passes + 1
+    expansion = control.expand_iteration(step, config, passes, runtime)
+    again = f"{node}{control.MARK}again"
+    expansion.specs.append(ExpandSpec(id=again, weight=0.1))
+    expansion.injected[again] = control.Injected(
+        step=step, frame=expansion.frame or runtime.frame, parent=step.id
+    )
+    return _grow(node, expansion, runtime)
+
+
+async def _loop_condition(config: WhileConfig, runtime: Runtime, passes: int) -> Any:
+    """Evaluate a loop's condition, with the body's own names in scope.
+
+    Before the first pass those names have no value, and an unresolved reference would
+    be an error naming a step that is right there in the file. Binding them to null
+    instead lets a loop be written the way it reads -- `while is_null(@page) or
+    @page.body.has_more` -- and keeps a genuine typo an error, because a name the body
+    does not produce is still unresolved.
+    """
+    context = runtime.context()
+    if passes == 0:
+        pending = Frame(
+            values={step.id: None for step in config.body},
+            parent=runtime.frame,
+        )
+        context = runtime.context(pending)
+    return await evaluate(parse(config.condition), context)
+
+
+async def _parallel(node: str, step: Step, config: ParallelConfig, runtime: Runtime) -> Any:
+    """Run every branch at once."""
+    return _grow(node, control.expand_parallel(step, config, runtime), runtime)
+
+
+def _grow(node: str, expansion: control.Expansion, runtime: Runtime) -> Any:
+    """Hand an expansion to the scheduler, or settle it when there is nothing to add."""
+    if expansion.has_value:
+        return expansion.value
+    if runtime.expand is None:  # pragma: no cover - the runner always supplies one
+        raise StepFailed(f"node {node!r} cannot expand outside a scheduled run")
+
+    runtime.injected.update(expansion.injected)
+    runtime.results[node] = expansion.results
+    runtime.joins[node] = expansion.produces
+    runtime.expand(node, expansion.specs)
+    return None
+
+
+async def run_injected(node_id: str, runtime: Runtime) -> Any:
+    """Run a node the graph grew for itself, in the scope it belongs to."""
+    entry = runtime.injected[node_id]
+    scoped = replace(runtime, frame=entry.frame)
+    value = await run_step(entry.step, Node(id=node_id), scoped, node_id=node_id)
+    if value is not SKIPPED:
+        # An iteration's steps see each other by their written names, not their
+        # decorated ones: `@fetch` inside a loop body means this iteration's `fetch`.
+        entry.frame.values[entry.step.id] = value
+        if entry.result_of is not None:
+            runtime.settled[entry.parent] = value
+    return value
+
+
+def collect(parent: str, runtime: Runtime) -> Any:
+    """What a finished control step produced, gathered from the copies it made.
+
+    Order is the order the copies were made -- element order for a `foreach`, branch
+    order for a `parallel` -- never the order they happened to finish in. A loop whose
+    results came back shuffled would be a loop nobody could use.
+    """
+    produces = runtime.joins.pop(parent, "list")
+    results = runtime.results.pop(parent, {})
+
+    if produces == "last":
+        made = (runtime.injected[node] for node in results.values() if node in runtime.injected)
+        owner = next((entry.parent for entry in made), parent)
+        return runtime.settled.get(owner)
+
+    values: list[Any] = []
+    for key in sorted(results, key=_iteration_order):
+        entry = runtime.injected.get(results[key])
+        values.append(None if entry is None else entry.frame.values.get(entry.step.id))
+
+    if produces == "one":
+        return values[0] if values else None
+    return values
+
+
+def _iteration_order(key: str) -> tuple[int, str]:
+    """Numeric keys sort numerically: pass 10 comes after pass 9, not after pass 1."""
+    return (int(key), "") if key.isdigit() else (0, key)
 
 
 # -- resolution ------------------------------------------------------------------
