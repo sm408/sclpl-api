@@ -37,9 +37,18 @@ ENVELOPES = ("data", "items", "results", "records", "rows")
 def records_of(value: Any) -> list[dict[str, Any]]:
     """The records inside whatever a step produced.
 
-    One definition, used by the writers and by the function catalogue alike, so
-    `save_csv(@x)` and `flatten(@x)` can never disagree about what the rows are.
+    One definition, used by the writers, the function catalogue, and every plugin alike,
+    so `save_csv(@x)` and `flatten(@x)` and `sqlite.write(@x)` can never disagree about
+    what the rows are.
+
+    A `Table` is recognised by offering `to_records()`, not by its type. `tables/base.py`
+    imports this module, so importing it back would be a cycle -- and duck-typing is the
+    honest rule anyway: a plugin's own backend is a table if it behaves like one.
     """
+    to_records = getattr(value, "to_records", None)
+    if callable(to_records):
+        rows = to_records()
+        return rows if isinstance(rows, list) else []
     if isinstance(value, list):
         return [row if isinstance(row, dict) else {"value": row} for row in value]
     if isinstance(value, dict):

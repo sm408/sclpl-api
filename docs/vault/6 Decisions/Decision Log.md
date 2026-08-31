@@ -15,6 +15,68 @@ someone undoing it next month.
 
 ---
 
+## 2026-09-01 · `records_of` understands a `Table`
+
+**Decided.** It recognises one by `to_records()`, not by type -- `tables/base.py` imports
+`flatten.py`, so importing back would be a cycle, and duck-typing is the honest rule
+anyway: a plugin's own backend is a table if it behaves like one.
+
+**Replaced.** `records_of(table)` returned `[{"value": "<Table 3x3>"}]` -- the repr, in a
+single column. `functions/io_fns.py` had a private wrapper handling tables first, so
+nothing inside `sclpl` ever hit it.
+
+**How it was found.** By writing the bundled SQLite plugin, which is exactly what locked
+decision 8 says shipping it is for. Only a plugin could hit this, because only a plugin
+used the public function directly.
+
+## 2026-09-01 · A dotted name before a paren is a call
+
+**Decided.** `sqlite.write(...)` parses as a call to `sqlite.write`. A chain rooted at a
+`@ref` does *not*: `@response.body(...)` would be calling a value.
+
+**Why.** A connector is namespaced by a dot -- that is what lets two plugins both offer
+`query` without either being renamed -- so the grammar has to accept a dotted callee.
+
+## 2026-09-01 · A refusal is not overwritten by a later check
+
+**Decided.** `_load` returns immediately if the plugin was already refused.
+
+**Replaced.** A plugin refused for unreadable TOML went on through the ABI and capability
+checks and came out reported as "names no module" -- true, a consequence, and pointing at
+the wrong line.
+
+## 2026-09-01 · `--deny-capability` is read before the parser runs
+
+**Decided.** `cli/app.py:_denied_capabilities` reads it from `sys.argv`. The parser still
+validates it.
+
+**Why.** Loading a plugin *runs* its module. A capability refused after parsing has
+already been exercised, so the denial has to precede the import -- and the import
+precedes the parser.
+
+## 2026-09-01 · A denial is sticky for the process
+
+**Decided.** `plugins.DENIED` accumulates, so a second `discover()` sees the same
+refusals.
+
+**Why.** `plugin list` re-discovers to get a fresh view, and a denial that applied only
+to the first discovery would be one `plugin list` could not show.
+
+## 2026-09-01 · `plugin install` prints the command rather than running it
+
+**Decided.** It shows the `pip install` line and exits 2.
+
+**Why.** Running pip would guess at the environment, the index, and whether `--user` was
+meant, and be wrong in a way that is hard to unpick. You have a package manager and know
+how you like to use it.
+
+## 2026-09-01 · A diagnostic never shows a traceback
+
+**Decided.** `entrypoint` catches `SclplError`, prints it, and exits with its code.
+
+**Replaced.** A diagnostic raised in the root callback -- from a global option, before
+routing -- came out as a stack trace with the message buried in it.
+
 ## 2026-08-31 · Readers and writers are both uncacheable
 
 **Decided.** `save*`, `read*`, `glob_read`, and `convert` are never cached.

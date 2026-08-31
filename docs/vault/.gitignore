@@ -4,4 +4,12 @@
 .obsidian/workspace.json
 .obsidian/workspace-mobile.json
 .obsidian/cache
+
+# Community plugins are vendored third-party JavaScript and a per-person choice. The
+# vault reads fine without any of them; `graph.json` and `app.json` are committed
+# because those *are* shared decisions about how the vault looks.
+.obsidian/plugins/
+.obsidian/community-plugins.json
+.obsidian/themes/
+
 .trash/

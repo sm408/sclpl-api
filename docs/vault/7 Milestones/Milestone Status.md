@@ -19,7 +19,7 @@ if `--help` lists a command, that command works.
 | M5 | [[M5 Functions and Tables]] | ✅ | `86b9efa` |
 | M6 | [[M6 Control Flow and Pagination]] | ✅ | — |
 | M7 | [[M7 Memory Lanes and Cache]] | ✅ | — |
-| M8 | Plugins | ⬜ | — |
+| M8 | [[M8 Plugins]] | ✅ | — |
 | M9 | Secrets, history, docs, packaging | ⬜ | — |
 
 ## Exit criteria
@@ -33,13 +33,13 @@ if `--help` lists a command, that command works.
 | M5 | Nested JSON → flattened CSV → Excel in one pipeline, with a schema assertion | ✅ |
 | M6 | A paginated source fans out into a bounded `foreach`, reported as one progress line | ✅ |
 | M7 | Intermediates at 3× budget complete by spilling; a CPU-bound join lands in a process | ✅ |
-| M8 | SQLite → join with an API → write back, no config; an external plugin `pip install`s and works | ⬜ |
+| M8 | SQLite → join with an API → write back, no config; an external plugin `pip install`s and works | ✅ |
 | M9 | A new user imports a shared workflow and finishes a paginated API → CSV run from the README in ten minutes | ⬜ |
 
 ## What is deliberately not done yet
 
-- `use` — invoking another workflow. Raises a named error, not a silent no-op *(M8)*
-- `state/` and `plugins_bundled/` — empty directories with budgets, not stubs
+- `use` — invoking another workflow. Raises a named error, not a silent no-op *(M9)*
+- `state/` — an empty directory with a budget, not a stub *(M9)*
 - Arrow IPC handoff to a process lane -- it pickles instead, which works and is
   slower *(M7 leftover)*
 - Lane assignment from run history, which needs the history *(M9)*
@@ -54,4 +54,4 @@ if `--help` lists a command, that command works.
 `ruff check` · `ruff format --check` · `mypy` (strict) · `pytest` ·
 `scripts/check_budget.py` · `scripts/check_layering.py`
 
-Currently: **616 tests**, 10,472 of 16,000 budgeted lines.
+Currently: **655 tests**, 11,156 of 16,000 budgeted lines.

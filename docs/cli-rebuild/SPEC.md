@@ -628,10 +628,10 @@ Do these in order. Each is independently demonstrable.
 - **Exit:** met — six 65MB intermediates against `--memory-budget 150M` complete with the right answer; a 40,000-row join runs in a separate PID while a one-row join stays on the loop
 
 ### M8 — Plugins and the bundled set
-- [ ] Entry-point discovery, manifest parsing, ABI check, capability declaration and enforcement
-- [ ] Schema-driven help and completion; `plugin scaffold`
-- [ ] Bundled `sqlite`, `fs`, `example` — public API only
-- **Exit:** SQLite → join with an API → write back, no config; an external plugin `pip install`s and works
+- [x] Entry-point discovery, manifest parsing, ABI check, capability declaration and enforcement (`--deny-capability`)
+- [x] Schema-driven help and completion; `plugin scaffold`, and `list`/`describe`/`install`
+- [x] Bundled `sqlite`, `fs`, `example` — public API only, which is how `records_of` was found not to handle a `Table`
+- **Exit:** met — a seven-step round trip, SQLite → paginated API join → SQLite, no config; a scaffolded plugin loads and runs unedited
 
 ### M9 — Secrets, history, packaging, docs
 - [ ] Keyring-first secrets, no base64 fallback; environments

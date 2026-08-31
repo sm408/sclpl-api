@@ -41,4 +41,5 @@ Every idea in `sclpl` that has a name.
 ## Extending
 
 - [[Extending sclpl]] — functions, connectors, plugins
+- [[Plugins]] — discovery, the manifest, capabilities, and the bundled set
 - [[The Line Budget]] — the size gate, and why it exists

@@ -199,9 +199,7 @@ def normalize(data: Any, *, sep: str = "_") -> Any:
 def _records(data: Any) -> list[dict[str, Any]]:
     """Get a list of objects out of whatever a step produced.
 
-    A `Table` knows its own rows; everything else goes through the one definition in
-    `tables/flatten.py`, so a function and a writer never disagree about the rows.
+    One line, because `records_of` is the definition -- including for a `Table`, which
+    it recognises by behaviour rather than by type.
     """
-    if isinstance(data, Table):
-        return data.to_records()
     return records_of(data)

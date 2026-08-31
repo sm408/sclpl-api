@@ -7,11 +7,12 @@ in one place. Nothing is stubbed: if `--help` lists a command, that command work
 from __future__ import annotations
 
 import sys
+from typing import Annotated
 
 import typer
 
 from sclpl import __version__, bootstrap
-from sclpl.cli import catalog_cmd, launcher, workflow_cmd
+from sclpl.cli import catalog_cmd, launcher, plugin_cmd, workflow_cmd
 from sclpl.cli import run as call_cmd
 from sclpl.cli.options import (
     GlobalOptions,
@@ -22,11 +23,32 @@ from sclpl.cli.options import (
     VerboseOption,
     resolve_verbosity,
 )
-from sclpl.errors import EXIT_USAGE
+from sclpl.errors import EXIT_USAGE, SclplError
+from sclpl.ext.plugins import parse_capabilities
+
+
+def _denied_capabilities() -> list[str]:
+    """`--deny-capability` values, read from `sys.argv` rather than from the parser.
+
+    Loading a plugin *runs* its module, so a capability refused after parsing has
+    already been exercised. The denial has to precede the import, and the import
+    precedes the parser -- so this reads the flag itself. It is validated properly by
+    `plugins.parse_capabilities` once the registry has it, so a typo is still an error
+    and not a silent no-op.
+    """
+    wanted: list[str] = []
+    argv = sys.argv[1:]
+    for index, item in enumerate(argv):
+        if item == "--deny-capability" and index + 1 < len(argv):
+            wanted.append(argv[index + 1])
+        elif item.startswith("--deny-capability="):
+            wanted.append(item.split("=", 1)[1])
+    return wanted
+
 
 # Built-ins and plugins register before any command can be routed, so `--help`,
 # completion, and preflight all see the same set a run would.
-bootstrap.load()
+bootstrap.load(denied=_denied_capabilities())
 
 app = typer.Typer(
     name="sclpl",
@@ -39,6 +61,7 @@ app = typer.Typer(
 call_cmd.register(app)
 workflow_cmd.register(app)
 catalog_cmd.register(app)
+plugin_cmd.register(app)
 
 
 def _version(value: bool) -> None:
@@ -55,6 +78,14 @@ def main(
     json_mode: JsonOption = False,
     plain: PlainOption = False,
     no_color: NoColorOption = False,
+    deny_capability: Annotated[
+        list[str] | None,
+        typer.Option(
+            "--deny-capability",
+            metavar="NAME",
+            help="Refuse to load any plugin declaring this. Repeatable.",
+        ),
+    ] = None,
     version: bool = typer.Option(
         False,
         "--version",
@@ -63,6 +94,10 @@ def main(
         help="Print the version and exit.",
     ),
 ) -> None:
+    # Already acted on before any plugin was imported -- see `_denied_capabilities`.
+    # Validated here so a typo is an error rather than a denial of nothing.
+    parse_capabilities(deny_capability or [])
+
     ctx.obj = GlobalOptions(
         verbosity=resolve_verbosity(quiet, verbose),
         json_mode=json_mode,
@@ -92,7 +127,17 @@ def entrypoint() -> None:
         rewritten = launcher.bare_shorthand(argv)
         if rewritten is not None:
             sys.argv = [sys.argv[0], *rewritten]
-    app()
+
+    try:
+        app()
+    except SclplError as error:
+        # A diagnostic reaching here came from somewhere no command wraps -- the root
+        # callback, or an option parsed before routing. It was written to be read, so
+        # it is printed rather than shown as a traceback with the message buried in it.
+        typer.echo(str(error), err=True)
+        # `sys.exit`, not `typer.Exit`: we are outside `app()`, so Click's handler is
+        # no longer on the stack to turn that into an exit code.
+        sys.exit(error.exit_code)
 
 
 def _command_names() -> list[str]:

@@ -1,0 +1,19 @@
+# What `sclpl plugin scaffold` produces. It is loaded like any other plugin, so it
+# cannot drift from the thing it is a template for -- a scaffold that no longer runs is
+# worse than no scaffold at all.
+
+[plugin]
+name = "example"
+version = "0.1.0"
+api = "sclpl/1"
+module = "sclpl.plugins_bundled.example"
+description = "The scaffold template. Copy it, rename it, delete what you do not need."
+capabilities = []
+
+[[function]]
+name = "greet"
+summary = "The smallest thing a plugin can contribute."
+
+[[connector]]
+name = "example.echo"
+summary = "A namespaced callable, which is what makes it a connector."

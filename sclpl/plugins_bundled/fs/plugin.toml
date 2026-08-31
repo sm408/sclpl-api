@@ -1,0 +1,40 @@
+# Filesystem operations that are about *files* rather than about their contents. The
+# built-in `read_*` and `save_*` functions handle formats; these handle paths.
+
+[plugin]
+name = "fs"
+version = "1.0.0"
+api = "sclpl/1"
+module = "sclpl.plugins_bundled.fs"
+description = "List, inspect, copy, and remove files. Paths, not formats."
+capabilities = ["fs:read", "fs:write"]
+
+[[connector]]
+name = "fs.glob"
+summary = "Paths matching a pattern, with size and mtime."
+
+[[connector]]
+name = "fs.stat"
+summary = "What is known about one path."
+
+[[connector]]
+name = "fs.exists"
+summary = "Whether a path is there."
+
+[[connector]]
+name = "fs.copy"
+lane = "thread"
+summary = "Copy a file, creating the destination directory."
+
+[[connector]]
+name = "fs.move"
+lane = "thread"
+summary = "Move or rename a file."
+
+[[connector]]
+name = "fs.remove"
+summary = "Delete a file. Refuses a directory unless told."
+
+[[connector]]
+name = "fs.mkdir"
+summary = "Create a directory and its parents."

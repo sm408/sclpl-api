@@ -39,6 +39,22 @@ read only by an injected node is freed before that node runs.
 
 → [[M6 Control Flow and Pagination]]
 
+**M8 finished.** Plugins, and the bundled `sqlite` / `fs` / `example`.
+
+The exit criterion is a seven-step round trip with no configuration: SQLite out, join
+with a paginated API, SQLite back in. And `plugin scaffold` writes something that loads
+and runs with no edits.
+
+The milestone justified its own design decision. Locked decision 8 says SQLite ships as a
+plugin "which is how we know the plugin API is sufficient" -- and it was not.
+`records_of`, a *public API* function, did not understand a `Table`: it returned the repr
+in a single column. The function catalogue had a private wrapper that handled tables
+first, so nothing inside `sclpl` had ever hit it. Only a plugin could, and one did, on
+the first try.
+
+The expression grammar also had no dotted calls, which a namespaced connector needs by
+definition. `sqlite.write(...)` had been parsing as attribute access.
+
 **M7 finished.** The governor, the lanes, and the cache.
 
 Both halves of the exit criterion are numbers rather than claims. Six 65 MB intermediates

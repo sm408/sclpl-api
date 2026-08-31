@@ -1,0 +1,31 @@
+# SQLite ships as a plugin rather than as core, on purpose (locked decision 8). It uses
+# only the public API, so if it needed something that is not there, the API would be
+# missing something -- and we would find out before anyone else did.
+
+[plugin]
+name = "sqlite"
+version = "1.0.0"
+api = "sclpl/1"
+module = "sclpl.plugins_bundled.sqlite"
+description = "Query and write SQLite databases. No new dependency; sqlite3 is stdlib."
+capabilities = ["fs:read", "fs:write"]
+
+[[connector]]
+name = "sqlite.query"
+lane = "thread"
+summary = "Run a SELECT and get rows back."
+
+[[connector]]
+name = "sqlite.write"
+lane = "thread"
+summary = "Write records into a table, creating it if needed."
+
+[[connector]]
+name = "sqlite.exec"
+lane = "thread"
+summary = "Run a statement that returns no rows."
+
+[[connector]]
+name = "sqlite.schema"
+lane = "thread"
+summary = "The tables in a database, and their columns."

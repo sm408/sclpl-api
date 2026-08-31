@@ -14,6 +14,7 @@ Budget 1,400. The Typer surface: commands, global flags, the bare launcher.
 | `run.py` | `call` — one request |
 | `workflow_cmd.py` | `run`, `validate`, `explain`, `fmt`, `convert` |
 | `catalog_cmd.py` | `import`, `list`, `show`, `remove` |
+| `plugin_cmd.py` | `plugin list`, `describe`, `scaffold`, `install` |
 | `launcher.py` | The bare `sclpl <wf> …` shorthand |
 
 ## Registration

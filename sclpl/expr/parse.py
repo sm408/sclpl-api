@@ -143,6 +143,28 @@ def is_expression(text: str) -> bool:
     return "{{" in text or text.lstrip().startswith("@")
 
 
+def _callee(node: Node) -> str | None:
+    """The name being called, for a bare identifier or a dotted chain of them.
+
+    `count(...)` is a function and `sqlite.write(...)` is a connector, and to the
+    dispatch table they are the same thing with different names -- the dot is what
+    namespaces a plugin's contributions so two plugins can both offer `query`.
+
+    A chain rooted at a `@ref` is *not* a call. `@response.body(...)` would be calling a
+    value, which is not a thing; leaving it as an attribute chain lets it fail where the
+    mistake is rather than as an unknown function.
+    """
+    parts: list[str] = []
+    current = node
+    while isinstance(current, Attr):
+        parts.append(current.name)
+        current = current.obj
+    if not isinstance(current, Var):
+        return None
+    parts.append(current.name)
+    return ".".join(reversed(parts))
+
+
 class _Parser:
     __slots__ = ("_tokens", "_index", "_source")
 
@@ -251,9 +273,11 @@ class _Parser:
             if self.at(Kind.LBRACKET):
                 node = self.subscript(node)
                 continue
-            if self.at(Kind.LPAREN) and isinstance(node, Var):
-                node = self.call(node.name)
-                continue
+            if self.at(Kind.LPAREN):
+                name = _callee(node)
+                if name is not None:
+                    node = self.call(name)
+                    continue
             break
         return node
 

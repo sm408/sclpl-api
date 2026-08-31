@@ -10,7 +10,8 @@ Budget 700. How anything outside the engine gets in.
 | File | Job |
 |---|---|
 | `functions.py` | The `@function` decorator, `Registered`, schema generation, coercion |
-| `plugins.py` | Entry-point discovery, manifest, ABI, capabilities #todo *(M8)* |
+| `plugins.py` | Discovery, manifest, ABI, capabilities → [[Plugins]] |
+| `api.py` | The public plugin API, and the promise attached to it |
 
 → [[Built-in Functions#How registration works]], [[Extending sclpl]]
 

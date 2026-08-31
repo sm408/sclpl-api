@@ -61,6 +61,13 @@ Rules the codebase holds itself to:
 - `UnknownReference` / `PathError` → the reference did not resolve
 - `MissingExtra` → an optional dependency is not installed
 
+## Nothing shows a traceback
+
+A `SclplError` reaching `cli/app.py:entrypoint` is printed as the diagnostic it is and
+the process exits with its code. Individual commands catch it too, but the entrypoint is
+the backstop: a message written to be read should never arrive as a stack trace with the
+message buried in the middle of it.
+
 ## Wrapping
 
 A function raising something that is *not* a `SclplError` is wrapped with the step id

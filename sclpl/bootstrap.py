@@ -10,11 +10,20 @@ say "make sure everything is loaded" without coordinating.
 
 from __future__ import annotations
 
+from collections.abc import Iterable
+
 _LOADED = False
 
 
-def load(*, plugins: bool = True) -> None:
-    """Register the built-in functions, and discover plugins."""
+def load(*, plugins: bool = True, denied: Iterable[str] = ()) -> None:
+    """Register the built-in functions, and discover plugins.
+
+    ``denied`` names capabilities a plugin may not have. It has to be known *here*,
+    before anything is imported: importing a plugin runs its module, and a capability
+    refused after that has already been exercised. That is why `--deny-capability` is
+    read from the command line before this is called rather than through the option
+    parser -- the denial has to precede the import, and the parser runs after it.
+    """
     global _LOADED
     if _LOADED:
         return
@@ -29,20 +38,20 @@ def load(*, plugins: bool = True) -> None:
     import sclpl.tables  # noqa: F401
 
     if plugins:
-        _load_plugins()
+        _load_plugins(denied)
 
 
-def _load_plugins() -> None:
+def _load_plugins(denied: Iterable[str] = ()) -> None:
     """Plugin discovery, once M8 has provided it.
 
     Guarded rather than assumed so the engine is usable without the plugin layer --
     which is also what proves the built-ins do not secretly depend on it.
     """
     try:
-        from sclpl.ext.plugins import discover  # type: ignore[import-not-found]
+        from sclpl.ext.plugins import discover
     except ImportError:
         return
-    discover()
+    discover(denied=denied)
 
 
 def reset() -> None:

@@ -54,14 +54,19 @@ last-one-wins.
 ## A plugin
 
 For a connector, an auth provider, a paginator, or a table backend — anything that needs
-a manifest and a declared capability set. #todo *(M8)*
+a manifest and a declared capability set.
 
-Discovery: `importlib.metadata.entry_points(group="sclpl.plugins")`, plus `./plugins/`.
-There is **no sandbox**: plugins are trusted code, gated by declared capabilities only.
+```bash
+sclpl plugin scaffold mything
+sclpl plugin describe mything
+```
 
-`sclpl plugin scaffold` generates a working skeleton. SQLite ships as a bundled plugin
-precisely so the API is exercised by something real
-([[Locked Decisions#8 SQLite ships as a bundled *plugin*, not core]]).
+That writes a plugin that **loads and runs immediately** — no fixes needed. Edit it.
+
+Import from `sclpl.ext.api` and nothing else: that module is the promise, and everything
+outside it may be rearranged between versions.
+
+→ [[Plugins]] for discovery, the manifest, capabilities, and the bundled set.
 
 ## Rules of the road
 
