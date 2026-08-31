@@ -96,6 +96,41 @@ right shape for "fetch, then decide whether to fetch again".
 `max_iterations` defaults to 1000 and its error says both remedies: raise it, or check
 that the condition actually goes false.
 
+## Bounding a fan-out
+
+`concurrency` on a `foreach` caps how many copies run at once:
+
+```
+@step details
+  foreach @ids as row
+    concurrency 4
+    step one
+      get {{base}}/items/{{row.id}}
+```
+
+It is implemented as a **per-tag ceiling with a private name** (`::loop:details`), so it
+goes through the same ordered acquisition as every other limit and cannot introduce a new
+way to deadlock. A fourth kind of semaphore would have to argue that separately.
+
+It is a literal, not a template: the limit is read when the file is parsed, before there
+is anything to interpolate.
+
+> [!note] It is measured, not asserted
+> Against a server reporting its peak simultaneous requests, 12 items at `concurrency 3`
+> peaked at 3. The same workflow without the clause peaked at 9. Global and host ceilings
+> were 16 in both.
+
+## Choosing what an iteration contributes
+
+`collect` is an expression evaluated in the iteration's scope after its body has run:
+
+```
+    collect @one.body.id
+```
+
+Without it, an iteration contributes its last step's value — usually a whole response
+when what was wanted was one field out of it.
+
 ## Empty cases
 
 - `foreach` over `[]` → `[]`. The loop ran, over nothing. A workflow that filtered

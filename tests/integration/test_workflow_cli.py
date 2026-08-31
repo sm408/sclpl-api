@@ -349,3 +349,69 @@ def test_a_cursor_paginator_with_no_path_is_caught_before_running(
     assert result.returncode == EXIT_VALIDATION
     assert "cursor_path" in result.stderr
     assert "link_header" in result.stderr
+
+
+# -- M6: a paginated source fanning out into a bounded loop ------------------------
+
+FANOUT = """
+@workflow fanout "Page a source, then fan out over what it returned"
+
+@var base = "{base}"
+
+@output ids:json
+
+@limits concurrency=16 host_concurrency=16
+
+@step pages
+  get {{{{base}}}}/paged
+  paginate cursor cursor_path=next param=cursor max_pages=40
+
+@step chosen
+  let take(@pages.body.data, 8)
+
+@step details
+  foreach @chosen as row
+    concurrency 2
+    collect @one.body.n
+    step one
+      get {{{{base}}}}/echo
+      query n={{{{row.id}}}}
+
+@step write -> ids
+  save_json @details
+"""
+
+
+@pytest.fixture
+def fanout(tmp_path: Path, server_url: str) -> Path:
+    path = tmp_path / "fanout.sclpll"
+    path.write_text(FANOUT.format(base=server_url), encoding="utf-8")
+    return path
+
+
+def test_a_paginated_source_fans_out_into_a_bounded_loop(fanout: Path, tmp_path: Path) -> None:
+    """The M6 exit criterion, end to end through the real CLI."""
+    out = tmp_path / "ids.json"
+    result = run_cli("run", str(fanout), str(out))
+    assert result.returncode == 0, result.stderr
+    assert json.loads(out.read_text(encoding="utf-8")) == [0, 1, 2, 3, 4, 5, 6, 7]
+
+
+def test_the_loop_is_reported_as_progress_not_silence(fanout: Path, tmp_path: Path) -> None:
+    """Every iteration is a real node, so every one is reported."""
+    result = run_cli("run", str(fanout), str(tmp_path / "ids.json"))
+    assert result.returncode == 0, result.stderr
+    assert "details::0::one" in result.stderr
+    assert "details::join" in result.stderr
+
+
+def test_a_foreach_concurrency_must_be_a_literal(tmp_path: Path, server_url: str) -> None:
+    """It is read at parse time, before there is anything to interpolate."""
+    path = tmp_path / "bad.sclpll"
+    path.write_text(
+        FANOUT.format(base=server_url).replace("concurrency 2", "concurrency {{n}}"),
+        encoding="utf-8",
+    )
+    result = run_cli("validate", str(path))
+    assert result.returncode == EXIT_VALIDATION
+    assert "literal" in result.stderr

@@ -122,6 +122,15 @@ class _Gate:
             self._tags[tag] = existing
         return existing
 
+    def set_tag_limit(self, tag: str, ceiling: int) -> None:
+        """Give a tag a ceiling it did not have. Used by a bounded `foreach`.
+
+        A per-loop limit is a per-tag limit with a private name, so it goes through the
+        same ordered acquisition as every other ceiling and cannot introduce a new way
+        to deadlock. A fourth kind of semaphore would have to argue that separately.
+        """
+        self._limits.tags.setdefault(tag, ceiling)
+
     def set_host_limit(self, host: str, ceiling: int) -> None:
         """Adaptive concurrency lowers a host's ceiling; it never raises it above the cap."""
         ceiling = max(1, min(ceiling, self._limits.host_concurrency))
@@ -325,7 +334,13 @@ class Scheduler:
 
     # -- runtime expansion -------------------------------------------------------
 
-    def expand(self, parent: str, specs: list[ExpandSpec]) -> None:
+    def expand(
+        self,
+        parent: str,
+        specs: list[ExpandSpec],
+        *,
+        tag_limit: tuple[str, int] | None = None,
+    ) -> None:
         """Add a subgraph beneath a running node, and make its dependents wait for it.
 
         This is invariant 3 and SPEC §12 meeting each other. A `foreach` cannot know how
@@ -346,6 +361,8 @@ class Scheduler:
         """
         node = self._plan.nodes[parent]
         join_id = f"{parent}{JOIN_SUFFIX}"
+        if tag_limit is not None:
+            self._gate.set_tag_limit(*tag_limit)
         made = [spec.id for spec in specs]
 
         made_set = {spec.id for spec in specs}

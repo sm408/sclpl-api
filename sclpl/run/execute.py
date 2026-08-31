@@ -61,7 +61,7 @@ class Runtime:
     #: each one runs in. Populated by the control-flow kinds, read by the runner.
     injected: dict[str, control.Injected] = field(default_factory=dict)
     #: How a running step adds nodes beneath itself. Supplied by the scheduler.
-    expand: Callable[[str, list[ExpandSpec]], None] | None = None
+    expand: Callable[[str, list[ExpandSpec], tuple[str, int] | None], None] | None = None
     #: Iteration key -> the node holding that iteration's result, per control step.
     results: dict[str, dict[str, str]] = field(default_factory=dict)
     #: Loops that finished without expanding, and what they produced instead.
@@ -70,6 +70,8 @@ class Runtime:
     iterations: dict[str, int] = field(default_factory=dict)
     #: Barrier node -> how to turn its copies' values into the control step's own.
     joins: dict[str, str] = field(default_factory=dict)
+    #: Injected node -> what that copy contributed, once `collect` has had its say.
+    produced: dict[str, Any] = field(default_factory=dict)
 
     def context(self, frame: Frame | None = None) -> Context:
         return Context(
@@ -458,7 +460,7 @@ def _grow(node: str, expansion: control.Expansion, runtime: Runtime) -> Any:
     runtime.injected.update(expansion.injected)
     runtime.results[node] = expansion.results
     runtime.joins[node] = expansion.produces
-    runtime.expand(node, expansion.specs)
+    runtime.expand(node, expansion.specs, expansion.tag_limit)
     return None
 
 
@@ -467,12 +469,22 @@ async def run_injected(node_id: str, runtime: Runtime) -> Any:
     entry = runtime.injected[node_id]
     scoped = replace(runtime, frame=entry.frame)
     value = await run_step(entry.step, Node(id=node_id), scoped, node_id=node_id)
-    if value is not SKIPPED:
-        # An iteration's steps see each other by their written names, not their
-        # decorated ones: `@fetch` inside a loop body means this iteration's `fetch`.
-        entry.frame.values[entry.step.id] = value
-        if entry.result_of is not None:
-            runtime.settled[entry.parent] = value
+    if value is SKIPPED:
+        return value
+
+    # An iteration's steps see each other by their written names, not their decorated
+    # ones: `@fetch` inside a loop body means this iteration's `fetch`.
+    entry.frame.values[entry.step.id] = value
+
+    if entry.result_of is not None:
+        result = value
+        if entry.collect:
+            # `collect` says what an iteration contributes. Evaluated after the body has
+            # bound its names, so it can refer to any of them -- which is the point:
+            # `collect @one.body.id` keeps the ids and discards the responses.
+            result = await evaluate(parse(entry.collect), scoped.context(entry.frame))
+        runtime.produced[node_id] = result
+        runtime.settled[entry.parent] = result
     return value
 
 
@@ -491,10 +503,9 @@ def collect(parent: str, runtime: Runtime) -> Any:
         owner = next((entry.parent for entry in made), parent)
         return runtime.settled.get(owner)
 
-    values: list[Any] = []
-    for key in sorted(results, key=_iteration_order):
-        entry = runtime.injected.get(results[key])
-        values.append(None if entry is None else entry.frame.values.get(entry.step.id))
+    values = [
+        runtime.produced.pop(results[key], None) for key in sorted(results, key=_iteration_order)
+    ]
 
     if produces == "one":
         return values[0] if values else None

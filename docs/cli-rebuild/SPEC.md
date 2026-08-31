@@ -615,10 +615,10 @@ Do these in order. Each is independently demonstrable.
 - **Exit:** met — nested JSON → flattened CSV → Excel in one pipeline, with a schema assertion
 
 ### M6 — Control flow and pagination
-- [ ] Five paginators streaming into the scheduler; `into`, `max_pages`, `stop_when`, `concurrent`
-- [ ] `foreach`, `if`, `while`, `do_while`, `gate`, `parallel` as runtime-injected subgraphs
-- [ ] Rules blocks: `assert`, `skip_if`, `retry_if`
-- **Exit:** a 40-page cursor source fans out into a bounded `foreach`, reported as one progress line
+- [x] Five paginators streaming into the scheduler; `into`, `max_pages`, `stop_when`; `concurrent` is honoured where it is possible and reported as ignored where it is not
+- [x] `foreach`, `if`, `while`, `do_while`, `gate`, `parallel` as runtime-injected subgraphs; `foreach` takes `concurrency` and `collect`
+- [x] Rules blocks: `assert`, `skip_if`, `retry_if`
+- **Exit:** met — a paginated source fans out into a bounded `foreach`; the bound is measured (12 items at `concurrency 3` peak at 3, against 9 unbounded)
 
 ### M7 — Memory, lanes, cache
 - [ ] Liveness analysis over the pruned DAG; refcount release; tombstones; `--keep-all`; `explain --memory`

@@ -445,11 +445,55 @@ class _Parser:
         if not variable.isidentifier():
             raise self.error(f"{variable!r} is not a usable name for the loop variable", first)
         body, rest = self._nested(lines, step)
+        if not body:
+            raise self.error(
+                "a foreach needs a body",
+                first,
+                ["indent at least one `step` under it"],
+            )
         config: dict[str, Any] = {"over": over, "var": variable, "body": body}
+
+        # Clauses configuring the loop sit above its first `step`, which is also where
+        # they read. `concurrency 4` and `concurrency=4` both work: one is a clause and
+        # the other is a setting, and arguing about which this is helps nobody.
         for line in rest:
-            key, separator, value = line.rest.partition("=")
-            if line.head == "concurrency" and separator:
-                config["concurrency"] = int(value)
+            _, separator, value = line.rest.partition("=")
+            argument = (value if separator else line.rest).strip()
+            match line.head:
+                case "concurrency":
+                    if not argument.isdigit():
+                        remedies = ["e.g. `concurrency 4`"]
+                        if "{{" in argument:
+                            # Worth saying outright: the limit is read when the file is
+                            # parsed, before any value exists to interpolate.
+                            remedies.insert(
+                                0,
+                                "it has to be a literal -- the limit is read at parse "
+                                "time, before there is anything to interpolate",
+                            )
+                        raise self.error(
+                            f"concurrency needs a number, found {argument!r}",
+                            line,
+                            remedies,
+                        )
+                    config["concurrency"] = int(argument)
+                case "collect":
+                    if not argument:
+                        raise self.error(
+                            "collect needs an expression",
+                            line,
+                            ["e.g. `collect @one.body.id` keeps the ids, not the responses"],
+                        )
+                    config["collect"] = argument
+                case _:
+                    raise self.error(
+                        f"a foreach takes no clause {line.head!r}",
+                        line,
+                        [
+                            "known: concurrency, collect",
+                            "a clause goes above the first `step`, not below it",
+                        ],
+                    )
         ForeachConfig.model_validate(config)
         return config
 
@@ -457,6 +501,12 @@ class _Parser:
         self, first: Token, lines: list[Token], step: dict[str, Any]
     ) -> dict[str, Any]:
         body, rest = self._nested(lines, step, frozenset({"otherwise"}))
+        if not body:
+            raise self.error(
+                "a when needs a body",
+                first,
+                ["indent at least one `step` under it", "`otherwise` holds the other branch"],
+            )
         otherwise: list[dict[str, Any]] = []
         for index, line in enumerate(rest):
             if line.head == "otherwise":
@@ -492,6 +542,12 @@ class _Parser:
 
     def _loop(self, first: Token, lines: list[Token], step: dict[str, Any]) -> dict[str, Any]:
         body, _ = self._nested(lines, step)
+        if not body:
+            raise self.error(
+                f"a {first.head} needs a body",
+                first,
+                ["indent at least one `step` under it"],
+            )
         config: dict[str, Any] = {"condition": first.rest.strip(), "body": body}
         WhileConfig.model_validate(config)
         return config

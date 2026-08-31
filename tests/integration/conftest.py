@@ -61,6 +61,25 @@ class Handler(BaseHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(body)
             return
+        if self.path.split("?")[0] == "/paged":
+            # A cursor source of 30 items in pages of 10, for the fan-out tests.
+            query = dict(
+                part.split("=", 1) for part in self.path.partition("?")[2].split("&") if "=" in part
+            )
+            start = int(query.get("cursor", 0))
+            rows = [{"id": n} for n in range(start, min(start + 10, 30))]
+            nxt = start + 10
+            self._respond(
+                200,
+                json.dumps({"data": rows, "next": nxt if nxt < 30 else None}).encode(),
+            )
+            return
+        if self.path.split("?")[0] == "/echo":
+            query = dict(
+                part.split("=", 1) for part in self.path.partition("?")[2].split("&") if "=" in part
+            )
+            self._respond(200, json.dumps({"n": int(query.get("n", -1))}).encode())
+            return
         if self.path == "/json":
             self._respond(200, json.dumps(PAYLOAD).encode())
         elif self.path == "/boom":

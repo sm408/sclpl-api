@@ -46,6 +46,10 @@ if TYPE_CHECKING:  # pragma: no cover - import cycle at runtime, fine for typing
 #: contain `:`, so a decorated name can never collide with one someone wrote.
 MARK = "::"
 
+#: Prefix for the private tag a bounded `foreach` uses. Same reasoning: a tag someone
+#: wrote cannot start with `::`.
+LOOP_TAG = "::loop:"
+
 
 @dataclass(slots=True)
 class Injected:
@@ -57,6 +61,9 @@ class Injected:
     parent: str
     #: Set on the last step of an iteration: its value is the iteration's result.
     result_of: str | None = None
+    #: An expression evaluated in the iteration's scope, whose value is the iteration's
+    #: result instead of the last step's. Only ever set alongside `result_of`.
+    collect: str | None = None
 
 
 @dataclass(slots=True)
@@ -79,6 +86,10 @@ class Expansion:
     #: the iteration results", which is the normal case.
     value: Any = None
     has_value: bool = False
+    #: A ceiling on how many of these copies run at once, as (tag, limit). A `foreach`
+    #: with `concurrency` sets one; it is a per-tag ceiling with a private name, so it
+    #: goes through the same ordered acquisition as every other limit.
+    tag_limit: tuple[str, int] | None = None
     #: The scope the copy runs in. A `while` hands this to its continuation, so the next
     #: condition sees what the pass just did -- which is the only way the condition can
     #: ever go false, and therefore the only way the loop can end on its own terms.
@@ -101,12 +112,26 @@ def expand_foreach(
         )
 
     expansion = Expansion()
+    tag: str | None = None
+    if config.concurrency is not None:
+        tag = f"{LOOP_TAG}{step.id}"
+        expansion.tag_limit = (tag, config.concurrency)
+
     for index, item in enumerate(items):
         frame = Frame(
             values={config.var: item, "index": index},
             parent=runtime.frame,
         )
-        _place(expansion, step, config.body, f"{index}", frame, runtime)
+        _place(
+            expansion,
+            step,
+            config.body,
+            f"{index}",
+            frame,
+            runtime,
+            tag=tag,
+            collect=config.collect,
+        )
     if not items:
         expansion.value = []
         expansion.has_value = True
@@ -192,6 +217,9 @@ def _place(
     key: str,
     frame: Frame,
     runtime: Runtime,
+    *,
+    tag: str | None = None,
+    collect: str | None = None,
 ) -> None:
     """Add one copy of ``body`` under ``key``, sharing one frame.
 
@@ -213,7 +241,7 @@ def _place(
                 # there is no such edge -- iteration 3 never waits for iteration 2.
                 id=node_id,
                 reads=reads_of(step) | ({previous} if previous else frozenset()),
-                tags=frozenset(step.tags),
+                tags=frozenset(step.tags) | ({tag} if tag else frozenset()),
                 host=_host_of(step),
                 lane=step.lane,
                 weight=1.0,
@@ -224,6 +252,7 @@ def _place(
     if previous is not None:
         expansion.results[key] = previous
         expansion.injected[previous].result_of = key
+        expansion.injected[previous].collect = collect
 
 
 def _host_of(step: Step) -> str | None:

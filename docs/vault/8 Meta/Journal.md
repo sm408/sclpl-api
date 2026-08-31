@@ -39,6 +39,20 @@ read only by an injected node is freed before that node runs.
 
 → [[M6 Control Flow and Pagination]]
 
+**M6 finished.** All five paginators, all six control-flow kinds, `concurrency` and
+`collect` on a `foreach`, and the exit criterion tested through the real CLI.
+
+The bound is measured rather than claimed: against a server reporting its peak
+simultaneous requests, 12 items at `concurrency 3` peaked at 3, and the same workflow
+without the clause peaked at 9. That number is the argument for injecting a loop into the
+graph instead of calling `gather` inside a step, and it is now a number rather than a
+paragraph.
+
+Building it found six bugs, listed in [[M6 Control Flow and Pagination]]. The one worth
+repeating: **any workflow containing a `foreach` had never compiled**, because the parent
+claimed to produce its body's names and the body's steps were also their own specs. There
+was no test with a loop in it, so nothing had noticed.
+
 **The graph looked like a hairball**, which was a fair question and a fair complaint. The
 answer had two halves.
 

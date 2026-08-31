@@ -15,6 +15,45 @@ someone undoing it next month.
 
 ---
 
+## 2026-08-31 · A loop's concurrency is a per-tag ceiling
+
+**Decided.** `foreach ... concurrency 4` registers a tag ceiling under a private name
+and puts that tag on every copy.
+
+**Why.** The gate already acquires global, then host, then tags in sorted order, and that
+fixed order is the entire deadlock argument. A fourth kind of semaphore would have to
+make that argument again. Reusing tags means a bounded loop cannot introduce a new way to
+deadlock, by construction.
+
+**Measured, not assumed.** 12 items at `concurrency 3` peaked at 3 simultaneous requests;
+without the clause, 9. Ceilings were 16 in both.
+
+## 2026-08-31 · `concurrency` is a literal, not a template
+
+**Decided.** `concurrency {{limit}}` is a parse error, with a message saying why.
+
+**Why.** The limit is read when the file is parsed, before any value exists to
+interpolate. Accepting it and ignoring it would be worse; a message that says only
+"needs a number" would leave the reader thinking they had mistyped.
+
+## 2026-08-31 · Refcounts are raised at injection
+
+**Decided.** `Scheduler.expand` calls `ValueStore.retain` for everything the new nodes
+read, before they can run.
+
+**Replaced.** `Plan.readers_of` counts nodes that exist at plan time. A loop body is not
+a node then, so a value read *only* by a body was freed the moment the loop's parent
+settled — and the body failed on a name plainly there in the file.
+
+## 2026-08-31 · An empty control body is a parse error
+
+**Decided.** `foreach`, `while`, `do_while`, and `when` with no `step` under them fail at
+parse time.
+
+**Replaced.** They failed at runtime, where there is no line number and the message
+arrives after the requests before it have been paid for. A body with nothing in it is a
+typo, and a typo should be caught where it was typed.
+
 ## 2026-08-31 · `errors.py` moves to the top of the package
 
 **Decided.** `run/errors.py` → `sclpl/errors.py`, and the `EXIT_*` codes move there from

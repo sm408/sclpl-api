@@ -19,7 +19,7 @@ from sclpl.run.execute import SKIPPED, Runtime, collect, run_injected, run_step
 from sclpl.run.ir import WorkflowDoc
 from sclpl.run.plan import Node
 from sclpl.run.preflight import Report, preflight
-from sclpl.run.schedule import JOIN_SUFFIX, Limits, Outcome, Scheduler
+from sclpl.run.schedule import JOIN_SUFFIX, ExpandSpec, Limits, Outcome, Scheduler
 from sclpl.run.transport import Pool, TransportLimits
 from sclpl.tables.io import STDIO
 from sclpl.values.store import ValueStore
@@ -147,7 +147,11 @@ async def run_workflow(doc: WorkflowDoc, options: Options, reporter: Reporter) -
             return None if value is SKIPPED else value
 
         scheduler = Scheduler(report.plan, store, reporter, limits)
-        runtime.expand = scheduler.expand
+
+        def expand(parent: str, specs: list[ExpandSpec], tag_limit: tuple[str, int] | None) -> None:
+            scheduler.expand(parent, specs, tag_limit=tag_limit)
+
+        runtime.expand = expand
         outcome = await scheduler.run(runner)
 
     exit_code = _exit_code(outcome)
