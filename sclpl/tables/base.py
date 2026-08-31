@@ -17,7 +17,7 @@ from collections.abc import Iterator
 from pathlib import Path
 from typing import Any, Protocol, runtime_checkable
 
-from sclpl.run.errors import SclplError
+from sclpl.errors import SclplError
 
 
 class MissingExtra(SclplError):
@@ -144,7 +144,7 @@ class Table:
     def select(self, columns: list[str]) -> Table:
         missing = [column for column in columns if column not in self.columns]
         if missing:
-            from sclpl.run.errors import ValidationError, did_you_mean
+            from sclpl.errors import ValidationError, did_you_mean
 
             remedies = []
             suggestion = did_you_mean(missing[0], self.columns)
@@ -259,7 +259,7 @@ def as_table(value: Any) -> Table:
         return Table.from_records([{"value": item} for item in value])
     if isinstance(value, dict):
         return Table.from_records([value])
-    from sclpl.run.errors import TypeDispatchError
+    from sclpl.errors import TypeDispatchError
 
     raise TypeDispatchError(
         f"cannot read {type(value).__name__} as a table",

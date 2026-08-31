@@ -17,7 +17,7 @@ from collections.abc import Iterator
 from dataclasses import dataclass, field
 from typing import Any
 
-from sclpl.run.errors import SclplError, did_you_mean
+from sclpl.errors import SclplError, did_you_mean
 from sclpl.values.digest import digest as compute_digest
 from sclpl.values.ref import MIN_SPILL_BYTES, Scratch, ValueRef, size_of, spill
 
@@ -167,6 +167,21 @@ class ValueStore:
         return self._stats.live
 
     # -- disposal ----------------------------------------------------------------
+
+    def retain(self, name: str, count: int = 1) -> bool:
+        """Record ``count`` more consumers of ``name``. False if there is nothing to hold.
+
+        The refcount for a binding is fixed when the plan is built, from the nodes that
+        exist then. Control flow adds nodes *while the run is going* -- a loop body is
+        not a node until the loop knows how many copies it has -- and those nodes read
+        things too. Without this, a value read only by a loop body is freed the moment
+        the loop's parent settles, and the body fails on a name that is plainly there.
+        """
+        binding = self._bindings.get(name)
+        if binding is None or binding.released:
+            return False
+        binding.readers += count
+        return True
 
     def release(self, name: str) -> Freed | None:
         """Record one consumer finished with ``name``; free it at zero.

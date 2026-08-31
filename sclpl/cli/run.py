@@ -19,10 +19,10 @@ from typing import Annotated, Any
 import httpx
 import typer
 
-from sclpl.cli.options import EXIT_STEP_FAILED, EXIT_USAGE, options_of
+from sclpl.cli.options import options_of
+from sclpl.errors import EXIT_STEP_FAILED, EXIT_USAGE, SclplError
 from sclpl.render.events import RunFinished, RunStarted, StepFinished, StepStarted
 from sclpl.render.reporter import Reporter, build_reporter
-from sclpl.run.errors import SclplError
 from sclpl.run.retry import Retry
 from sclpl.run.transport import Pool, TransportLimits, summarise
 

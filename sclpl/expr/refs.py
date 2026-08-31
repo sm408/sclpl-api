@@ -20,8 +20,8 @@ from __future__ import annotations
 
 import re
 
+from sclpl.errors import ValidationError
 from sclpl.expr.parse import parse, parse_interpolated
-from sclpl.run.errors import ValidationError
 
 #: The fallback scan. Deliberately the same shape the lexer accepts for a `@ref`.
 _REF = re.compile(r"@([A-Za-z_][A-Za-z0-9_-]*)")

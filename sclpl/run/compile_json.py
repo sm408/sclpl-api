@@ -13,7 +13,7 @@ from typing import Any
 
 from pydantic import ValidationError as PydanticError
 
-from sclpl.run.errors import ValidationError, did_you_mean
+from sclpl.errors import ValidationError, did_you_mean
 from sclpl.run.ir import WorkflowDoc
 
 #: Two spaces, keys in model order, trailing newline. The formatting `fmt` produces and

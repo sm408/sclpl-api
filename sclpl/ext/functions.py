@@ -20,8 +20,8 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any, TypeVar, get_type_hints
 
+from sclpl.errors import TypeDispatchError, ValidationError, did_you_mean
 from sclpl.expr import dispatch
-from sclpl.run.errors import TypeDispatchError, ValidationError, did_you_mean
 
 F = TypeVar("F", bound=Callable[..., Any])
 

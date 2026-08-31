@@ -15,10 +15,10 @@ from typing import Annotated, Any
 import typer
 
 from sclpl.catalog import resolve as catalog
-from sclpl.cli.options import EXIT_USAGE, EXIT_VALIDATION, options_of
+from sclpl.cli.options import options_of
+from sclpl.errors import EXIT_INTERRUPTED, EXIT_USAGE, EXIT_VALIDATION, SclplError
 from sclpl.render.reporter import build_reporter
 from sclpl.run import compile_json
-from sclpl.run.errors import SclplError
 from sclpl.run.ir import WorkflowDoc
 from sclpl.run.preflight import preflight
 from sclpl.run.runner import Options, run_workflow
@@ -101,8 +101,6 @@ def run(
     try:
         code = asyncio.run(go())
     except KeyboardInterrupt:
-        from sclpl.cli.options import EXIT_INTERRUPTED
-
         raise typer.Exit(EXIT_INTERRUPTED) from None
     if code:
         raise typer.Exit(code)

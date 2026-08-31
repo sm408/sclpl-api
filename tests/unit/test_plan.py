@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from sclpl.run.errors import ValidationError
+from sclpl.errors import ValidationError
 from sclpl.run.plan import StepSpec, build
 
 

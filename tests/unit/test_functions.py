@@ -15,9 +15,9 @@ from typing import Any
 import pytest
 
 from sclpl import bootstrap
+from sclpl.errors import AssertionFailed, TypeDispatchError, ValidationError
 from sclpl.expr import Context, evaluate, parse
 from sclpl.ext import functions as registry
-from sclpl.run.errors import AssertionFailed, TypeDispatchError, ValidationError
 from sclpl.tables import Table
 from sclpl.values import ValueStore
 

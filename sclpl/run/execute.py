@@ -11,12 +11,12 @@ from collections.abc import Callable
 from dataclasses import dataclass, field, replace
 from typing import Any
 
+from sclpl.errors import AssertionFailed, SclplError, StepFailed, ValidationError
 from sclpl.expr import Context, evaluate, parse, parse_interpolated
 from sclpl.expr.eval import _truthy
 from sclpl.render.events import StepProgress
 from sclpl.render.reporter import Reporter
 from sclpl.run import control, paginate
-from sclpl.run.errors import AssertionFailed, SclplError, StepFailed, ValidationError
 from sclpl.run.ir import (
     FnConfig,
     ForeachConfig,
@@ -411,8 +411,13 @@ async def _while(node: str, step: Step, config: WhileConfig, runtime: Runtime) -
 
     runtime.iterations[step.id] = passes + 1
     expansion = control.expand_iteration(step, config, passes, runtime)
-    again = f"{node}{control.MARK}again"
-    expansion.specs.append(ExpandSpec(id=again, weight=0.1))
+    # Named by pass number rather than by nesting: a chain of continuations would
+    # otherwise read `climb::again::again::again`, which is a progress line nobody can
+    # scan. The step id is stable across the chain, so the count is enough.
+    again = f"{step.id}{control.MARK}pass{passes + 1}"
+    # The continuation re-evaluates the condition, so it reads whatever the condition
+    # reads. Recording that is what keeps those values alive for the next pass.
+    expansion.specs.append(ExpandSpec(id=again, reads=control.reads_of(step), weight=0.1))
     expansion.injected[again] = control.Injected(
         step=step, frame=expansion.frame or runtime.frame, parent=step.id
     )

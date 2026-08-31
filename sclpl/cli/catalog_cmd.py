@@ -9,7 +9,7 @@ import typer
 
 from sclpl.catalog import resolve as resolver
 from sclpl.catalog import store
-from sclpl.run.errors import SclplError
+from sclpl.errors import SclplError
 from sclpl.run.preflight import preflight
 
 app = typer.Typer(help="Register and inspect workflows.", no_args_is_help=True)

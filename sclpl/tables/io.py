@@ -12,12 +12,34 @@ import json
 import sys
 import tempfile
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal, TypeAlias
 
-from sclpl.run.errors import ValidationError, did_you_mean
-from sclpl.run.ports import BY_EXTENSION, STDIO
+from sclpl.errors import ValidationError, did_you_mean
 from sclpl.tables.base import Table, as_table
 from sclpl.tables.flatten import flatten_records, records_of
+
+STDIO = "-"
+
+#: The formats `sclpl` reads and writes. `auto` means "work it out from the path".
+Format: TypeAlias = Literal["csv", "json", "ndjson", "parquet", "xlsx", "sqlite", "auto"]
+
+#: What a bare path means when no `:format` is given. Lives here rather than in
+#: `run/ports.py` because it is a fact about formats; binding a port is one of its
+#: consumers, not its owner.
+BY_EXTENSION: dict[str, Format] = {
+    ".csv": "csv",
+    ".tsv": "csv",
+    ".json": "json",
+    ".ndjson": "ndjson",
+    ".jsonl": "ndjson",
+    ".parquet": "parquet",
+    ".pq": "parquet",
+    ".xlsx": "xlsx",
+    ".xls": "xlsx",
+    ".db": "sqlite",
+    ".sqlite": "sqlite",
+    ".sqlite3": "sqlite",
+}
 
 #: Formats that hold tabular data. `json` and `ndjson` can be either, and are decided
 #: by what is actually in the file.

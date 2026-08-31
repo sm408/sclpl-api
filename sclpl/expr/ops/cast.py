@@ -9,8 +9,8 @@ from __future__ import annotations
 from datetime import UTC, date, datetime, timedelta
 from typing import Any
 
+from sclpl.errors import TypeDispatchError
 from sclpl.expr.dispatch import generic
-from sclpl.run.errors import TypeDispatchError
 
 #: Tried in order. ISO 8601 first, since that is what an API returns.
 _FORMATS: tuple[str, ...] = (

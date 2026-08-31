@@ -15,7 +15,7 @@ from __future__ import annotations
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
 
-from sclpl.run.errors import ValidationError, did_you_mean
+from sclpl.errors import ValidationError, did_you_mean
 
 
 @dataclass(slots=True)

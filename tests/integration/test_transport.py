@@ -7,9 +7,9 @@ import io
 
 import pytest
 
+from sclpl.errors import StepFailed
 from sclpl.render.plain import PlainSink
 from sclpl.render.reporter import Reporter
-from sclpl.run.errors import StepFailed
 from sclpl.run.retry import Retry
 from sclpl.run.transport import Pool, Profile, TransportLimits, decode, summarise
 

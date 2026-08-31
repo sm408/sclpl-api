@@ -14,7 +14,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from enum import Enum, auto
 
-from sclpl.run.errors import ValidationError
+from sclpl.errors import ValidationError
 
 
 class Kind(Enum):

@@ -14,8 +14,8 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
+from sclpl.errors import ValidationError
 from sclpl.ext.functions import function
-from sclpl.run.errors import ValidationError
 from sclpl.tables import Table, io
 from sclpl.tables.flatten import flatten_records, records_of
 

@@ -27,7 +27,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
-from sclpl.run.errors import StepFailed
+from sclpl.errors import StepFailed
 from sclpl.run.ir import (
     ForeachConfig,
     GateConfig,
@@ -212,7 +212,7 @@ def _place(
                 # have an order, and it is the one they were written in. Between copies
                 # there is no such edge -- iteration 3 never waits for iteration 2.
                 id=node_id,
-                reads=frozenset({previous}) if previous else frozenset(),
+                reads=reads_of(step) | ({previous} if previous else frozenset()),
                 tags=frozenset(step.tags),
                 host=_host_of(step),
                 lane=step.lane,
@@ -230,3 +230,15 @@ def _host_of(step: Step) -> str | None:
     from sclpl.run.compile_plan import host_of
 
     return host_of(step)
+
+
+def reads_of(step: Step) -> frozenset[str]:
+    """What a body step reads, so the scheduler can hold those values open.
+
+    Most of these resolve from the iteration's frame -- the loop variable, a sibling
+    step -- and only the ones that are actually in the store get held. The store treats
+    a name it does not know as nothing to do.
+    """
+    from sclpl.run.compile_plan import references
+
+    return frozenset(references(step))

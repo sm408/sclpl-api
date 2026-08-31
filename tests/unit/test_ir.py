@@ -6,8 +6,8 @@ import json
 
 import pytest
 
+from sclpl.errors import ValidationError
 from sclpl.run import compile_json
-from sclpl.run.errors import ValidationError
 from sclpl.run.ir import HttpConfig, WorkflowDoc
 from sclpl.run.sclpll import emit, parse
 

@@ -85,7 +85,7 @@ class PandasBackend:
         missing_left = [key for key in on if key not in left.columns]
         missing_right = [key for key in on if key not in right.columns]
         if missing_left or missing_right:
-            from sclpl.run.errors import ValidationError
+            from sclpl.errors import ValidationError
 
             side = "left" if missing_left else "right"
             missing = missing_left or missing_right
@@ -121,7 +121,7 @@ class PandasBackend:
                 except ImportError as error:
                     raise MissingExtra("reading Excel", "openpyxl") from error
             case _:
-                from sclpl.run.errors import ValidationError
+                from sclpl.errors import ValidationError
 
                 raise ValidationError(f"cannot read {fmt!r} as a table")
 
@@ -169,7 +169,7 @@ class PandasBackend:
                 except ImportError as error:
                     raise MissingExtra("writing Excel", "openpyxl") from error
             case _:
-                from sclpl.run.errors import ValidationError
+                from sclpl.errors import ValidationError
 
                 raise ValidationError(f"cannot write {fmt!r}")
 

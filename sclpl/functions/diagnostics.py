@@ -9,8 +9,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from sclpl.errors import AssertionFailed
 from sclpl.ext.functions import function
-from sclpl.run.errors import AssertionFailed
 from sclpl.tables import Table
 from sclpl.tables.flatten import infer_schema
 

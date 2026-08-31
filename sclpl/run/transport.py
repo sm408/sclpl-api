@@ -21,9 +21,9 @@ from typing import Any
 
 import httpx
 
+from sclpl.errors import StepFailed
 from sclpl.render.events import StepRetrying
 from sclpl.render.reporter import Reporter
-from sclpl.run.errors import StepFailed
 from sclpl.run.retry import (
     Adaptive,
     Breaker,

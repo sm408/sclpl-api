@@ -14,7 +14,6 @@ from sclpl import __version__, bootstrap
 from sclpl.cli import catalog_cmd, launcher, workflow_cmd
 from sclpl.cli import run as call_cmd
 from sclpl.cli.options import (
-    EXIT_USAGE,
     GlobalOptions,
     JsonOption,
     NoColorOption,
@@ -23,6 +22,7 @@ from sclpl.cli.options import (
     VerboseOption,
     resolve_verbosity,
 )
+from sclpl.errors import EXIT_USAGE
 
 # Built-ins and plugins register before any command can be routed, so `--help`,
 # completion, and preflight all see the same set a run would.

@@ -7,9 +7,9 @@ from typing import Any
 import pytest
 
 from sclpl import bootstrap
+from sclpl.errors import ExpressionError, PathError, TypeDispatchError, UnknownReference
 from sclpl.expr import Context, evaluate, parse, parse_interpolated, unparse
 from sclpl.expr.ast import Call, Literal, Ref
-from sclpl.run.errors import ExpressionError, PathError, TypeDispatchError, UnknownReference
 from sclpl.values import ValueStore
 
 RESPONSE: dict[str, Any] = {

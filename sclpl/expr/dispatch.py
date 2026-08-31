@@ -20,7 +20,7 @@ import inspect
 from collections.abc import Callable
 from typing import Any, TypeVar
 
-from sclpl.run.errors import TypeDispatchError, did_you_mean
+from sclpl.errors import TypeDispatchError, did_you_mean
 
 F = TypeVar("F", bound=Callable[..., Any])
 

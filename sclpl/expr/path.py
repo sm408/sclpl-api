@@ -12,7 +12,7 @@ from __future__ import annotations
 from collections.abc import Iterable, Sequence
 from typing import Any
 
-from sclpl.run.errors import PathError, nearest
+from sclpl.errors import PathError, nearest
 
 #: Beyond this, listing the available keys stops being help and starts being noise.
 MAX_KEYS_SHOWN = 8

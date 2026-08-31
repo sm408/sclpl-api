@@ -64,8 +64,11 @@ The full tree, package by package, is SPEC §4.
   reason in the commit message. Each existing one does three or four jobs.
 - **Size budget:** per-package line budgets in SPEC §19, enforced by `scripts/check_budget.py` in
   CI. Deleting counts as progress; say what shrank in the commit message.
-- **Gates:** `ruff check`, `ruff format --check`, `mypy` (strict), `pytest`, and the budget check.
-  All five must pass before a commit.
+- **Gates:** `ruff check`, `ruff format --check`, `mypy` (strict), `pytest`, the budget check, and
+  `scripts/check_layering.py`. All six must pass before a commit. `check_layering.py` refuses an
+  import cycle between packages and prints the diagram `docs/vault/2 Architecture/Architecture
+  Measured.md` embeds — regenerate it when the graph changes, because a hand-drawn architecture
+  diagram is a drawing of an intention.
 - **Tests:** no network in CI except the local mock server in `tests/integration/conftest.py`.
   Secrets never appear in a fixture, a snapshot, or a log.
 - **Nothing is stubbed.** If `--help` lists a command, that command works. A milestone registers its

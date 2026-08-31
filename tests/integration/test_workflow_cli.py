@@ -10,7 +10,7 @@ from pathlib import Path
 
 import pytest
 
-from sclpl.cli.options import EXIT_USAGE, EXIT_VALIDATION
+from sclpl.errors import EXIT_USAGE, EXIT_VALIDATION
 
 WORKFLOW = """
 @workflow probe "A workflow that talks to the mock server"

@@ -14,9 +14,9 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from sclpl.errors import ValidationError, did_you_mean
 from sclpl.run import paginate
 from sclpl.run.compile_plan import compile_plan, function_names, hosts
-from sclpl.run.errors import ValidationError, did_you_mean
 from sclpl.run.ir import WorkflowDoc
 from sclpl.run.modes import Resolved, resolve
 from sclpl.run.plan import Plan

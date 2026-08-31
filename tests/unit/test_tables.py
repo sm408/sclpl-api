@@ -13,7 +13,7 @@ from typing import Any
 
 import pytest
 
-from sclpl.run.errors import ValidationError
+from sclpl.errors import ValidationError
 from sclpl.tables import Table, as_table, io
 from sclpl.tables.flatten import (
     flatten_record,

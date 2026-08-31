@@ -17,8 +17,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
+from sclpl.errors import UnknownTarget, did_you_mean
 from sclpl.run import compile_json
-from sclpl.run.errors import UnknownTarget, did_you_mean
 from sclpl.run.ir import WorkflowDoc
 from sclpl.run.sclpll import parse as parse_sclpll
 

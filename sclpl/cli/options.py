@@ -13,14 +13,6 @@ from typing import Annotated
 import typer
 
 # Exit codes are part of the CLI contract (SPEC §15) — scripts depend on them.
-EXIT_OK = 0
-EXIT_STEP_FAILED = 1
-EXIT_USAGE = 2
-EXIT_VALIDATION = 3
-EXIT_ASSERTION = 4
-EXIT_CACHE_MISS = 5
-EXIT_UNKNOWN_TARGET = 6
-EXIT_INTERRUPTED = 130
 
 #: `-qq` .. `-vvv`. Below `-2` and above `3` nothing further changes, so clamp rather
 #: than let `-vvvvv` imply a level no sink implements.

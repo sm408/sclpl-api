@@ -11,6 +11,7 @@ nodes because they must short-circuit.
 
 from __future__ import annotations
 
+from sclpl.errors import ExpressionError
 from sclpl.expr.ast import (
     And,
     Attr,
@@ -34,7 +35,6 @@ from sclpl.expr.ast import (
     collect_refs,
 )
 from sclpl.expr.lex import Kind, Token, tokenize
-from sclpl.run.errors import ExpressionError
 
 #: Infix operator -> the canonical function it lowers to. The names on the right are
 #: what `dispatch.py` registers, so adding an operator means adding an overload rather

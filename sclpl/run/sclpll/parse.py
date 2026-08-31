@@ -13,7 +13,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from sclpl.run.errors import ValidationError, did_you_mean
+from sclpl.errors import ValidationError, did_you_mean
 from sclpl.run.ir import (
     FnConfig,
     ForeachConfig,
@@ -351,7 +351,8 @@ class _Parser:
             step["config"] = self._parallel(first, body[1:], step)
         elif head == "gate":
             step["kind"] = "gate"
-            step["config"] = GateConfig(reason=first.rest.strip()).model_dump(exclude_defaults=True)
+            reason = unquote(first.rest.strip())
+            step["config"] = GateConfig(reason=reason).model_dump(exclude_defaults=True)
             self._common_body(step, body[1:])
         else:
             step["kind"] = "fn"

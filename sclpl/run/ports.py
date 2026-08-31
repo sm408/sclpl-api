@@ -18,26 +18,9 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from sclpl.run.errors import ValidationError, did_you_mean
-from sclpl.run.ir import Format, Port, WorkflowDoc
-
-STDIO = "-"
-
-#: Extension -> format. What a bare path means when no `:format` is given.
-BY_EXTENSION: dict[str, Format] = {
-    ".csv": "csv",
-    ".tsv": "csv",
-    ".json": "json",
-    ".ndjson": "ndjson",
-    ".jsonl": "ndjson",
-    ".parquet": "parquet",
-    ".pq": "parquet",
-    ".xlsx": "xlsx",
-    ".xls": "xlsx",
-    ".db": "sqlite",
-    ".sqlite": "sqlite",
-    ".sqlite3": "sqlite",
-}
+from sclpl.errors import ValidationError, did_you_mean
+from sclpl.run.ir import Port, WorkflowDoc
+from sclpl.tables.io import BY_EXTENSION, STDIO, Format
 
 
 @dataclass(slots=True)

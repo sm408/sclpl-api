@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from sclpl.run.errors import ValidationError
+from sclpl.errors import ValidationError
 from sclpl.run.ir import WorkflowDoc
 from sclpl.run.modes import resolve
 from sclpl.run.ports import bind, check_readable

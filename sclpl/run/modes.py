@@ -17,7 +17,7 @@ import fnmatch
 from dataclasses import dataclass, field
 from typing import Any
 
-from sclpl.run.errors import ValidationError, did_you_mean
+from sclpl.errors import ValidationError, did_you_mean
 from sclpl.run.ir import ModeSpec, WorkflowDoc
 
 #: A selector prefixed with this matches every step carrying the tag.

@@ -11,17 +11,17 @@ import time
 from dataclasses import dataclass, field
 from typing import Any
 
+from sclpl.errors import EXIT_INTERRUPTED, EXIT_STEP_FAILED, SclplError
 from sclpl.render.events import RunFinished, RunStarted
 from sclpl.render.reporter import Reporter
 from sclpl.run.compile_plan import hosts
-from sclpl.run.errors import SclplError
 from sclpl.run.execute import SKIPPED, Runtime, collect, run_injected, run_step
 from sclpl.run.ir import WorkflowDoc
 from sclpl.run.plan import Node
-from sclpl.run.ports import STDIO
 from sclpl.run.preflight import Report, preflight
 from sclpl.run.schedule import JOIN_SUFFIX, Limits, Outcome, Scheduler
 from sclpl.run.transport import Pool, TransportLimits
+from sclpl.tables.io import STDIO
 from sclpl.values.store import ValueStore
 
 
@@ -192,15 +192,12 @@ def _limits(doc: WorkflowDoc, options: Options) -> Limits:
 def _exit_code(outcome: Outcome) -> int:
     """The first failure's own exit code, so an assertion is distinguishable from a 500."""
     if outcome.status == "cancelled":
-        from sclpl.cli.options import EXIT_INTERRUPTED
-
         return EXIT_INTERRUPTED
     if not outcome.failed:
         return 0
     for error in outcome.failed.values():
         if isinstance(error, SclplError):
             return error.exit_code
-    from sclpl.cli.options import EXIT_STEP_FAILED
 
     return EXIT_STEP_FAILED
 

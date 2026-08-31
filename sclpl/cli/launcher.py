@@ -25,7 +25,7 @@ from dataclasses import dataclass
 import typer
 
 from sclpl.catalog import resolve as resolver
-from sclpl.cli.options import EXIT_OK, EXIT_USAGE
+from sclpl.errors import EXIT_OK, EXIT_USAGE
 
 
 @dataclass(frozen=True, slots=True)

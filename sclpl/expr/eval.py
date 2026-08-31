@@ -15,6 +15,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
+from sclpl.errors import ExpressionError, PathError, UnknownReference, did_you_mean
 from sclpl.expr import dispatch, path
 from sclpl.expr.ast import (
     And,
@@ -38,7 +39,6 @@ from sclpl.expr.ast import (
     Var,
     unparse,
 )
-from sclpl.run.errors import ExpressionError, PathError, UnknownReference, did_you_mean
 from sclpl.values.store import Frame, ValueStore
 
 

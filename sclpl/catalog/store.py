@@ -15,7 +15,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from sclpl.catalog.resolve import PROJECT_DIR, SUFFIXES, USER_DIR, WORKFLOWS, load
-from sclpl.run.errors import UnknownTarget, ValidationError, did_you_mean
+from sclpl.errors import UnknownTarget, ValidationError, did_you_mean
 from sclpl.run.ir import WorkflowDoc
 from sclpl.values.digest import digest
 

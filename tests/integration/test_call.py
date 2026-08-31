@@ -8,7 +8,7 @@ import sys
 
 import pytest
 
-from sclpl.cli.options import EXIT_STEP_FAILED, EXIT_USAGE
+from sclpl.errors import EXIT_STEP_FAILED, EXIT_USAGE
 
 
 def run_cli(*args: str) -> subprocess.CompletedProcess[str]:

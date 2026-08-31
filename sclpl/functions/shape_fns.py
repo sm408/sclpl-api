@@ -10,8 +10,8 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Any
 
+from sclpl.errors import TypeDispatchError, ValidationError, did_you_mean
 from sclpl.ext.functions import function
-from sclpl.run.errors import TypeDispatchError, ValidationError, did_you_mean
 from sclpl.tables import Table
 from sclpl.tables.flatten import flatten_records
 

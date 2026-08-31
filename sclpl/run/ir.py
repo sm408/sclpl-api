@@ -15,13 +15,14 @@ from typing import Any, Literal, TypeAlias
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
+from sclpl.tables.io import Format
+
 JsonValue: TypeAlias = Any
 
 StepKind: TypeAlias = Literal[
     "http", "fn", "use", "let", "foreach", "if", "while", "do_while", "gate", "parallel"
 ]
 
-Format: TypeAlias = Literal["csv", "json", "ndjson", "parquet", "xlsx", "sqlite", "auto"]
 
 Lane: TypeAlias = Literal["async", "thread", "process", "serial"]
 

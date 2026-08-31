@@ -10,8 +10,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from sclpl.errors import TypeDispatchError
 from sclpl.expr.dispatch import generic
-from sclpl.run.errors import TypeDispatchError
 
 _NUMERIC = (int, float)
 

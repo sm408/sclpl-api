@@ -33,7 +33,7 @@ from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass, field
 from typing import Any
 
-from sclpl.run.errors import StepFailed, ValidationError
+from sclpl.errors import StepFailed, ValidationError
 from sclpl.run.ir import Pagination
 from sclpl.tables.flatten import ENVELOPES
 

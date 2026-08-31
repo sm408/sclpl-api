@@ -27,9 +27,9 @@ from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from typing import Any
 
+from sclpl.errors import SclplError
 from sclpl.render.events import RunFinished, StepFinished, StepStarted, ValueFreed
 from sclpl.render.reporter import Reporter
-from sclpl.run.errors import SclplError
 from sclpl.run.plan import Node, Plan
 from sclpl.values.store import ValueStore
 
@@ -349,6 +349,15 @@ class Scheduler:
         made = [spec.id for spec in specs]
 
         made_set = {spec.id for spec in specs}
+
+        # Hold open everything the new nodes read. The refcount for a binding was fixed
+        # when the plan was built, from the nodes that existed then; these did not. Left
+        # alone, a value read only by a loop body is freed the moment the parent settles
+        # -- which is a failure on a name that is plainly there in the file.
+        for spec in specs:
+            for name in spec.reads - made_set:
+                self._store.retain(name)
+
         for spec in specs:
             # A spec's `reads` name earlier nodes in the same copy of a body, which is
             # where a body's written order becomes graph edges. Anything else it reads

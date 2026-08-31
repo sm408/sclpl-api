@@ -5,8 +5,8 @@ from __future__ import annotations
 import re
 from typing import Any
 
+from sclpl.errors import TypeDispatchError
 from sclpl.expr.dispatch import generic, overload
-from sclpl.run.errors import TypeDispatchError
 
 #: Compiled patterns are cached: a `matches` inside a filter runs once per element, and
 #: recompiling the same pattern a thousand times is pure waste.
