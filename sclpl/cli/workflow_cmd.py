@@ -68,6 +68,28 @@ def run(
     keep_all: Annotated[
         bool, typer.Option("--keep-all", help="Do not free intermediate values.")
     ] = False,
+    no_cache: Annotated[
+        bool, typer.Option("--no-cache", help="Neither read nor write the cache.")
+    ] = False,
+    refresh: Annotated[
+        bool, typer.Option("--refresh", help="Ignore what is cached; replace it.")
+    ] = False,
+    offline: Annotated[
+        bool,
+        typer.Option("--offline", help="Read the cache only. A miss exits 5."),
+    ] = False,
+    http_cache: Annotated[
+        bool,
+        typer.Option("--http-cache", help="Revalidate with ETag; a 304 counts as a hit."),
+    ] = False,
+    memory_budget: Annotated[
+        str | None,
+        typer.Option(
+            "--memory-budget",
+            metavar="SIZE",
+            help="Spill intermediates past this, e.g. 4G. Default: half the machine.",
+        ),
+    ] = None,
 ) -> None:
     doc = _load(workflow)
     options = Options(
@@ -84,6 +106,11 @@ def run(
         validate=not no_validate,
         dry_run=dry_run,
         keep_all=keep_all,
+        memory_budget=memory_budget,
+        no_cache=no_cache,
+        refresh=refresh,
+        offline=offline,
+        http_cache=http_cache,
     )
     globals_ = options_of(ctx)
     reporter = build_reporter(
@@ -131,6 +158,10 @@ def explain(
     ctx: typer.Context,
     workflow: WorkflowArg,
     mode: ModeOpt = None,
+    memory: Annotated[
+        bool,
+        typer.Option("--memory", help="Show where each value is freed."),
+    ] = False,
 ) -> None:
     """Print the plan: order, dependencies, and the critical path."""
     doc = _load(workflow)
@@ -160,6 +191,16 @@ def explain(
             f"  {step_id:<24} {needs[:28]:<28} {(node.host or '-')[:20]:<20} "
             f"{node.critical_path:.1f}"
         )
+
+    if memory:
+        released = plan.release_points()
+        typer.echo(f"\n  {'value':<24} {'read by':<8} freed after")
+        typer.echo(f"  {'-' * 24} {'-' * 8} {'-' * 24}")
+        for step_id in plan.topological():
+            # A leaf is what the run produced. Freeing it on arrival saves nothing and
+            # throws away the answer, so it is held to the end.
+            after = released.get(step_id) or "held (nothing reads it)"
+            typer.echo(f"  {step_id:<24} {plan.readers_of(step_id):<8} {after}")
 
     typer.echo(f"\n  critical path: {plan.critical_path_length():.1f}")
     typer.echo(f"  parallel roots: {len(plan.roots())}")

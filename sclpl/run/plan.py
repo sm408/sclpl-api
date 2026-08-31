@@ -75,6 +75,26 @@ class Plan:
         """How many nodes read ``name``. This is the initial refcount in the store."""
         return sum(1 for node in self.nodes.values() if name in node.reads)
 
+    def release_points(self) -> dict[str, str]:
+        """Binding name -> the node after which nothing reads it any more.
+
+        Liveness, computed over the graph as it stands (SPEC section 12). For a pruned
+        plan that is the *pruned* graph, which is the point: a partial run frees more,
+        because half the consumers are not there.
+
+        A name with no entry is never released -- a leaf, whose value is what the run
+        produced. "No consumer in the graph" is not the same as "nobody wants it".
+        """
+        order = {node_id: index for index, node_id in enumerate(self.topological())}
+        last: dict[str, str] = {}
+        for node in self.nodes.values():
+            position = order.get(node.id, 0)
+            for name in node.reads:
+                held = last.get(name)
+                if held is None or order.get(held, 0) < position:
+                    last[name] = node.id
+        return last
+
     def hosts(self) -> tuple[str, ...]:
         found = {node.host for node in self.nodes.values() if node.host}
         return tuple(sorted(found))

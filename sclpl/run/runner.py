@@ -14,6 +14,7 @@ from typing import Any
 from sclpl.errors import EXIT_INTERRUPTED, EXIT_STEP_FAILED, SclplError
 from sclpl.render.events import RunFinished, RunStarted
 from sclpl.render.reporter import Reporter
+from sclpl.run import lanes
 from sclpl.run.compile_plan import hosts
 from sclpl.run.execute import SKIPPED, Runtime, collect, run_injected, run_step
 from sclpl.run.ir import WorkflowDoc
@@ -22,6 +23,9 @@ from sclpl.run.preflight import Report, preflight
 from sclpl.run.schedule import JOIN_SUFFIX, ExpandSpec, Limits, Outcome, Scheduler
 from sclpl.run.transport import Pool, TransportLimits
 from sclpl.tables.io import STDIO
+from sclpl.values import cache
+from sclpl.values.governor import parse_budget
+from sclpl.values.ref import Scratch
 from sclpl.values.store import ValueStore
 
 
@@ -42,6 +46,11 @@ class Options:
     validate: bool = True
     dry_run: bool = False
     keep_all: bool = False
+    memory_budget: str | None = None
+    no_cache: bool = False
+    refresh: bool = False
+    offline: bool = False
+    http_cache: bool = False
 
 
 @dataclass(slots=True)
@@ -107,7 +116,7 @@ async def run_workflow(doc: WorkflowDoc, options: Options, reporter: Reporter) -
         return Result(report=report, exit_code=0)
 
     limits = _limits(doc, options)
-    store = ValueStore(keep_all=options.keep_all)
+    store = ValueStore(keep_all=options.keep_all, scratch=Scratch())
     variables = {**doc.vars, **report.resolved.vars, **options.overrides}
 
     transport = TransportLimits(
@@ -115,6 +124,14 @@ async def run_workflow(doc: WorkflowDoc, options: Options, reporter: Reporter) -
         max_connections=limits.concurrency * 2,
     )
 
+    pools = lanes.Pools(max_processes=min(4, limits.concurrency))
+    policy = cache.Policy.from_flags(
+        no_cache=options.no_cache,
+        refresh=options.refresh,
+        offline=options.offline,
+        http_cache=options.http_cache,
+    )
+    store_cache = cache.Cache(cache.default_root(), policy=policy) if policy.enabled else None
     async with Pool(transport) as pool:
         runtime = Runtime(
             doc=doc,
@@ -124,6 +141,8 @@ async def run_workflow(doc: WorkflowDoc, options: Options, reporter: Reporter) -
             vars=variables,
             stubs=dict(report.resolved.stubs),
             outputs=_output_paths(report),
+            pools=pools,
+            cache=store_cache,
         )
         for name, value in report.resolved.stubs.items():
             # A stub stands in for a producer the mode pruned. It is pinned, because
@@ -152,7 +171,17 @@ async def run_workflow(doc: WorkflowDoc, options: Options, reporter: Reporter) -
             scheduler.expand(parent, specs, tag_limit=tag_limit)
 
         runtime.expand = expand
-        outcome = await scheduler.run(runner)
+        try:
+            outcome = await scheduler.run(runner)
+        finally:
+            # Pools outlive the event loop unless closed, and a lingering process pool
+            # keeps the interpreter alive after the CLI has printed its summary.
+            pools.close()
+            if store_cache is not None:
+                if store_cache.stats.hits or store_cache.stats.writes:
+                    reporter.log("info", store_cache.stats.summary())
+                store_cache.prune()
+                store_cache.close()
 
     exit_code = _exit_code(outcome)
     reporter.emit(
@@ -185,11 +214,16 @@ def _output_paths(report: Report) -> dict[str, str]:
 
 def _limits(doc: WorkflowDoc, options: Options) -> Limits:
     """Flags beat the mode's limits, which beat the workflow's (SPEC section 15)."""
+    # There is always a budget. SPEC section 12 makes it a share of system memory when
+    # nobody says otherwise, and a governor that only exists when asked for is a
+    # governor that is missing exactly when a run turns out to be bigger than expected.
+    budget = options.memory_budget or doc.limits.memory_budget
     return Limits(
         concurrency=options.concurrency or doc.limits.concurrency,
         host_concurrency=options.host_concurrency or doc.limits.host_concurrency,
         tags=dict(doc.limits.tags),
         keep_going=options.keep_going,
+        memory_budget=parse_budget(budget),
     )
 
 

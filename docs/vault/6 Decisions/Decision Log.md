@@ -15,6 +15,67 @@ someone undoing it next month.
 
 ---
 
+## 2026-08-31 · Readers and writers are both uncacheable
+
+**Decided.** `save*`, `read*`, `glob_read`, and `convert` are never cached.
+
+**Why, twice.** A **writer** has an effect a hit cannot reproduce: it would report a path
+it did not write to. A **reader** is keyed on its arguments, and a path is not its
+contents -- caching it would serve yesterday's file from today's name, which is the worst
+kind of wrong because it looks right.
+
+Keying a reader on mtime and size would fix the second. But a local file read is neither
+slow nor rate-limited, and the cache exists for things that are.
+
+## 2026-08-31 · Mode is excluded from the cache key
+
+**Decided.** Per SPEC §12, and worth restating because it looks like an omission.
+
+**Why.** A key including the mode means a `partial` run and a `full` run never share the
+fetch they have in common -- which is most of the value a cache has in a workflow tool.
+
+## 2026-08-31 · An assertion still runs on a cache hit
+
+**Decided.** A hit reuses the value; it does not skip the check.
+
+**Why.** A cached value that no longer satisfies an assertion is exactly the case the
+assertion exists for.
+
+## 2026-08-31 · The credential is a salt, never a value
+
+**Decided.** The key includes a hash *of* the credential.
+
+**Why.** Two people running the same workflow with different tokens must not read each
+other's entries -- they may be different tenants. But the token itself has no business
+being part of a filename.
+
+## 2026-08-31 · There is always a memory budget
+
+**Decided.** Half the machine when nobody says otherwise, floored at 512 MB.
+
+**Why.** A governor that only exists when asked for is a governor that is missing exactly
+when a run turns out to be bigger than expected.
+
+## 2026-08-31 · The RSS probe is injected
+
+**Decided.** `Governor.probe` defaults to the module's `rss()` and can be replaced.
+
+**Replaced.** `sample()` called the global directly, so the watermark policy could not be
+tested without a process that happened to be the right size.
+
+**Why.** It is also what lets a platform where the probe does not work supply its own,
+rather than having the governor silently do nothing there.
+
+## 2026-08-31 · A lane is an optimisation, and falls back
+
+**Decided.** A process pool that cannot be created, a payload that will not pickle, or a
+pool that breaks all fall back to a thread, with the reason logged at `-vv`. A broken
+pool is discarded rather than retried.
+
+**Why.** The answer does not depend on where it was computed, only the time does. A run
+that fails because a closure would not pickle has lost something real to save something
+that was only ever a preference. And one dead pool should not fail every step after it.
+
 ## 2026-08-31 · A loop's concurrency is a per-tag ceiling
 
 **Decided.** `foreach ... concurrency 4` registers a tag ceiling under a private name

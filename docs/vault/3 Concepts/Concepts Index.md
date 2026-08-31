@@ -18,6 +18,7 @@ Every idea in `sclpl` that has a name.
 
 - [[The DAG]] — inferred from references, never declared
 - [[The Scheduler]] — a ready queue, ordered semaphores, no barrier waves
+- [[Lanes]] — the loop, a thread, or a process, and how one is chosen
 - [[Control Flow]] — `foreach`, `if`, `while`, `parallel`, `gate` as injected subgraphs
 - [[Step Kinds]] — the eight things a step can be
 
@@ -25,6 +26,8 @@ Every idea in `sclpl` that has a name.
 
 - [[Typed Values]] — the invariant, and where it is enforced
 - [[The Value Store]] — refcounts, liveness, freeing
+- [[Memory and Spilling]] — watermarks, and finishing rather than dying
+- [[The Cache]] — what is keyed, what is never cached, and the five flags
 - [[Expressions]] — the allowlisted AST, paths, and dispatch
 - [[Tables and Flattening]] — the reference semantics for nested JSON
 

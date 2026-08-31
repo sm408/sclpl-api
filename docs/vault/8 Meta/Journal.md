@@ -39,6 +39,21 @@ read only by an injected node is freed before that node runs.
 
 → [[M6 Control Flow and Pagination]]
 
+**M7 finished.** The governor, the lanes, and the cache.
+
+Both halves of the exit criterion are numbers rather than claims. Six 65 MB intermediates
+against a 150 MB budget: completed, exit 0, right answer. A 40,000-row join in PID 21772
+while the parent was 20544; a one-row join on the loop.
+
+Three things found while building it, all in [[Decision Log]]. The one worth repeating:
+**`read_json` was about to be cached on its path.** Every `fn` step was cacheable and a
+reader's key is its arguments -- so a second run would have served yesterday's file from
+today's name. That is the worst class of bug, because nothing looks wrong.
+
+The Windows RSS probe also took three attempts, and the failure mode is instructive: it
+returned 0 rather than raising, and 0 reads as "no memory in use". A governor reading 0
+does nothing, quietly, forever.
+
 **M6 finished.** All five paginators, all six control-flow kinds, `concurrency` and
 `collect` on a `foreach`, and the exit criterion tested through the real CLI.
 

@@ -1,79 +1,22 @@
 {
   "collapse-filter": false,
-  "search": "-tag:#moc",
-  "showTags": false,
-  "showAttachments": false,
-  "hideUnresolved": true,
+  "search": "",
+  "showTags": true,
+  "showAttachments": true,
+  "hideUnresolved": false,
   "showOrphans": true,
   "collapse-color-groups": false,
-  "colorGroups": [
-    {
-      "query": "tag:#concept",
-      "color": {
-        "a": 1,
-        "rgb": 4235743
-      }
-    },
-    {
-      "query": "tag:#package",
-      "color": {
-        "a": 1,
-        "rgb": 15695665
-      }
-    },
-    {
-      "query": "tag:#guide",
-      "color": {
-        "a": 1,
-        "rgb": 5027149
-      }
-    },
-    {
-      "query": "tag:#decision",
-      "color": {
-        "a": 1,
-        "rgb": 14832687
-      }
-    },
-    {
-      "query": "tag:#milestone",
-      "color": {
-        "a": 1,
-        "rgb": 11119017
-      }
-    },
-    {
-      "query": "tag:#architecture",
-      "color": {
-        "a": 1,
-        "rgb": 14200723
-      }
-    },
-    {
-      "query": "tag:#meta",
-      "color": {
-        "a": 1,
-        "rgb": 7107965
-      }
-    },
-    {
-      "query": "tag:#start",
-      "color": {
-        "a": 1,
-        "rgb": 16746496
-      }
-    }
-  ],
+  "colorGroups": [],
   "collapse-display": false,
-  "showArrow": true,
-  "textFadeMultiplier": -0.5,
-  "nodeSizeMultiplier": 1.1,
-  "lineSizeMultiplier": 0.8,
+  "showArrow": false,
+  "textFadeMultiplier": 0,
+  "nodeSizeMultiplier": 1,
+  "lineSizeMultiplier": 1,
   "collapse-forces": false,
-  "centerStrength": 0.3,
-  "repelStrength": 14,
-  "linkStrength": 0.65,
-  "linkDistance": 190,
-  "scale": 0.8,
+  "centerStrength": 1,
+  "repelStrength": 0,
+  "linkStrength": 1,
+  "linkDistance": 30,
+  "scale": 0.6568998174390305,
   "close": false
 }

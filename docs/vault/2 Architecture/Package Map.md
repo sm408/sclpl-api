@@ -46,6 +46,7 @@ a kind of failure and not of the surface that reports it.
 | `schedule.py` | The ready queue, the gate, runtime expansion |
 | `execute.py` | One step, dispatched on kind |
 | `control.py` | `foreach` / `if` / `while` / `parallel` → nodes |
+| `lanes.py` | Which of async / thread / process a call belongs in |
 | `paginate.py` | The five strategies |
 | `transport.py` | Pooled clients, breakers, adaptive limits |
 | `retry.py` | Backoff, jitter, `Retry-After` |

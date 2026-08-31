@@ -10,10 +10,10 @@ Budget 1,000. What a run holds in memory, and what it does when that is too much
 | File | Job | State |
 |---|---|---|
 | `store.py` | `ValueStore`, `Value`, `Frame`, refcounts, release | ✅ |
-| `ref.py` | `ValueRef` — spill and rehydrate; the reader registry | partial |
+| `ref.py` | `ValueRef` — spill and rehydrate; the reader registry | ✅ |
 | `digest.py` | Content hashing, for the cache key | ✅ |
-| `cache.py` | Content-addressed cache and index | ⬜ M7 #todo |
-| `governor.py` | Resource watermarks | ⬜ M7 #todo |
+| `cache.py` | Content-addressed cache and index → [[The Cache]] | ✅ |
+| `governor.py` | Resource watermarks → [[Memory and Spilling]] | ✅ |
 
 → [[The Value Store]]
 

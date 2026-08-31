@@ -16,7 +16,7 @@ from sclpl.expr import Context, evaluate, parse, parse_interpolated
 from sclpl.expr.eval import _truthy
 from sclpl.render.events import StepProgress
 from sclpl.render.reporter import Reporter
-from sclpl.run import control, paginate
+from sclpl.run import control, lanes, paginate
 from sclpl.run.ir import (
     FnConfig,
     ForeachConfig,
@@ -34,6 +34,8 @@ from sclpl.run.plan import Node
 from sclpl.run.retry import Retry
 from sclpl.run.schedule import ExpandSpec
 from sclpl.run.transport import Pool, decode
+from sclpl.values import cache as cache_mod
+from sclpl.values.digest import digest as digest_of
 from sclpl.values.store import Frame, ValueStore
 
 #: Marks a step the runner decided to skip. Distinct from `None`, which is a real
@@ -60,6 +62,10 @@ class Runtime:
     #: Nodes the run grew for itself -- loop iterations, taken branches -- and the scope
     #: each one runs in. Populated by the control-flow kinds, read by the runner.
     injected: dict[str, control.Injected] = field(default_factory=dict)
+    #: Where results are reused from, when the policy allows it. None disables it.
+    cache: cache_mod.Cache | None = None
+    #: Thread and process pools, for the steps that should not run on the loop.
+    pools: lanes.Pools = field(default_factory=lanes.Pools)
     #: How a running step adds nodes beneath itself. Supplied by the scheduler.
     expand: Callable[[str, list[ExpandSpec], tuple[str, int] | None], None] | None = None
     #: Iteration key -> the node holding that iteration's result, per control step.
@@ -91,11 +97,94 @@ async def run_step(step: Step, node: Node, runtime: Runtime, *, node_id: str = "
     if step.skip_if and await _condition(step.skip_if, runtime, step):
         return SKIPPED
 
+    key = await _cache_key(step, runtime)
+    if key is not None:
+        hit = runtime.cache.get(key) if runtime.cache else None
+        if hit is not None:
+            runtime.reporter.emit(StepProgress(id=step.id, detail="cached", current=1))
+            if step.assert_:
+                # Still checked. A cached value that no longer satisfies an assertion is
+                # exactly the case the assertion exists for.
+                await _assert(step, hit.value, runtime)
+            return hit.value
+        if runtime.cache is not None and runtime.cache.policy.require_hit:
+            raise cache_mod.Missing(step.id)
+
     value = await _dispatch(step, node, runtime, node_id or node.id)
 
     if step.assert_:
         await _assert(step, value, runtime)
+    if key is not None and runtime.cache is not None and value is not SKIPPED:
+        runtime.cache.put(key, value, ttl=step.cache.ttl, step=step.id)
     return value
+
+
+async def _cache_key(step: Step, runtime: Runtime) -> str | None:
+    """The cache key for this step, or None when it is not cacheable.
+
+    Three things are never cached. **Control flow** produces a graph, not a value, and a
+    cached loop would skip the work its own body was the point of. **Writers** have an
+    effect the cache cannot reproduce -- a hit would report a file it did not write. And
+    anything a step turned off with `cache off`.
+    """
+    if runtime.cache is None or not runtime.cache.policy.enabled or not step.cache.enabled:
+        return None
+    if step.kind not in ("http", "fn"):
+        return None
+
+    match step.config:
+        case HttpConfig() as config:
+            url = await _interpolate(config.url, runtime)
+            query = {
+                name: await _interpolate(value, runtime) for name, value in config.query.items()
+            }
+            headers = {
+                name: str(await _interpolate(value, runtime))
+                for name, value in config.headers.items()
+            }
+            body = await _resolve(config.body, runtime) if config.body is not None else None
+            return cache_mod.key_for(
+                step_kind="http",
+                method=config.method,
+                url=str(url),
+                query=query,
+                body=body,
+                headers=headers,
+                credential=config.auth,
+            )
+        case FnConfig() as config:
+            if _touches_a_file(config.name):
+                return None
+            entry = _registered(config.name)
+            args = [await _resolve(value, runtime) for value in config.args]
+            kwargs = {name: await _resolve(value, runtime) for name, value in config.kwargs.items()}
+            return cache_mod.key_for(
+                step_kind="fn",
+                function=config.name,
+                function_version=entry.version if entry else 1,
+                inputs=[digest_of(value) for value in (*args, *kwargs.values())],
+            )
+        case _:
+            return None
+
+
+#: Functions whose answer depends on something the cache key cannot see, or whose point
+#: is an effect the cache cannot reproduce.
+_UNCACHEABLE = ("save", "read", "glob_read", "convert")
+
+
+def _touches_a_file(name: str) -> bool:
+    """Whether this function's answer depends on the filesystem.
+
+    Two different reasons, one rule. A **writer** has an effect a hit cannot reproduce:
+    it would report a path it did not write to. A **reader** is keyed on its path, and a
+    path is not its contents -- caching it would serve yesterday's file from today's
+    name, which is the worst kind of wrong because it looks right.
+
+    Keying a reader on mtime and size would fix that, but a local file read is neither
+    slow nor rate-limited, and the cache exists for things that are.
+    """
+    return name.startswith(_UNCACHEABLE)
 
 
 async def _dispatch(step: Step, node: Node, runtime: Runtime, node_id: str) -> Any:
@@ -304,7 +393,7 @@ async def _fn(step: Step, config: FnConfig, runtime: Runtime) -> Any:
         )
     args, kwargs = _bind_output(step, args, kwargs, runtime)
     try:
-        return await dispatch.apply(config.name, args, kwargs)
+        return await _in_lane(step, config, args, kwargs, runtime)
     except SclplError:
         # Already carries a message and remedies aimed at the workflow author.
         raise
@@ -316,6 +405,51 @@ async def _fn(step: Step, config: FnConfig, runtime: Runtime) -> Any:
             f"step {step.id!r} failed inside {config.name}(): {type(error).__name__}: {error}",
             remedies=[f"check what {config.name}() was given -- -vv shows the resolved arguments"],
         ) from error
+
+
+async def _in_lane(
+    step: Step,
+    config: FnConfig,
+    args: list[Any],
+    kwargs: dict[str, Any],
+    runtime: Runtime,
+) -> Any:
+    """Run the call where it belongs: the loop, a thread, or a process.
+
+    The lane is chosen from what the function *is* and how big its arguments are, not
+    from what it is called. A `join` over ten rows and a `join` over a hundred thousand
+    are the same function and want different places to run.
+
+    A dispatch entry that is not a plain callable -- an operator with overloads -- stays
+    on the loop: `dispatch.apply` resolves it, and resolution is not something to send to
+    another process.
+    """
+    from sclpl.expr import dispatch
+
+    entry = _registered(config.name)
+    if entry is None:
+        return await dispatch.apply(config.name, args, kwargs)
+
+    lane = lanes.assign(step.lane, is_async=entry.is_async, args=args, kwargs=kwargs)
+    if lane == "async":
+        return await dispatch.apply(config.name, args, kwargs)
+
+    runtime.reporter.emit(StepProgress(id=step.id, detail=lane, current=1))
+    try:
+        return await lanes.call(lane, runtime.pools, entry.call, *args, **kwargs)
+    except lanes.LaneFallback as reason:
+        # The lane is an optimisation. Losing the run to save it would be the wrong
+        # trade, so the work goes to a thread and the reason is said out loud.
+        runtime.reporter.log("debug", f"{step.id}: {lane} lane unavailable ({reason})", step.id)
+        return await lanes.call("thread", runtime.pools, entry.call, *args, **kwargs)
+
+
+def _registered(name: str) -> Any:
+    """The catalogue entry for ``name``, if it is one. None for a bare operator."""
+    from sclpl.ext.functions import REGISTRY
+
+    entry = REGISTRY.get(name)
+    return entry if entry is not None and callable(entry.call) else None
 
 
 def _bind_output(

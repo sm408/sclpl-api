@@ -35,10 +35,10 @@ which is how `@fetch` inside a loop body means *this* iteration's `fetch`.
 
 Lookup order in `expr/eval.py:_lookup_ref` is **store first, then frame**.
 
-> [!warning] Known gap
-> Refcounts are computed at plan time, before [[Control Flow|runtime expansion]] exists.
-> A value read only by an injected node is not counted, so it can be freed before the
-> node runs. Tracked in [[Decision Log]]. #todo
+`ValueStore.retain` raises a count while a run is going. Control flow adds nodes the
+plan never saw -- a loop body is not a node until the loop knows how many copies it has
+-- and those nodes read things too. Without it, a value read *only* by a loop body was
+freed the moment the loop's parent settled. → [[Control Flow]]
 
 ## Spill
 
@@ -47,4 +47,4 @@ back. The reader registry (`register_reader`) is how `tables/` teaches `values/`
 Parquet **without `values/` importing `tables/`**, which would be a layering violation
 in the wrong direction.
 
-Full spill and rehydration land in M7. → [[Milestone Status]]
+Spilling is driven by the governor. → [[Memory and Spilling]]

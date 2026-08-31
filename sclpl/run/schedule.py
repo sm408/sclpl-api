@@ -28,9 +28,16 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from sclpl.errors import SclplError
-from sclpl.render.events import RunFinished, StepFinished, StepStarted, ValueFreed
+from sclpl.render.events import (
+    ResourceWarning,
+    RunFinished,
+    StepFinished,
+    StepStarted,
+    ValueFreed,
+)
 from sclpl.render.reporter import Reporter
 from sclpl.run.plan import Node, Plan
+from sclpl.values.governor import Governor, human
 from sclpl.values.store import ValueStore
 
 #: What a worker calls to run one node. Returns the value the node produced.
@@ -64,6 +71,9 @@ class Limits:
     tags: dict[str, int] = field(default_factory=dict)
     #: Stop admitting new work after the first failure.
     keep_going: bool = False
+    #: Bytes a run may hold before it starts writing intermediates to disk. None turns
+    #: the governor off entirely, which is for tests and for `--keep-all`.
+    memory_budget: int | None = None
 
 
 @dataclass(slots=True)
@@ -173,6 +183,8 @@ class Scheduler:
         "_counter",
         "_wakeup",
         "_inflight",
+        "_governor",
+        "_ceiling",
     )
 
     def __init__(
@@ -194,6 +206,9 @@ class Scheduler:
         self._counter = 0
         self._wakeup = asyncio.Event()
         self._inflight = 0
+        budget = self._limits.memory_budget
+        self._governor = Governor(budget=budget) if budget else None
+        self._ceiling = max(1, self._limits.concurrency)
 
     async def run(self, runner: Runner) -> Outcome:
         """Execute every node, or stop early on failure unless `keep_going`."""
@@ -261,7 +276,7 @@ class Scheduler:
         finishes and either pushes work or empties the graph.
         """
         while True:
-            if self._ready and not self._stopping:
+            if self._ready and not self._stopping and self._inflight < self._ceiling:
                 _, _, node_id = heapq.heappop(self._ready)
                 self._inflight += 1
                 return node_id
@@ -309,6 +324,7 @@ class Scheduler:
             readers=self._plan.readers_of(published),
             pinned=not node.dependents,
         )
+        self._govern()
         self._outcome.succeeded.append(node.id)
         self._reporter.emit(
             StepFinished(
@@ -319,6 +335,47 @@ class Scheduler:
             )
         )
         self._settle(node)
+
+    def _govern(self) -> None:
+        """Sample memory, and give some back if there is pressure.
+
+        Called after a node publishes, which is the moment the store has just grown --
+        and the only moment at which spilling can help before the next node adds more.
+
+        Spilling is not freeing: the value stays readable, it just lives on disk until
+        something asks for it. A run that would have died holding three times its budget
+        instead finishes, slower, which is the trade the budget exists to make.
+        """
+        if self._governor is None:
+            return
+        pressure = self._governor.sample(self._store.stats().bytes_live)
+        if pressure.level == "ok":
+            return
+
+        recovered = self._governor.relieve(self._store, pressure)
+        if recovered:
+            self._reporter.log(
+                "info",
+                f"memory at {pressure.describe()}; spilled {human(recovered)} to disk",
+            )
+
+        if pressure.level != "hard":
+            return
+
+        lowered = self._governor.concurrency_for(self._ceiling, pressure)
+        if lowered < self._ceiling:
+            # Workers are not stopped -- one already running finishes. The ceiling
+            # applies to what is admitted next, which is the only thing still in hand.
+            self._reporter.log(
+                "warning",
+                f"memory at {pressure.describe()}; concurrency {self._ceiling} -> {lowered}",
+            )
+            self._ceiling = lowered
+        if not self._governor.warned:
+            self._governor.warned = True
+            self._reporter.emit(
+                ResourceWarning(kind="memory", current=pressure.used, budget=pressure.budget)
+            )
 
     def _settle(self, node: Node) -> None:
         """Release what this node consumed, then admit whatever it unblocked."""

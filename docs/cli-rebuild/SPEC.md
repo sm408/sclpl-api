@@ -621,11 +621,11 @@ Do these in order. Each is independently demonstrable.
 - **Exit:** met — a paginated source fans out into a bounded `foreach`; the bound is measured (12 items at `concurrency 3` peak at 3, against 9 unbounded)
 
 ### M7 — Memory, lanes, cache
-- [ ] Liveness analysis over the pruned DAG; refcount release; tombstones; `--keep-all`; `explain --memory`
-- [ ] Spill to Parquet/pickle; `ValueRef` rehydration; scratch lifecycle
-- [ ] Governor with soft/hard watermarks; adaptive concurrency reduction
-- [ ] Lane assignment + Arrow IPC / path handoff; content-addressed cache and all five flags
-- **Exit:** intermediates at 3× budget complete by spilling; a CPU-bound join auto-lands in a process
+- [x] Liveness analysis over the pruned DAG; refcount release; tombstones; `--keep-all`; `explain --memory`
+- [x] Spill to Parquet/pickle; `ValueRef` rehydration; scratch lifecycle
+- [x] Governor with soft/hard watermarks; adaptive concurrency reduction
+- [x] Lane assignment; content-addressed cache and all five flags. Arrow IPC handoff is *not* done — a `Table` to a process pickles, which works and is slower
+- **Exit:** met — six 65MB intermediates against `--memory-budget 150M` complete with the right answer; a 40,000-row join runs in a separate PID while a one-row join stays on the loop
 
 ### M8 — Plugins and the bundled set
 - [ ] Entry-point discovery, manifest parsing, ABI check, capability declaration and enforcement

@@ -17,6 +17,7 @@ Full file table in [[Package Map#`run/` in detail]]. The notes that matter:
 - [[Step Kinds]] — `execute.py`
 - [[Control Flow]] — `control.py`
 - [[Pagination]] — `paginate.py`
+- [[Lanes]] — `lanes.py`
 - [[Transport]] — `transport.py`, `retry.py`
 - [[Errors and Exit Codes]] — `sclpl/errors.py`, which is *not* in this package
 
