@@ -60,8 +60,10 @@ The full tree, package by package, is SPEC §4.
 
 ## Rules of the road
 
-- **Dependencies:** `httpx`, `typer`, `pydantic`, `aiosqlite`, `pyarrow`. Adding a sixth needs a
-  reason in the commit message. Each existing one does three or four jobs.
+- **Dependencies:** `httpx`, `typer`, `pydantic`, `pyarrow`. Adding a fifth needs a reason in the
+  commit message. Each existing one does three or four jobs. `aiosqlite` was dropped in M9: both
+  SQLite users write once per run or sub-millisecond per step, and an unused dependency is worse
+  than an extra one.
 - **Size budget:** per-package line budgets in SPEC §19, enforced by `scripts/check_budget.py` in
   CI. Deleting counts as progress; say what shrank in the commit message.
 - **Gates:** `ruff check`, `ruff format --check`, `mypy` (strict), `pytest`, the budget check, and

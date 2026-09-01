@@ -113,7 +113,7 @@ sclpl/
     plugins.py           discovery, manifest, ABI, capabilities
     scaffold/            plugin template
   state/
-    db.py                aiosqlite connection + migrations
+    db.py                run history: sqlite3 + NDJSON logs
     history.py           run records, search, retention
     settings.py          config load/merge/show
     secrets.py           keyring-first, encrypted-file fallback
@@ -634,10 +634,10 @@ Do these in order. Each is independently demonstrable.
 - **Exit:** met — a seven-step round trip, SQLite → paginated API join → SQLite, no config; a scaffolded plugin loads and runs unedited
 
 ### M9 — Secrets, history, packaging, docs
-- [ ] Keyring-first secrets, no base64 fallback; environments
-- [ ] History schema, retention default 5, tags, `runs search|diff|replay|export|pin|prune`
-- [ ] `doctor`, completions, wheel, `docs build` + CI drift check, four playbooks, `concepts.md`
-- **Exit:** a new user imports a shared workflow and finishes a paginated API → CSV run from the README in ten minutes
+- [x] Keyring-first secrets, encrypted-file fallback, **no base64**; environments as namespaces
+- [x] History schema, retention default 5 with pinned runs exempt *and uncounted*, tags, `runs list|show|search|diff|replay|export|pin|prune`, NDJSON logs written during the run
+- [x] `doctor`, completions, `docs build --check` drift gate, four playbooks with runnable examples, `concepts.md`
+- **Exit:** met — `test_a_new_user_gets_from_the_readme_to_a_csv` types every command the README gives, in order, and ends with 30 rows across three pages
 
 ---
 
@@ -680,8 +680,9 @@ Current target **~16,000 lines**, against ~59,100 deleted. Enforced in CI by
 A `parent/child` key is counted on its own and excluded from its parent, so `expr/ops/`
 and `run/sclpll/` cannot absorb growth belonging to `expr/` or `run/`, nor the reverse.
 
-Dependencies, each doing three or four jobs: `httpx`, `typer`, `pydantic`, `aiosqlite`,
-`pyarrow`. Extras: `[data]` (pandas, openpyxl), `[keyring]`, `[dev]`. **`rich` is not a
+Dependencies, each doing three or four jobs: `httpx`, `typer`, `pydantic`, `pyarrow`.
+`aiosqlite` was dropped in M9 as unused -- both SQLite users write once per run or
+sub-millisecond per step, and stdlib `sqlite3` is enough for that. Extras: `[data]` (pandas, openpyxl), `[keyring]`, `[crypto]`, `[dev]`. **`rich` is not a
 dependency.**
 
 Rules: no abstraction until the second caller; reuse before writing; one mechanism per concept;

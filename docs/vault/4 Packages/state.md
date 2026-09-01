@@ -5,17 +5,25 @@ tags:
 
 # `state/`
 
-Budget 900. Persistent state. **Empty — M9.** #todo
-
-Planned:
+Budget 900. What persists between runs.
 
 | File | Job |
 |---|---|
-| `db.py` | SQLite run history; `run_ports`, retention, pinning |
-| `settings.py` | Config load / merge / show |
-| `secrets.py` | Keyring-first, **no base64 fallback** |
+| `secrets.py` | Keyring, then encrypted file, then refuse → [[Secrets]] |
+| `db.py` | Run history and NDJSON logs → [[Run History]] |
 
-The base64 fallback is [[Why a Rewrite|defect 4]] and must not come back —
-[[Invariants#9 Secrets never reach a log, a label, or a trace]].
+## Both refuse rather than degrade
 
-`docs/attic/carried/storage/` holds the v1 code kept for this milestone.
+`secrets.py` will not store a credential somewhere weak, and says which of two extras to
+install. That is [[Why a Rewrite|defect 4]] made impossible.
+
+`db.py` wraps its own writes: a run that produced its files has succeeded whether or not
+it could also write a row about itself.
+
+Two failures, two opposite handlings — and the difference is whether the thing being
+protected is the *user's* interest or the tool's convenience.
+
+## `sqlite3`, not `aiosqlite`
+
+History writes once per run. An async driver would buy nothing, and `aiosqlite` was
+dropped in M9 after being declared and never used.

@@ -13,7 +13,6 @@ dependencies = [
     "httpx[http2]>=0.27,<1",
     "typer>=0.12,<1",
     "pydantic>=2.5,<3",
-    "aiosqlite>=0.20,<1",
     "pyarrow>=16,<21",
 ]
 
@@ -28,8 +27,13 @@ data = [
     "pandas>=2.2,<3",
     "openpyxl>=3.1,<4",
 ]
+# Two extras rather than one: a server with no keyring daemon should not have to
+# install a keyring to get the encrypted-file backend, and a laptop with a Keychain
+# should not need `cryptography` it will never use.
 keyring = [
     "keyring>=25,<26",
+]
+crypto = [
     "cryptography>=42,<46",
 ]
 dev = [
@@ -58,7 +62,7 @@ exclude = "docs/attic"
 warn_unreachable = true
 
 [[tool.mypy.overrides]]
-module = ["aiosqlite.*", "pyarrow.*", "pandas.*"]
+module = ["pyarrow.*", "pandas.*", "keyring.*", "cryptography.*"]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]

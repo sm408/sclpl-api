@@ -23,6 +23,7 @@ from sclpl.run.ir import WorkflowDoc
 from sclpl.run.preflight import preflight
 from sclpl.run.runner import Options, run_workflow
 from sclpl.run.sclpll import emit as emit_sclpll
+from sclpl.state import db
 
 
 def register(app: typer.Typer) -> None:
@@ -82,6 +83,13 @@ def run(
         bool,
         typer.Option("--http-cache", help="Revalidate with ETag; a 304 counts as a hit."),
     ] = False,
+    name: Annotated[
+        str | None, typer.Option("--name", help="Call this run something in the history.")
+    ] = None,
+    tag: Annotated[list[str] | None, typer.Option("--tag", help="Tag it. Repeatable.")] = None,
+    no_record: Annotated[
+        bool, typer.Option("--no-record", help="Do not write it to the history.")
+    ] = False,
     memory_budget: Annotated[
         str | None,
         typer.Option(
@@ -107,6 +115,10 @@ def run(
         dry_run=dry_run,
         keep_all=keep_all,
         memory_budget=memory_budget,
+        name=name,
+        tags=list(tag or []),
+        record=not no_record,
+        run_id=_new_run_id(),
         no_cache=no_cache,
         refresh=refresh,
         offline=offline,
@@ -118,6 +130,11 @@ def run(
         json_mode=globals_.json_mode,
         plain=globals_.plain,
         no_color=globals_.no_color,
+        # Written *during* the run, not assembled from memory afterwards: a log put
+        # together at the end is a log that is missing whatever crashed.
+        log_path=db.default_root() / "logs" / f"{options.run_id}.ndjson"
+        if options.record
+        else None,
     )
 
     async def go() -> int:
@@ -267,6 +284,13 @@ def convert(
 
 
 # -- helpers ---------------------------------------------------------------------
+
+
+def _new_run_id() -> str:
+    """A fresh id for this run, decided before it starts rather than after."""
+    import time
+
+    return db.run_id("run", time.perf_counter())
 
 
 def _load(target: str) -> WorkflowDoc:

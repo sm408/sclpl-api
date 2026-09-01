@@ -15,6 +15,75 @@ someone undoing it next month.
 
 ---
 
+## 2026-09-01 · A pruned writer's port is not required
+
+**Decided.** An output port declared required is optional for *this invocation* when the
+mode pruned every step claiming it with `-> port`.
+
+**Replaced.** `--mode smoke` prunes the writer and preflight still demanded a file for
+`report`.
+
+**Why.** Demanding a file for something nothing will write is asking for a promise nobody
+will keep. Only ports a step *claims* are relaxed: a workflow writing literal paths has
+told us nothing about who writes what, and guessing there would loosen a requirement the
+author meant.
+
+## 2026-09-01 · `aiosqlite` is dropped
+
+**Decided.** Four dependencies, not five: `httpx`, `typer`, `pydantic`, `pyarrow`.
+
+**Why.** It was declared and **never imported**. Both SQLite users -- the cache and the
+history -- write once per run or sub-millisecond per step, and stdlib `sqlite3` covers
+that. The bundled SQLite plugin already runs in the thread lane, which is the established
+pattern for blocking database work.
+
+An unused dependency is worse than an extra one: it installs, it is audited, it appears
+in every lockfile, and it does nothing.
+
+## 2026-09-01 · Secrets refuse rather than degrade
+
+**Decided.** Keyring, then encrypted file, then **fail** -- naming both extras.
+
+**Replaced.** [[Why a Rewrite|Defect 4]]: the predecessor fell back to base64 and said
+nothing.
+
+**Why.** A fallback weaker than what the user asked for, applied silently, is worse than
+an error. An error is visible the first time; a weak store is invisible until it matters.
+
+**And:** an installed `keyring` is not a usable one -- it falls back to a `fail.Keyring`
+with no daemon. Checked before use, so the file backend gets its turn.
+
+## 2026-09-01 · Reading a secret from the environment is not storing one
+
+**Decided.** `SCLPL_SECRET_<NAME>` is read when nothing is stored.
+
+**Why.** CI has no keyring and no session to unlock one, and the secret arrives as a
+variable anyway. Where a secret comes from and where it is *kept* are different
+questions; the refusal is about the second.
+
+## 2026-09-01 · `replay` and `install` print rather than run
+
+**Decided.** `runs replay` prints the command; `plugin install` prints the `pip` line.
+
+**Why, in both cases.** A replay is usually wanted *with* a change, and a command you can
+edit is more use than one that has already gone. And running pip would guess at the
+environment, the index, and whether `--user` was meant.
+
+## 2026-09-01 · A pin does not spend the retention budget
+
+**Decided.** Pinned runs are exempt from pruning **and not counted** toward `keep`.
+
+**Why.** Otherwise pinning three runs with `keep 5` silently evicts everything else. A
+pin means "keep this", not "spend the budget on this".
+
+## 2026-09-01 · The event log is written during the run
+
+**Decided.** The run id is decided before the run starts, and the NDJSON log is a second
+reporter sink.
+
+**Why.** A log assembled at the end from memory is a log that is missing whatever
+crashed -- which is the log you wanted.
+
 ## 2026-09-01 · `records_of` understands a `Table`
 
 **Decided.** It recognises one by `to_records()`, not by type -- `tables/base.py` imports

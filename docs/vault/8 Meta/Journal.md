@@ -39,6 +39,30 @@ read only by an injected node is freed before that node runs.
 
 → [[M6 Control Flow and Pagination]]
 
+**M9 finished. That is all ten milestones.**
+
+The exit criterion is the README itself: a test types every command the README gives, in
+the order it gives them, and ends with 30 rows across three pages in a CSV. A second test
+asserts every command the README *promises* exists, because "nothing is stubbed" is only
+true if something checks.
+
+Defect 4 is closed. Secrets go in the keyring, or an encrypted file, or **nowhere** -- and
+the refusal names both extras. The predecessor fell back to base64 and said nothing,
+which is the failure mode the whole design is arranged against: a fallback weaker than
+what was asked for, applied silently.
+
+Two findings worth keeping:
+
+**A pruned writer's port was still required.** `--mode smoke` prunes the step that writes
+`report`, and preflight demanded a file for it anyway.
+
+**`aiosqlite` was declared and never imported.** Four dependencies now, not five. An
+unused dependency is worse than an extra one -- it installs, it is audited, it appears in
+every lockfile, and it does nothing.
+
+And the docs drift gate caught its own author on its first run, which is the gate
+working.
+
 **M8 finished.** Plugins, and the bundled `sqlite` / `fs` / `example`.
 
 The exit criterion is a seven-step round trip with no configuration: SQLite out, join

@@ -14,6 +14,7 @@ ports, because "expected 3 arguments, got 2" without saying which three is a puz
 from __future__ import annotations
 
 import sys
+from collections.abc import Iterable
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -72,11 +73,18 @@ def bind(
     named_in: dict[str, str] | None = None,
     named_out: dict[str, str] | None = None,
     positional: list[str] | None = None,
+    optional: Iterable[str] = (),
 ) -> Bindings:
-    """Bind every declared port, or raise saying which one could not be."""
+    """Bind every declared port, or raise saying which one could not be.
+
+    ``optional`` names ports that are declared required but are not required *for this
+    invocation* -- because the mode pruned the only step that writes to them. Demanding
+    a file for something nothing will write is asking for a promise nobody will keep.
+    """
     named_in = dict(named_in or {})
     named_out = dict(named_out or {})
     positional = list(positional or [])
+    relaxed = frozenset(optional)
 
     _check_names(doc, named_in, "in")
     _check_names(doc, named_out, "out")
@@ -125,7 +133,7 @@ def bind(
     missing = [
         binding.name
         for binding in (*inputs.values(), *outputs.values())
-        if binding.required and not binding.bound
+        if binding.required and binding.name not in relaxed and not binding.bound
     ]
     if missing:
         raise ValidationError(

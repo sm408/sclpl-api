@@ -2,80 +2,150 @@
 
 A command-line pipeline runner for HTTP APIs.
 
-`sclpl` reads a workflow, resolves a dependency graph from the references in it, runs the graph as
-fast as the remote allows, and writes CSV, JSON, NDJSON, Parquet, Excel, or SQLite. No TUI, no web
-UI, no server.
+`sclpl` reads a workflow, works out what depends on what from the references in it, runs
+the graph as fast as the remote allows, and writes CSV, JSON, NDJSON, Parquet, Excel, or
+SQLite.
 
-> **Status: M0 of a rewrite.** The command below works today. Workflows, the expression language,
-> the scheduler, and the rest of the surface land in M1–M9 — see
-> [`docs/cli-rebuild/SPEC.md`](docs/cli-rebuild/SPEC.md) §17 for the milestone list, and
-> [`docs/cli-rebuild/HANDOFF.md`](docs/cli-rebuild/HANDOFF.md) to pick the work up.
+No TUI, no web UI, no server, no accounts.
 
 ## Install
 
 ```bash
-pip install -e ".[dev]"
+pip install sclpl
 ```
 
-Extras: `[data]` for pandas and Excel, `[keyring]` for OS-keyring secrets, `[dev]` for the toolchain.
-
-## Use
+Extras: `[data]` for Excel and Parquet, `[keyring]` for OS-keyring secrets, `[crypto]`
+for an encrypted secret file on a machine with no keyring.
 
 ```bash
-sclpl call GET https://httpbin.org/json      # body to stdout, progress to stderr
-sclpl call GET https://api.test/v1/orders -H "Authorization: Bearer $TOKEN"
+sclpl doctor          # what is installed, and what any of it is missing
 ```
 
-Because stdout carries only data, it pipes:
+## Ten minutes, start to finish
+
+### 1. One request
 
 ```bash
-sclpl call GET https://httpbin.org/json | jq .slideshow.title
+sclpl call GET https://api.example.com/orders | head
 ```
 
-### Output control
+The body goes to **stdout** and the progress to **stderr**, so it pipes.
 
-| Flag | Effect |
+### 2. Make it a workflow
+
+`orders.sclpll`:
+
+```
+@workflow orders "Every order, as a CSV"
+
+@var base = "https://api.example.com"
+
+@output report:csv
+
+@step fetch
+  get {{base}}/orders
+  paginate cursor cursor_path=next_cursor param=cursor max_pages=40
+
+@step write -> report
+  save_csv @fetch.body
+```
+
+```bash
+sclpl validate orders.sclpll      # no network, no writes
+sclpl run orders.sclpll out.csv
+```
+
+That is the whole thing. `paginate` follows the source to its end and hands the merged
+result on **with the same shape one page had**; `save_csv` flattens nested objects into
+underscore columns and reaches through a `{"data": […]}` envelope without being told to.
+
+### 3. Check it before you trust it
+
+```
+@step checked
+  assert_rowcount @fetch.body.data min=1
+```
+
+An assertion failure exits **4**, not 1 — so a script can tell "the data was wrong" from
+"the request failed".
+
+### 4. Then
+
+- **[Playbook 1](docs/playbooks/01-paginated-api-to-csv.md)** — this, in more detail
+- **[Playbook 2](docs/playbooks/02-joining-sources.md)** — two sources, joined
+- **[Playbook 3](docs/playbooks/03-automating.md)** — running it every night
+- **[Playbook 4](docs/playbooks/04-debugging.md)** — when something is wrong
+- **[Concepts](docs/concepts.md)** — every word this tool uses, in dependency order
+
+## What it does that you might not expect
+
+**The dependency graph is inferred.** Writing `@orders` in a step is what makes it wait
+for `orders`. There is no `needs:` list to keep in sync, and none to fall out of date.
+
+**Values keep their types.** A number stays a number the whole way through, so
+`@a.total > 500` compares numbers and a table stays a table. Stringification happens only
+at a `{{...}}` boundary you asked for.
+
+**Steps start the moment their dependencies land**, not when a batch finishes. Two
+fetches that do not reference each other run at once, without you arranging it.
+
+**A run holding more than its memory budget spills to disk and finishes**, slower,
+rather than being killed.
+
+**A CPU-bound join moves to another process** on its own, decided by how big the data is
+rather than by what the function is called.
+
+**Secrets go in the OS keyring**, or an encrypted file. If neither is available, `sclpl`
+refuses to store one rather than falling back to something weaker.
+
+## The surface
+
+```
+sclpl run|validate|explain|fmt|convert    a workflow
+sclpl call                                one request
+sclpl import|list|show|remove             the catalogue
+sclpl runs list|show|search|diff|replay|export|pin|prune
+sclpl secret set|get|list|remove
+sclpl plugin list|describe|scaffold|install
+sclpl doctor|completion|docs build
+```
+
+Nothing is stubbed: if `--help` lists a command, that command works.
+
+## Extending it
+
+```bash
+sclpl plugin scaffold mything
+```
+
+Writes a plugin that loads and runs immediately. Import from `sclpl.ext.api` and nothing
+else — that module is the promise. SQLite and the filesystem connectors ship as bundled
+plugins using exactly that API, which is how we know it is enough.
+
+## Documentation
+
+| | |
 |---|---|
-| `-q` / `-qq` | Errors and summary only / total silence |
-| `-v` … `-vvv` | Step lines, then timings and retries, then scheduler detail |
-| `--json` | NDJSON events on stderr; the human view is suppressed |
-| `--plain` | One line per event, no escape sequences |
-| `--no-color` | Keep the layout, drop the colour (`NO_COLOR` does the same) |
+| [`docs/concepts.md`](docs/concepts.md) | The vocabulary |
+| [`docs/playbooks/`](docs/playbooks/) | Four worked tasks |
+| [`docs/reference/`](docs/reference/) | Generated from what is registered. Do not edit |
+| [`docs/vault/`](docs/vault/) | An Obsidian vault: how it works and **why** it is shaped this way |
+| [`docs/cli-rebuild/SPEC.md`](docs/cli-rebuild/SPEC.md) | Normative. Wins any disagreement |
 
-`SCLPL_RENDER=plain|simple|full` overrides the auto-detected renderer.
-
-### Exit codes
-
-`0` success · `1` step failure · `2` usage · `3` validation · `4` assertion · `5` cache miss under
-`--offline` · `6` unknown workflow or mode · `130` interrupted.
-
-## Design
-
-Ten invariants govern the code; they are listed in
-[`docs/cli-rebuild/SPEC.md`](docs/cli-rebuild/SPEC.md) §3. The two that shape most of what you will
-read:
-
-- **stdout is data, stderr is interface.** Progress never touches stdout.
-- **One writer to the terminal.** Every worker and plugin emits an event to a single queue; exactly
-  one task holds the stderr handle.
-
-The terminal layer is hand-written — `rich` is deliberately not a dependency. Dependencies are
-`httpx`, `typer`, `pydantic`, `aiosqlite`, and `pyarrow`.
-
-## Development
+## Developing
 
 ```bash
-python -m ruff check sclpl tests scripts
-python -m ruff format --check sclpl tests scripts
-python -m mypy
+pip install -e ".[dev,data,crypto]"
 python -m pytest -q
-python scripts/check_budget.py      # per-package line budget, SPEC §19
+python scripts/check_budget.py      # per-package line budget
+python scripts/check_layering.py    # no import cycles
+python scripts/check_vault.py       # every wikilink resolves
+sclpl docs build --check            # the reference is current
 ```
 
-All four run in CI. The budget check is a gate, not a report: exceeding it means deleting something
-or moving the number in the SPEC on purpose.
+Six gates, all of which must pass before a commit: `ruff check`, `ruff format --check`,
+`mypy` (strict), `pytest`, the budget check, and the layering check.
 
-## History
+## Licence
 
-The Textual TUI and the Vue/FastAPI studio this replaces are archived at commit `1b1abe0`. Their
-documentation, examples, and workflows are under `docs/attic/`.
+See [`LICENSE`](LICENSE).

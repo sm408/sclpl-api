@@ -8,7 +8,7 @@ constraint.
 open it as a vault, or read it as plain Markdown starting at `docs/vault/Start Here.md`. It is kept
 current as the work goes: every major decision lands in `docs/vault/Decision Log.md`.
 
-**M0–M8 are done (1 Sep 2026). Start at M9 — see §10 for the state they left behind.**
+**All ten milestones are done (1 Sep 2026). §10 has what they left behind, and what is deliberately still open.**
 
 ---
 

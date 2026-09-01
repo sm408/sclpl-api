@@ -86,7 +86,13 @@ def preflight(
     # today's invocation happens to bind; `run` asks whether *this* invocation can
     # proceed, which needs every required port bound.
     try:
-        report.bindings = bind(doc, named_in=named_in, named_out=named_out, positional=positional)
+        report.bindings = bind(
+            doc,
+            named_in=named_in,
+            named_out=named_out,
+            positional=positional,
+            optional=_unwritten_ports(doc, mode),
+        )
     except ValidationError as error:
         if require_ports:
             report.problems.append(error)
@@ -141,6 +147,32 @@ def preflight(
     if hosts(doc):
         report.notes.append(f"hosts: {', '.join(hosts(doc))}")
     return report
+
+
+def _unwritten_ports(doc: WorkflowDoc, mode: str | None) -> set[str]:
+    """Output ports whose only writer this mode pruned.
+
+    Ports are bound before the mode resolves -- everything downstream needs to know what
+    is available -- so this resolves the mode once, cheaply, just to ask which writers
+    survive. A port some kept step still writes stays required.
+
+    Only ports a step *claims* with `-> port` are considered. A workflow whose steps
+    write literal paths has told us nothing about who writes what, and guessing there
+    would relax a requirement the author meant.
+    """
+    claimed = {step.writes for step in doc.all_steps() if step.writes}
+    if not claimed:
+        return set()
+    try:
+        kept = resolve(
+            doc, mode, available={port.name for port in (*doc.inputs, *doc.outputs)}
+        ).keep
+    except ValidationError:
+        # The mode is broken; that is reported properly a few lines later. Relaxing
+        # nothing here means the error the reader sees is the mode's, not a port's.
+        return set()
+    still_written = {step.writes for step in doc.all_steps() if step.writes and step.id in kept}
+    return {name for name in claimed if name not in still_written and name is not None}
 
 
 def _check_expressions(doc: WorkflowDoc, resolved: Resolved) -> list[ValidationError]:

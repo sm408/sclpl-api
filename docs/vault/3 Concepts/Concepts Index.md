@@ -37,6 +37,8 @@ Every idea in `sclpl` that has a name.
 - [[Pagination]] — five strategies, one loop
 - [[The Terminal Layer]] — events, the single writer, the ladder
 - [[Errors and Exit Codes]] — what each code means and who should act on it
+- [[Secrets]] — keyring first, and the refusal that closes defect 4
+- [[Run History]] — a row, a log, and retention that respects a pin
 
 ## Extending
 

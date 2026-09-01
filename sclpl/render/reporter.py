@@ -15,6 +15,7 @@ import asyncio
 import contextlib
 import sys
 from collections.abc import Sequence
+from pathlib import Path
 from types import TracebackType
 from typing import Protocol, TextIO, runtime_checkable
 
@@ -157,12 +158,18 @@ def build_reporter(
     no_color: bool = False,
     stream: TextIO | None = None,
     caps: Caps | None = None,
+    log_path: Path | None = None,
 ) -> Reporter:
     """Choose the sink for this invocation and wire it up.
 
     Precedence, highest first: `--json` (machine output wins over everything human),
     `-qq`/`-q`, then the probed rung with `--plain` and `--no-color` able to lower it.
     Nothing here can raise the rung above what the probe allowed.
+
+    ``log_path`` adds a second sink writing NDJSON to a file, *in addition* to whatever
+    the human sees. That is what makes history greppable without the database -- and it
+    records everything regardless of verbosity, because a log that dropped the retry you
+    needed cannot be re-run.
     """
     stream = stream if stream is not None else sys.stderr
     caps = caps if caps is not None else probe(stream)
@@ -191,6 +198,16 @@ def build_reporter(
     else:
         sinks = [HumanSink(caps, stream, verbosity)]
         guard = TerminalGuard(caps, stream)
+    if log_path is not None:
+        try:
+            log_path.parent.mkdir(parents=True, exist_ok=True)
+            sinks.append(
+                JsonlSink(log_path.open("w", encoding="utf-8"), verbosity=3, close_stream=True)
+            )
+        except OSError:
+            # A log is a convenience. A run that cannot write one has still run.
+            pass
+
     return Reporter(sinks, guard=guard)
 
 

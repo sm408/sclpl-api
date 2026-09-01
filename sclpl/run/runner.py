@@ -7,6 +7,7 @@ in how they gather the arguments, not in what happens afterwards.
 
 from __future__ import annotations
 
+import sys
 import time
 from dataclasses import dataclass, field
 from typing import Any
@@ -22,8 +23,9 @@ from sclpl.run.plan import Node
 from sclpl.run.preflight import Report, preflight
 from sclpl.run.schedule import JOIN_SUFFIX, ExpandSpec, Limits, Outcome, Scheduler
 from sclpl.run.transport import Pool, TransportLimits
+from sclpl.state import db
 from sclpl.tables.io import STDIO
-from sclpl.values import cache
+from sclpl.values import cache, governor
 from sclpl.values.governor import parse_budget
 from sclpl.values.ref import Scratch
 from sclpl.values.store import ValueStore
@@ -47,6 +49,16 @@ class Options:
     dry_run: bool = False
     keep_all: bool = False
     memory_budget: str | None = None
+    #: What to call this run in the history. Defaults to `workflow-mode-MMDD-HHMM`.
+    name: str | None = None
+    tags: list[str] = field(default_factory=list)
+    env: str | None = None
+    #: History is written unless this is off, which is for tests and one-off `call`s.
+    record: bool = True
+    keep: int = db.KEEP_DEFAULT
+    #: Decided before the run so the event log can be written *during* it. A log
+    #: assembled afterwards from memory is a log that is missing whatever crashed.
+    run_id: str = ""
     no_cache: bool = False
     refresh: bool = False
     offline: bool = False
@@ -192,7 +204,66 @@ async def run_workflow(doc: WorkflowDoc, options: Options, reporter: Reporter) -
             exit_code=exit_code,
         )
     )
+    if options.record:
+        _remember(doc, options, report, outcome, exit_code, started, store_cache)
     return Result(outcome=outcome, report=report, store=store, exit_code=exit_code)
+
+
+def _remember(
+    doc: WorkflowDoc,
+    options: Options,
+    report: Report,
+    outcome: Outcome,
+    exit_code: int,
+    started: float,
+    store_cache: cache.Cache | None,
+) -> None:
+    """Write the run to history, and prune.
+
+    Wrapped, because history is a convenience and a run that produced its files has
+    succeeded whether or not it could also write a row about itself. A read-only home
+    directory should not turn a good run into a failed one.
+    """
+    try:
+        identifier = options.run_id or db.run_id(doc.name, started)
+        record = db.RunRecord(
+            id=identifier,
+            name=options.name or db.default_name(doc.name, options.mode),
+            workflow=doc.name,
+            workflow_version=doc.version,
+            mode=report.resolved.name if report.resolved else options.mode,
+            started_at=db.now(),
+            finished_at=db.now(),
+            duration_ms=outcome.duration_ms,
+            status=outcome.status,
+            exit_code=exit_code,
+            steps_run=len(outcome.succeeded),
+            steps_skipped=len(outcome.skipped),
+            steps_failed=len(outcome.failed),
+            cache_hits=store_cache.stats.hits if store_cache else 0,
+            cache_misses=store_cache.stats.misses if store_cache else 0,
+            peak_rss_bytes=governor.rss(),
+            env=options.env,
+            tags=list(options.tags),
+            argv=" ".join(sys.argv[1:]),
+            steps=[db.StepRecord(step_id=name, status="ok") for name in outcome.succeeded]
+            + [
+                db.StepRecord(step_id=name, status="failed", error=str(error))
+                for name, error in outcome.failed.items()
+            ]
+            + [db.StepRecord(step_id=name, status="skipped") for name in outcome.skipped],
+            ports=[
+                (binding.direction, binding.name, binding.describe(), "")
+                for binding in (report.bindings.all() if report.bindings else [])
+            ],
+        )
+        with db.History() as history:
+            log = history.log_path(identifier)
+            record.log_path = str(log) if log.exists() else None
+            history.record(record)
+            history.prune(options.keep)
+    except Exception:  # noqa: BLE001 - history is a convenience, never the run's verdict
+        return
 
 
 def _output_paths(report: Report) -> dict[str, str]:
