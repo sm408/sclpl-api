@@ -1,14 +1,53 @@
-# sclpl
+<div align="center">
 
-[![CI](https://github.com/sm408/sclpl-api/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/sm408/sclpl-api/actions/workflows/ci.yml)
-![Python](https://img.shields.io/badge/python-3.11%20%7C%203.13-3776AB)
-![License](https://img.shields.io/badge/license-MIT-2f855a)
+<h1>sclpl</h1>
 
-**A local-first command-line workflow runner for HTTP APIs.**
+<p><strong>Programmable API workflows, written as files and run locally.</strong></p>
 
-`sclpl` reads a workflow, infers the dependency graph from `@references`, runs the graph
-as soon as each dependency is ready, and writes CSV, JSON, NDJSON, Parquet, Excel, or
-SQLite outputs.
+<p>
+  Fetch pages, validate data, transform records, join local sources,<br />
+  and export clean files without building a one-off Python script for every API job.
+</p>
+
+<br />
+
+<p>
+  <a href="https://github.com/sm408/sclpl-api/actions/workflows/ci.yml">
+    <img alt="CI" src="https://github.com/sm408/sclpl-api/actions/workflows/ci.yml/badge.svg?branch=main" />
+  </a>
+  <img alt="Python 3.11 and 3.13" src="https://img.shields.io/badge/python-3.11%20%7C%203.13-3776AB?logo=python&amp;logoColor=white" />
+  <img alt="Local first" src="https://img.shields.io/badge/local--first-no%20server-2f855a" />
+  <img alt="MIT license" src="https://img.shields.io/badge/license-MIT-2f855a" />
+</p>
+
+<br />
+
+<p>
+  <img alt="Typer CLI" src="https://img.shields.io/badge/Typer-CLI-0f766e" />
+  <img alt="Pydantic models" src="https://img.shields.io/badge/Pydantic-models-e11d48" />
+  <img alt="httpx transport" src="https://img.shields.io/badge/httpx-transport-2563eb" />
+  <img alt="SQLite history and plugins" src="https://img.shields.io/badge/SQLite-history%20%26%20plugins-003b57?logo=sqlite&amp;logoColor=white" />
+  <img alt="PyArrow columnar data" src="https://img.shields.io/badge/PyArrow-columnar-f59e0b" />
+  <img alt="pandas tables" src="https://img.shields.io/badge/pandas-tables-150458?logo=pandas&amp;logoColor=white" />
+</p>
+
+<br />
+
+<p>
+  <code>HTTP APIs</code> ·
+  <code>SCLPLL workflows</code> ·
+  <code>Python functions</code> ·
+  <code>SQLite history</code> ·
+  <code>Plugin API</code>
+</p>
+
+</div>
+
+---
+
+`sclpl` reads a workflow, infers the dependency graph from `@references`, runs each step
+as soon as its inputs are ready, and writes CSV, JSON, NDJSON, Parquet, Excel, or SQLite
+outputs.
 
 No server. No accounts. No web UI. Just workflows, Python values, and files you own.
 
@@ -29,6 +68,42 @@ history, and export results without turning every workflow into a custom Python 
 | Work with tabular results | Flattening, joins, grouping, CSV, Excel, Parquet |
 | Run safely at scale | Retries, cache, memory spilling, lane assignment |
 | Extend the tool | Python functions and plugins through `sclpl.ext.api` |
+
+## Showcase
+
+<table>
+  <tr>
+    <td><strong>⚡ Continuous Scheduler</strong><br />Steps start the moment their references are ready. Independent API calls run together without a hand-maintained dependency list.</td>
+    <td><strong>📄 Workflow Files</strong><br />SCLPLL is compact enough to write by hand, while JSON stays available for generated workflows and tooling.</td>
+  </tr>
+  <tr>
+    <td><strong>📊 Data Workbench</strong><br />Flatten nested JSON, keep typed Python values, join records, profile tables, and export to analyst-friendly formats.</td>
+    <td><strong>🧩 Plugin System</strong><br />Bundled SQLite, filesystem, example, and text plugins use the same public API that external plugins use.</td>
+  </tr>
+  <tr>
+    <td><strong>🔐 Secrets That Refuse</strong><br />Credentials go to the OS keyring or an encrypted file. If neither safe backend exists, storage fails loudly.</td>
+    <td><strong>🧠 Operational Memory</strong><br />Runs keep local history, NDJSON logs, cache state, and diffs so overnight jobs are inspectable after the fact.</td>
+  </tr>
+</table>
+
+## Architecture At A Glance
+
+```mermaid
+flowchart LR
+    A[SCLPLL or JSON workflow] --> B[Validate and compile]
+    B --> C[Reference DAG]
+    C --> D[Continuous scheduler]
+    D --> E[HTTP transport]
+    D --> F[Python functions]
+    D --> G[Plugins]
+    E --> H[Typed values]
+    F --> H
+    G --> H
+    H --> I[CSV / JSON / NDJSON / Parquet / Excel / SQLite]
+    D --> J[Cache]
+    D --> K[Memory governor]
+    D --> L[Run history and NDJSON logs]
+```
 
 ## Install
 
