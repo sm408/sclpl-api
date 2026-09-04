@@ -101,7 +101,7 @@ def _fernet() -> object | None:
         from cryptography.fernet import Fernet
     except ImportError:
         return None
-    return Fernet
+    return cast(object, Fernet)
 
 
 def backend() -> Backend:
