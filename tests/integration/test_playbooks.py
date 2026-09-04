@@ -48,12 +48,15 @@ def home(tmp_path: Path) -> Path:
 # -- the playbooks exist and point at real examples ---------------------------------
 
 
-def test_there_are_four_playbooks() -> None:
+def test_there_are_seven_playbooks() -> None:
     assert sorted(path.name for path in PLAYBOOKS.glob("*.md")) == [
         "01-paginated-api-to-csv.md",
         "02-joining-sources.md",
         "03-automating.md",
         "04-debugging.md",
+        "05-analyst.md",
+        "06-data-engineer.md",
+        "07-software-engineer.md",
     ]
 
 

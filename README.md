@@ -273,6 +273,9 @@ Good next reads:
 
 Current boundaries are documented in [`docs/limitations.md`](docs/limitations.md).
 
+Choose a path by role: [Analyst](docs/playbooks/05-analyst.md), [Data Engineer](docs/playbooks/06-data-engineer.md),
+or [Software Engineer](docs/playbooks/07-software-engineer.md).
+
 ## Developing
 
 ```bash
