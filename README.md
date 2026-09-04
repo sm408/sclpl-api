@@ -289,4 +289,4 @@ layering, vault links, and generated-doc drift.
 
 ## License
 
-MIT, as declared in [`pyproject.toml`](pyproject.toml).
+MIT. See [`LICENSE`](LICENSE).
