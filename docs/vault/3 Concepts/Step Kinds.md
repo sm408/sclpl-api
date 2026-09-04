@@ -51,9 +51,9 @@ Two things it does that matter:
 
 ## `use`
 
-Invoke another workflow as a step. Lands in M8 with the plugin and catalogue work it
-shares a resolution path with. Today it raises a named error telling you to inline the
-steps or run the two workflows in sequence — not a silent no-op. #todo
+Invoke another workflow as a step. It is deliberately outside the completed M0-M9 scope:
+today it raises a named error telling you to inline the steps or run the two workflows
+in sequence — not a silent no-op. #todo
 
 ## Clauses every kind has
 

@@ -74,4 +74,4 @@ trace with the message buried in it.
 
 `use` -- invoking another workflow as a step -- still raises its named error. It shares a
 resolution path with the catalogue, but it is a *workflow* feature rather than a plugin
-one, and M9 is where the catalogue work finishes. #todo
+one, so it remains outside the completed plugin milestone. #todo

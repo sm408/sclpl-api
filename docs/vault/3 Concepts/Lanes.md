@@ -73,6 +73,6 @@ the CLI has printed its summary.
 zero-copy, rather than pickled. Today it pickles, which works and is slower. #todo
 
 **History-based assignment.** SPEC §12 also wants rolling-median statistics from past
-runs to inform the choice. That needs the run history from M9 first. #todo
+runs to inform the choice. Run history exists now; no lane policy reads it yet. #todo
 
 → [[Memory and Spilling]], [[The Scheduler]]

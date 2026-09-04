@@ -51,4 +51,4 @@ if `--help` lists a command, that command works.
 `ruff check` · `ruff format --check` · `mypy` (strict) · `pytest` ·
 `scripts/check_budget.py` · `scripts/check_layering.py`
 
-Currently: **722 tests**, 12,251 of 16,000 budgeted lines.
+Currently: **722 tests**, 12,250 of 16,000 budgeted lines.

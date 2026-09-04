@@ -210,8 +210,7 @@ async def _dispatch(step: Step, node: Node, runtime: Runtime, node_id: str) -> A
             return control.gate_reason(config)
         case UseConfig():
             raise StepFailed(
-                f"step {step.id!r} calls another workflow, which lands in M8 with the "
-                "plugin and catalogue work it shares a resolution path with",
+                f"step {step.id!r} calls another workflow, which is not implemented in this build",
                 remedies=["inline the steps for now, or run the two workflows in sequence"],
             )
         case _:
