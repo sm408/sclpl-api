@@ -1,12 +1,23 @@
 # Concepts
 
-The words this tool uses, and what they mean. In dependency order — each one only uses
-the ones above it.
+The words this tool uses, and what they mean.
+
+Read this page from top to bottom the first time: each concept only depends on the ones
+above it. Come back later as a glossary.
 
 For *why* any of these are the way they are, the Obsidian vault at `docs/vault/` has a
 note per concept. This page is the short version.
 
 ---
+
+## Map
+
+| Layer | Concepts |
+|---|---|
+| Authoring | [Workflow](#workflow), [Step](#step), [Reference](#reference), [Port](#port), [Mode](#mode) |
+| Execution | [Plan](#plan), [Lane](#lane), [Pagination](#pagination), [Cache](#cache), [Governor](#governor) |
+| Data | [Value](#value), [Expression](#expression), [Table](#table), [Flattening](#flattening) |
+| Operations | [Plugin](#plugin), [Run](#run), [Secret](#secret) |
 
 ## Workflow
 
