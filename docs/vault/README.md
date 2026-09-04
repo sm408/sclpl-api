@@ -18,7 +18,7 @@ things it was built for: the `[[wikilink]]` graph, and backlinks. Start at
 |---|---|
 | **This vault** | How the thing works, why it is shaped this way, and what was decided |
 | [[SPEC]] (`docs/cli-rebuild/SPEC.md`) | **Normative.** What to build. Wins any disagreement with this vault |
-| [[HANDOFF]] (`docs/cli-rebuild/HANDOFF.md`) | Where the work stands right now |
+| [[Milestone Status]] | Completed milestones, current gates, and deliberate limitations |
 | `docs/reference/` | Generated. Hand-editing it fails CI |
 
 If a note here contradicts the SPEC, the SPEC is right and the note is stale. Say so in
@@ -50,7 +50,7 @@ without breaking anything.
   it is two notes.
 - Every claim about behaviour names the file it lives in, as `path.py:symbol`.
 - Anything decided rather than derived goes in [[Decision Log]] with its reasoning.
-- `#todo` marks something known to be missing. `#wip` marks a note that is ahead of the
+- `#todo` marks a known follow-up. `#wip` marks a note that is ahead of the
   code.
 - Every note carries a `tags:` line matching its folder. A hub that links to everything
   is additionally `#moc`, so the graph can hide it.

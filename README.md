@@ -262,6 +262,7 @@ def domain(url: str) -> str:
 | [`docs/reference/`](docs/reference/) | Generated command, function, expression, and plugin reference |
 | [`docs/vault/`](docs/vault/) | Obsidian notes explaining why the system is shaped this way |
 | [`docs/cli-rebuild/SPEC.md`](docs/cli-rebuild/SPEC.md) | Normative design spec; wins any disagreement |
+| [`docs/limitations.md`](docs/limitations.md) | Deliberate follow-up areas and current boundaries |
 
 Good next reads:
 
@@ -269,6 +270,8 @@ Good next reads:
 2. [`Joining Sources`](docs/playbooks/02-joining-sources.md)
 3. [`Concepts`](docs/concepts.md)
 4. [`Functions Reference`](docs/reference/functions.md)
+
+Current boundaries are documented in [`docs/limitations.md`](docs/limitations.md).
 
 ## Developing
 

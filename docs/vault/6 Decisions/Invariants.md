@@ -7,8 +7,8 @@ tags:
 # Invariants
 
 Ten rules. **A violation is a review block, not a style note.** They are copied verbatim
-from `CLAUDE.md`, which is the enforcing document; this note adds the reasoning and the
-links.
+from `CONTRIBUTING.md`, which is the contributor-facing summary; this note adds the reasoning
+and the links.
 
 ## 1 stdout is data, stderr is interface
 

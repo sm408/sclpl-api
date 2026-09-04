@@ -1372,7 +1372,7 @@ sclpl runs prune --keep 20                     <i>or set history.keep in config<
     plugins.md            <i>← from each plugin manifest + JSON Schema</i>
   <b>concepts.md</b>             <i>the DAG, values, lanes, modes — the mental model, once</i>
   <b>adr/</b>                    <i>one short file per decision that was hard</i>
-  <b>HANDOFF.md</b>              <i>current state, next task, invariants — for an agent or a new dev</i></pre>
+  <b>CONTRIBUTING.md</b>         <i>development setup, engineering principles, and review guidance</i></pre>
 
   <p>Four properties, each of which is a rule rather than an aspiration:</p>
   <ul>
@@ -1394,7 +1394,7 @@ sclpl runs prune --keep 20                     <i>or set history.keep in config<
       </tbody>
     </table>
   </div>
-  <p>Each playbook opens with a complete worked example and adds one idea at a time, and each ends with the failures that reader will actually hit — a pruned dependency, a rate limit, a memory warning, a plugin capability denial — with the exact command that resolves each. <code>HANDOFF.md</code> is the twin of this document: it records where the work stands, what the next milestone is, and the invariants a contributor must not break, so an agent or a new engineer can pick the work up without reading this plan end to end.</p>
+  <p>Each playbook opens with a complete worked example and adds one idea at a time, and each ends with the failures that reader will actually hit — a pruned dependency, a rate limit, a memory warning, a plugin capability denial — with the exact command that resolves each. The playbooks and contributor guide are the practical companion to this document: they explain how to use the implemented system and how to change it without violating its invariants.</p>
 </section>
 
 <!-- ═══════════════ 16 ═══════════════ -->
@@ -1493,7 +1493,7 @@ sclpl runs prune --keep 20                     <i>or set history.keep in config<
   </div>
 
   <div class="note wide" style="margin-top:8px;">
-    <strong>Where things stand right now:</strong> the repository is under version control for the first time and the full pre-rework state is preserved as commit <code>1b1abe0</code>. This plan and its agent handoff note are committed under <code>docs/cli-rebuild/</code>. Every open question is now answered, so <strong>M0 is unblocked</strong> — the next commit deletes the TUI, the FastAPI layer, and the SPA.
+    <strong>Project history:</strong> the full pre-rework state is preserved as commit <code>1b1abe0</code>. The implementation plan and specification are committed under <code>docs/cli-rebuild/</code>; the current release status is maintained in the vault and public documentation. The TUI, FastAPI layer, and SPA were removed in M0.
   </div>
 </section>
 
@@ -1544,7 +1544,7 @@ sclpl runs prune --keep 20                     <i>or set history.keep in config<
           <tr><td>§14</td><td><strong>History model.</strong> Retention configurable, default 5; dated, named, and taggable runs; recorded fields; <code>runs search</code> with FTS5 and a <code>LIKE</code> fallback; <code>pin</code>, <code>prune</code>, <code>export</code>.</td><td>decision 5</td></tr>
           <tr><td>§14</td><td><code>import</code> split into <code>workflow</code> / <code>function</code> / <code>plugin</code> / <code>settings</code>; <code>list</code> extended; run gains <code>--name</code>, <code>--tag</code>, <code>--no-validate</code>.</td><td>&ldquo;import functions, plugins, workflows, settings&rdquo;</td></tr>
           <tr><td>§04</td><td><code>cli/</code> budget raised 600 → 850 for the launcher; total 6,900 → 7,150.</td><td>follow-on</td></tr>
-          <tr><td>new</td><td><code>docs/cli-rebuild/SPEC.md</code> — the implementation-level specification an agent builds from. <code>HANDOFF.md</code> updated to match.</td><td>&ldquo;a proper detailed version in docs&rdquo;</td></tr>
+          <tr><td>new</td><td><code>docs/cli-rebuild/SPEC.md</code> — the implementation-level specification contributors build from, kept aligned with the public documentation.</td><td>&ldquo;a proper detailed version in docs&rdquo;</td></tr>
         </tbody>
       </table>
     </div>

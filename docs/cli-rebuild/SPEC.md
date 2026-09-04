@@ -1,8 +1,9 @@
 # sclpl — Implementation Specification
 
-**Status:** approved, unstarted. All decisions locked (§2). Work begins at M0 (§17).
-**Companion documents:** `plan.html` (why, with evidence), `HANDOFF.md` (operational summary).
-**Audience:** the engineer or agent implementing this. This document is normative — where it and
+**Status:** implemented. All decisions locked (§2); completed milestones are recorded in the
+vault status note.
+**Companion documents:** `plan.html` (why, with evidence), `docs/concepts.md` (public vocabulary).
+**Audience:** contributors and maintainers. This document is normative — where it and
 `plan.html` disagree, this one wins.
 
 ---
@@ -651,7 +652,7 @@ Do these in order. Each is independently demonstrable.
 | pty / golden | Byte-exact snapshots at all three render rungs; resize + interrupt fuzz asserting restoration |
 | Integration | Local mock HTTP server; all five paginators; retries; cancellation; partial output on `Ctrl-C` |
 | Examples | Every snippet in the playbooks lives in `examples/` and runs in CI |
-| Budget | Line count per package asserted against §5 of `HANDOFF.md` |
+| Budget | Line count per package asserted against §19 of this document |
 | Docs | `docs build` regenerated and diffed; non-empty diff fails |
 
 No network in CI except the local mock server. Secrets never appear in a fixture, snapshot, or log.

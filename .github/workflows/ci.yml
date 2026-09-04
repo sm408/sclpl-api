@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [main, "feat/**", "worktree-**"]
+    branches: [main]
   pull_request:
 
 concurrency:

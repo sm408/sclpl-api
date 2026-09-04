@@ -2,7 +2,7 @@
 
 **Date:** 23 Aug 2026
 **Status:** accepted
-**Supersedes:** the budget table in `SPEC.md` §19 and `HANDOFF.md` §5
+**Supersedes:** the budget table in `SPEC.md` §19
 
 ## Context
 
