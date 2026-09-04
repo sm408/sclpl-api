@@ -9,11 +9,6 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
-env:
-  # No network in CI except the local mock server (SPEC section 18). The plain rung is
-  # also what a log-after-the-fact reader wants.
-  SCLPL_RENDER: plain
-
 jobs:
   check:
     runs-on: ubuntu-latest
@@ -33,7 +28,7 @@ jobs:
       - name: Install
         run: |
           python -m pip install --upgrade pip
-          python -m pip install -e ".[dev]"
+          python -m pip install -e ".[dev,data]"
 
       - name: Lint
         run: |

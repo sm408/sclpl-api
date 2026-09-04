@@ -149,7 +149,7 @@ layer is hand-written (`rich` is not a dependency), and SQLite ships as a bundle
 ## 9. Current checkout drill
 
 ```bash
-python -m pip install -e ".[dev]"
+python -m pip install -e ".[dev,data]"
 python -m pytest -q && python scripts/check_budget.py
 python -m sclpl validate examples/orders.sclpll
 ```
