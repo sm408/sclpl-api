@@ -30,6 +30,7 @@ import os
 import stat
 from dataclasses import dataclass
 from pathlib import Path
+from typing import cast
 
 from sclpl.errors import ValidationError, did_you_mean
 
@@ -92,7 +93,7 @@ def _keyring() -> object | None:
             return None
     except Exception:  # noqa: BLE001 - an unusable keyring is not an error, it is a no
         return None
-    return keyring  # type: ignore[no-any-return]
+    return cast(object, keyring)
 
 
 def _fernet() -> object | None:

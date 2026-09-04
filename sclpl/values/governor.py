@@ -300,7 +300,7 @@ def _system_windows() -> int:
 
         status = Status()
         status.dwLength = ctypes.sizeof(Status)
-        ctypes.windll.kernel32.GlobalMemoryStatusEx(ctypes.byref(status))
+        _win(ctypes, "kernel32").GlobalMemoryStatusEx(ctypes.byref(status))
         return int(status.ullTotalPhys)
     except Exception:  # noqa: BLE001
         return 0

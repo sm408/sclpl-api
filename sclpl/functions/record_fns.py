@@ -91,4 +91,4 @@ def _contains(value: Any, needle: Any) -> bool:
 def _bounded(value: Any, bound: float, *, lower: bool) -> bool:
     if isinstance(value, bool) or not isinstance(value, (int, float)):
         return False
-    return value >= bound if lower else value <= bound
+    return bool(value >= bound if lower else value <= bound)
