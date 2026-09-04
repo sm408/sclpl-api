@@ -258,6 +258,7 @@ def domain(url: str) -> str:
 | Path | Use it for |
 |---|---|
 | [`docs/playbooks/`](docs/playbooks/) | Worked tasks you can adapt |
+| [`docs/guide/`](docs/guide/) | Workflow anatomy, SCLPLL syntax, and glossary |
 | [`docs/concepts.md`](docs/concepts.md) | The vocabulary in dependency order |
 | [`docs/reference/`](docs/reference/) | Generated command, function, expression, and plugin reference |
 | [`docs/vault/`](docs/vault/) | Obsidian notes explaining why the system is shaped this way |
