@@ -7,7 +7,7 @@ runtime type, `count(@x)` keeps working when `@x` becomes a dataframe.
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 from typing import Any
 
 from sclpl.errors import TypeDispatchError
@@ -276,7 +276,9 @@ def _sequence(name: str, values: Any) -> list[Any]:
         return list(values.values())
     records = getattr(values, "to_records", None)
     if callable(records):
-        return list(records())
+        result = records()
+        if isinstance(result, Iterable):
+            return list(result)
     raise TypeDispatchError(f"{name}() needs a collection, not {type(values).__name__}")
 
 
