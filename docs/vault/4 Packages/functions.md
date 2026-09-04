@@ -5,7 +5,7 @@ tags:
 
 # `functions/`
 
-Budget 1,200. The 37 built-ins.
+Budget 1,200. The 43 built-ins.
 
 | File | Family |
 |---|---|

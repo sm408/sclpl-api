@@ -20,6 +20,8 @@
 | `dedupe(data, by=null)` | Remove duplicate records, optionally comparing only some columns. |
 | `describe(data)` | Per-column statistics: count, nulls, distinct, and min/max where meaningful. |
 | `explode(data, field)` | Turn each element of an array field into its own row. |
+| `fill_nulls(data, defaults)` | Replace null or missing fields with defaults. |
+| `filter_rows(data, column, equals=null, contains=null, minimum=null, maximum=null)` | Keep rows whose column matches the supplied checks. |
 | `flatten(data, sep='_', explode=null, columns='union', max_depth=12, depth=1)` | Flatten nested objects into underscore-joined columns, or nested lists into one. |
 | `glob_read(pattern, concat=true)` | Read every file matching a pattern, concatenated by default. |
 | `group_agg(data, by, agg=null)` | Group records and aggregate the other columns. |
@@ -30,6 +32,7 @@
 | `merge(first, *rest)` | Merge records or objects; later values win on a shared key. |
 | `normalize(data, sep='_')` | Flatten and align records so every one has the same fields. |
 | `pivot(data, index, column, value)` | Turn distinct values of one column into columns of their own. |
+| `pluck(data, column, default=null)` | Return one column as a list, preserving row order. |
 | `profile(data)` | A summary of the data: row count, columns, types, and null counts. |
 | `read(path)` | Read a file, choosing the format from the extension. |
 | `read_csv(path)` | Read a CSV file into a table. |
@@ -38,6 +41,7 @@
 | `read_ndjson(path)` | Read newline-delimited JSON into a list of objects. |
 | `read_parquet(path)` | Read a Parquet file into a table. |
 | `rename(data, mapping)` | Rename columns. |
+| `row_number(data, column='row_number', start=1)` | Add a stable row number column. |
 | `sample(data, n=5)` | A few records, evenly spaced through the data rather than just the first few. |
 | `save(data, path)` | Write a value, choosing the format from the file extension. |
 | `save_csv(data, path, sep='_', explode=null, columns='union')` | Write records to CSV, flattening nested objects into underscore columns. |
@@ -67,3 +71,8 @@
 | `sqlite.query(database, sql, *params)` | Run a SELECT and return the rows as objects. |
 | `sqlite.schema(database, table=null)` | The tables in a database and their columns, or just one table's. |
 | `sqlite.write(data, database, table, mode='replace', key=null)` | Write records into a table, creating it from the first row if it is not there. |
+| `text.extract(data, field, pattern, group=1, into=null)` | Extract a regex group from text or from a field in each record. |
+| `text.join(values, sep=', ')` | Join values into text. |
+| `text.slug(value, lower=true)` | Turn text into a URL- and filename-friendly slug. |
+| `text.split(value, sep=',', strip=true)` | Split text into parts. |
+| `text.template(pattern, data)` | Format one record, or each record, with `{field}` placeholders. |

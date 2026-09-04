@@ -25,7 +25,7 @@ Each defect has a corresponding invariant that exists to keep it dead:
 - Defect 1 → [[Invariants#2 Values keep their Python type]] → [[Typed Values]]
 - Defect 2 → [[The Scheduler]]
 - Defect 3 → [[Transport]]
-- Defect 4 → [[Secrets]] #todo *(M9)*
+- Defect 4 → [[Secrets]]
 
 ## Why the UI went too
 

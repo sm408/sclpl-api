@@ -5,7 +5,7 @@ tags:
 
 # Built-in Functions
 
-37 built-ins, registered through `ext/functions.py` and listed by `sclpl fn list`.
+43 built-ins, registered through `ext/functions.py` and listed by `sclpl fn list`.
 
 ## How registration works
 

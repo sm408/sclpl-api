@@ -7,7 +7,7 @@ a paginator does. The transport is tested elsewhere.
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, cast
 
 import pytest
 
@@ -66,7 +66,9 @@ def fetcher(shape: str) -> tuple[paginate.Fetch, list[dict[str, Any]]]:
 
 def gathered(followed: paginate.Follow) -> list[dict[str, int]]:
     merged = paginate.merge(followed.pages, None, paginate.dig)
-    return merged["data"] if isinstance(merged, dict) else merged
+    if isinstance(merged, dict):
+        return cast(list[dict[str, int]], merged["data"])
+    return cast(list[dict[str, int]], merged)
 
 
 # -- each strategy reaches the end -------------------------------------------------

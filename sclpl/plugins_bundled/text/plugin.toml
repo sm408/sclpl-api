@@ -1,0 +1,29 @@
+# Text helpers that are useful in local pipelines and need no external dependency.
+
+[plugin]
+name = "text"
+version = "1.0.0"
+api = "sclpl/1"
+module = "sclpl.plugins_bundled.text"
+description = "Slug, split, join, template, and extract text."
+capabilities = []
+
+[[connector]]
+name = "text.slug"
+summary = "Turn text into a URL- and filename-friendly slug."
+
+[[connector]]
+name = "text.split"
+summary = "Split text into parts."
+
+[[connector]]
+name = "text.join"
+summary = "Join values into text."
+
+[[connector]]
+name = "text.template"
+summary = "Format records with placeholders."
+
+[[connector]]
+name = "text.extract"
+summary = "Extract a regex group from text or records."

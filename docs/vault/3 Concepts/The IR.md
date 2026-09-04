@@ -73,6 +73,6 @@ class Step:
 | `while` / `do_while` | `WhileConfig` | `condition`, `body`, `max_iterations` |
 | `parallel` | `ParallelConfig` | `branches` |
 | `gate` | `GateConfig` | `reason` |
-| `use` | `UseConfig` | `workflow`, `mode`, `inputs` #todo *(M8)* |
+| `use` | `UseConfig` | `workflow`, `mode`, `inputs` #todo |
 
 → [[Step Kinds]] for what each one does at runtime.

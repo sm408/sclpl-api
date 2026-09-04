@@ -25,9 +25,9 @@ a kind of failure and not of the surface that reports it.
 | [[expr-ops]] | 1,400 | The operator catalogue |
 | [[tables]] | 900 | `Table`, backends, flattening, format dispatch |
 | [[ext]] | 700 | The `@function` registry, the plugin ABI |
-| [[functions]] | 1,200 | The 37 built-ins |
-| [[state]] | 900 | Run history, settings, secrets #todo *(M9)* |
-| [[plugins_bundled]] | 600 | `sqlite`, `fs`, `example` #todo *(M8)* |
+| [[functions]] | 1,200 | The 43 built-ins |
+| [[state]] | 900 | Run history, settings, secrets |
+| [[plugins_bundled]] | 600 | `sqlite`, `fs`, `text`, `example` |
 
 ## `run/` in detail
 

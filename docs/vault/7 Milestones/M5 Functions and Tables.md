@@ -11,7 +11,7 @@ Commit `86b9efa`. Tables, the built-in catalogue, and the output-port binding M4
 
 - `tables/` — `Table`, the `TableBackend` protocol, the pandas backend, format dispatch,
   and the §10 flattening semantics → [[Tables and Flattening]]
-- `functions/` — 37 built-ins → [[Built-in Functions]]
+- `functions/` — 43 built-ins → [[Built-in Functions]]
 - `ext/functions.py` — the `@function` registry, schema generation, argument coercion
 - `bootstrap.py` — built-ins first, then plugins, so a plugin that shadows one is doing
   it deliberately

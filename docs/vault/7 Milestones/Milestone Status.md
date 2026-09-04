@@ -17,10 +17,10 @@ if `--help` lists a command, that command works.
 | M3 | The live region | ✅ | `41d7745` |
 | M4 | IR, both surfaces, catalogue, modes, ports, launcher | ✅ | `773e747` |
 | M5 | [[M5 Functions and Tables]] | ✅ | `86b9efa` |
-| M6 | [[M6 Control Flow and Pagination]] | ✅ | — |
-| M7 | [[M7 Memory Lanes and Cache]] | ✅ | — |
-| M8 | [[M8 Plugins]] | ✅ | — |
-| M9 | [[M9 Secrets History and Docs]] | ✅ | — |
+| M6 | [[M6 Control Flow and Pagination]] | ✅ | `f209f15` |
+| M7 | [[M7 Memory Lanes and Cache]] | ✅ | `0da3229` |
+| M8 | [[M8 Plugins]] | ✅ | `505475c` |
+| M9 | [[M9 Secrets History and Docs]] | ✅ | `39478b7` |
 
 ## Exit criteria
 
@@ -41,16 +41,14 @@ if `--help` lists a command, that command works.
 - `use` — invoking another workflow. Raises a named error, not a silent no-op
 - Arrow IPC handoff to a process lane -- it pickles instead, which works and is
   slower *(M7 leftover)*
-- Lane assignment from run history, which needs the history *(M9)*
+- Lane assignment from run history
 - HTTP revalidation round trips; `--http-cache` stores ETags but does not yet send them
-  *(M9)*
 - One progress *line* per fan-out. Every iteration is currently a row of its own, which
   is honest but noisy for a hundred-element loop *(M7, with the live region work)*
-- Secrets, run history, `doctor`, completions, the wheel *(M9)*
 
 ## Gates, at every commit
 
 `ruff check` · `ruff format --check` · `mypy` (strict) · `pytest` ·
 `scripts/check_budget.py` · `scripts/check_layering.py`
 
-Currently: **701 tests**, 12,123 of 16,000 budgeted lines.
+Currently: **722 tests**, 12,251 of 16,000 budgeted lines.

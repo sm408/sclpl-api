@@ -205,6 +205,29 @@ async def test_casting_to_an_unknown_type_lists_the_known_ones(ctx: Context) -> 
     assert "integer" in str(caught.value)
 
 
+# -- record helpers ----------------------------------------------------------------
+
+
+async def test_pluck_returns_one_column_in_order(ctx: Context) -> None:
+    assert await run("pluck(@orders, 'city')", ctx) == ["London", "Baltimore", "London"]
+
+
+async def test_filter_rows_combines_checks(ctx: Context) -> None:
+    kept = await run("filter_rows(@orders, 'total', minimum=10, maximum=100)", ctx)
+    assert [row["id"] for row in rows(kept)] == [1]
+
+
+async def test_fill_nulls_replaces_missing_and_null_values(ctx: Context) -> None:
+    filled = await run("fill_nulls([{'a': null}, {'b': 2}], {'a': 0})", ctx)
+    assert filled == [{"a": 0}, {"b": 2, "a": 0}]
+
+
+async def test_row_number_preserves_table_shape(ctx: Context) -> None:
+    numbered = await run("row_number(to_table(@orders), column='line', start=10)", ctx)
+    assert isinstance(numbered, Table)
+    assert numbered.to_records()[0]["line"] == 10
+
+
 # -- diagnostics ------------------------------------------------------------------
 
 

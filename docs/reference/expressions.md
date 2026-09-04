@@ -47,6 +47,8 @@ argument. `any` means the operator does not care.
 | `explode` | any | Turn each element of an array field into its own row. |
 | `extract` | str | The first regex match, or a capture group. |
 | `extract_all` | str | Every regex match in the string. |
+| `fill_nulls` | any | Replace null or missing fields with defaults. |
+| `filter_rows` | any | Keep rows whose column matches the supplied checks. |
 | `first` | list | The first element, or null when empty. |
 | `flatten` | any | Flatten nested objects into underscore-joined columns, or nested lists into one. |
 | `floor` | any | Rounds down to a whole number. |
@@ -97,7 +99,7 @@ argument. `any` means the operator does not care.
 | `pad_right` | str | Pads a string on the right to a given width. |
 | `pick` | dict | An object with only the named fields. |
 | `pivot` | any | Turn distinct values of one column into columns of their own. |
-| `pluck` | list | One field from every element. |
+| `pluck` | list | Return one column as a list, preserving row order. |
 | `pow` | float, int | Raises the left side to the power of the right. |
 | `profile` | any | A summary of the data: row count, columns, types, and null counts. |
 | `read` | any | Read a file, choosing the format from the extension. |
@@ -110,6 +112,7 @@ argument. `any` means the operator does not care.
 | `replace` | str | Replaces every occurrence of one substring. |
 | `reverse` | list | The elements in reverse order. |
 | `round` | any | Rounds to the given number of decimal places. |
+| `row_number` | any | Add a stable row number column. |
 | `sample` | any | A few records, evenly spaced through the data rather than just the first few. |
 | `save` | any | Write a value, choosing the format from the file extension. |
 | `save_csv` | any | Write records to CSV, flattening nested objects into underscore columns. |
@@ -132,6 +135,11 @@ argument. `any` means the operator does not care.
 | `sum` | any | The total of a list of numbers. |
 | `take` | list | The first n elements. |
 | `text` | any | Converts any value to its string form. |
+| `text.extract` | any | Extract a regex group from text or from a field in each record. |
+| `text.join` | any | Join values into text. |
+| `text.slug` | any | Turn text into a URL- and filename-friendly slug. |
+| `text.split` | any | Split text into parts. |
+| `text.template` | any | Format one record, or each record, with `{field}` placeholders. |
 | `timestamp` | any | A date as seconds since the epoch. |
 | `to_table` | any | Convert records into a table. |
 | `today` | any | Midnight UTC today. |

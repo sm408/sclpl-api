@@ -36,7 +36,7 @@ is better than importing it wrong.
 
 ## 5 Run history in SQLite, retention default 5
 
-Pinned runs are exempt. #todo *(M9)*
+Pinned runs are exempt.
 
 ## 6 TUI, FastAPI, and SPA are deleted, not deprecated
 
@@ -56,7 +56,7 @@ shell is not reproducible, so the code that draws has to be code we can read.
 ## 8 SQLite ships as a bundled *plugin*, not core
 
 Which is how we know the plugin API is sufficient: if the bundled plugin needs something
-the API does not offer, the API is wrong. #todo *(M8)*
+the API does not offer, the API is wrong.
 
 ## Dependencies
 

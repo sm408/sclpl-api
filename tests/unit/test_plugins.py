@@ -56,13 +56,14 @@ def make_plugin(
 def test_the_bundled_plugins_load() -> None:
     """Through the same discovery path an external plugin takes."""
     registry = ext.discover()
-    for name in ("sqlite", "fs", "example"):
+    for name in ("sqlite", "fs", "text", "example"):
         assert registry.plugins[name].loaded, registry.plugins[name].refused
 
 
 def test_the_bundled_plugins_declare_what_they_do() -> None:
     registry = ext.discover()
     assert registry.plugins["sqlite"].capabilities == {"fs:read", "fs:write"}
+    assert registry.plugins["text"].capabilities == frozenset()
     assert registry.plugins["example"].capabilities == frozenset()
 
 
@@ -333,6 +334,33 @@ def test_fs_copy_creates_the_destination_directory(tmp_path: Path) -> None:
     target = tmp_path / "deep" / "nested" / "b.txt"
     run(f"fs.copy('{source.as_posix()}', '{target.as_posix()}')")
     assert target.read_text(encoding="utf-8") == "hello"
+
+
+# -- the bundled text plugin ---------------------------------------------------------
+
+
+def test_text_slug_makes_a_filename_safe_value() -> None:
+    assert run("text.slug('Quarterly Revenue Report!')") == "quarterly-revenue-report"
+
+
+def test_text_template_renders_each_record() -> None:
+    rendered = run("text.template('{id}: {name}', [{'id': 1, 'name': 'Ada'}])")
+    assert rendered == ["1: Ada"]
+
+
+def test_text_template_names_a_missing_field() -> None:
+    with pytest.raises(ValidationError) as caught:
+        run("text.template('{missing}', [{'id': 1}])")
+    assert "available: id" in str(caught.value)
+
+
+def test_text_extract_adds_a_field_to_records() -> None:
+    rows = run("text.extract([{'raw': 'ticket-42'}], 'raw', 'ticket-(\\d+)', into='id')")
+    assert rows == [{"raw": "ticket-42", "id": "42"}]
+
+
+def test_text_split_and_join_round_trip() -> None:
+    assert run("text.join(text.split('a, b, c'), sep='|')") == "a|b|c"
 
 
 # -- the example plugin, which is the scaffold ---------------------------------------

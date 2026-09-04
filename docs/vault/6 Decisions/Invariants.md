@@ -74,7 +74,7 @@ and the plugin ABI (so a plugin is not a fork).
 Redaction lives in the reporter, keyed on the set of resolved secret values — so it
 cannot be bypassed by a component that forgets to redact.
 
-→ [[Secrets]] #todo *(M9)*
+→ [[Secrets]]
 
 ## 10 `docs/reference/` is generated
 

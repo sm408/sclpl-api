@@ -18,7 +18,7 @@ current as the work goes: every major decision lands in `docs/vault/Decision Log
 |---|---|
 | Baseline commit | `1b1abe0` — full pre-rework tree (TUI + web studio), 369 files |
 | Working branch | `worktree-cli-studio` (created under `.claude/worktrees/cli-studio`) |
-| Original checkout | sits on `feat/cli-studio`, still at the baseline |
+| Original checkout | should be fast-forwarded back to `main` when this handoff is merged |
 | Plan (why) | `docs/cli-rebuild/plan.html` |
 | Spec (what to build) | `docs/cli-rebuild/SPEC.md` — normative |
 
@@ -73,15 +73,17 @@ arguing with the plan — they are all still present at the baseline commit.
 
 ## 5. Size budget (checked in CI)
 
-Target **~7,150 lines** total, against ~33,600 deleted.
+Target **16,000 checked lines** total, against ~59,000 deleted in M0.
 
 | Package | Budget | | Package | Budget |
 |---|---:|---|---|---:|
-| `cli/` | 850 | | `expr/` | 800 |
-| `render/` | 900 | | `tables/` | 500 |
-| `catalog/` | 400 | | `ext/` | 400 |
-| `run/` | 1,400 | | `state/` | 400 |
-| `values/` | 600 | | `functions/` | 900 |
+| `cli/` | 1,400 | | `expr/` | 1,500 |
+| `render/` | 1,300 | | `expr/ops/` | 1,400 |
+| `catalog/` | 500 | | `tables/` | 900 |
+| `run/` | 3,600 | | `ext/` | 700 |
+| `run/sclpll/` | 1,200 | | `state/` | 900 |
+| `values/` | 1,000 | | `functions/` | 1,200 |
+| `plugins_bundled/` | 600 | | | |
 
 Dependencies, each doing three or four jobs: `httpx`, `typer`, `pydantic`, `aiosqlite`, `pyarrow`.
 **`rich` is deliberately not a dependency** — the terminal layer is hand-written (see §7).
@@ -117,9 +119,8 @@ byte-exact pty snapshot tests, and `--plain` / `SCLPL_RENDER` escape hatches. Co
 every terminal bug.
 
 **SQLite ships as a bundled plugin, not as core.** It uses only the public plugin API, so it doubles
-as proof the API is sufficient — and it costs no new dependency because `aiosqlite` already carries
-engine state and the cache index. Bundled set is `sqlite`, `fs`, `example`; everything else installs
-on demand.
+as proof the API is sufficient. Bundled set is `sqlite`, `fs`, `text`, `example`; everything else
+installs on demand.
 
 ---
 
@@ -145,7 +146,7 @@ layer is hand-written (`rich` is not a dependency), and SQLite ships as a bundle
 
 ---
 
-## 9. Start here
+## 9. Current checkout drill
 
 ```bash
 python -m pip install -e ".[dev]"
@@ -153,21 +154,13 @@ python -m pytest -q && python scripts/check_budget.py
 python -m sclpl validate examples/orders.sclpll
 ```
 
-Then **M6** (SPEC §17): the five paginators streaming into the scheduler, and `foreach` / `if` /
-`while` / `do_while` / `gate` / `parallel` as runtime-injected subgraphs. Exit criterion: a 40-page
-cursor source fans out into a bounded `foreach`, reported as one progress line.
-
-**Start with pagination, and start by deleting the warning.** `paginate` already parses into
-`HttpConfig.paginate`; `run/execute.py:_http` ignores it. Preflight says so out loud
-(`_check_pagination`) because a run that quietly returns page one succeeds with short data — the
-worst available failure. That note is a placeholder for the implementation, and removing it is how
-you know M6's first half is done.
-
-Commit messages say what shrank. If a milestone adds a feature and the total drops, say so.
+All ten planned milestones are implemented. The current continuation work is integration hygiene:
+run the gates, commit the worktree, merge it back to `main`, push `main`, and remove the temporary
+worktree/branch so the repository has one active line again.
 
 ---
 
-## 10. What M0–M5 left behind
+## 10. What M0–M9 left behind
 
 **Deleted in M0: 250 files, 59,093 lines** — the Textual TUI, the FastAPI backend, the Vue SPA, and
 the `app/` package they were entangled with. The whole of `app/` went, not just `app/ui/` and
@@ -175,7 +168,7 @@ the `app/` package they were entangled with. The whole of `app/` went, not just 
 tree with no `app/` in it. Carry-overs are at `docs/attic/carried/`; baseline `1b1abe0` is the
 archive.
 
-**Written since: ~8,900 lines of code and 518 tests.** All five gates green at every commit.
+**Current checked state: 12,251 lines of code and 722 passing tests.** Gates are green.
 
 | Milestone | Commit | What landed |
 |---|---|---|
@@ -184,7 +177,11 @@ archive.
 | M2 | `87a0a5a` | `run/{plan,schedule,retry,transport}.py` — continuous scheduling, pooled transport |
 | M3 | `41d7745` | `render/live.py` — the live region |
 | M4 | `773e747` | IR, both surfaces, catalogue, modes, ports, launcher |
-| M5 | (this one) | `tables/`, `functions/`, `ext/functions.py`, `bootstrap.py` |
+| M5 | `86b9efa` | `tables/`, `functions/`, `ext/functions.py`, `bootstrap.py` |
+| M6 | `f209f15` | five paginators, six control-flow kinds, measured bounds |
+| M7 | `0da3229` | memory governor, lanes, cache |
+| M8 | `505475c` | plugin ABI, bundled plugins, external scaffold |
+| M9 | `39478b7` | secrets, history, doctor, completions, generated docs |
 
 **What exists now**
 
@@ -194,9 +191,11 @@ archive.
 | `sclpl/cli/` | Typer root, global flags, `call`, `run`, `validate`, `explain`, `show`, `fmt`, `convert`, the catalogue commands, the bare launcher |
 | `sclpl/values/`, `sclpl/expr/` | `ValueStore` with refcounts, path resolver with nearest-key suggestions, lexer/parser/AST, `(name, type)` dispatch with MRO walk-up |
 | `sclpl/run/` | IR (pydantic, `extra="forbid"`), both surfaces, modes, ports, preflight, plan, scheduler, retry, transport, execute |
-| `sclpl/tables/`, `sclpl/functions/`, `sclpl/ext/` | `Table` + backend protocol + pandas backend, format dispatch, the §10 flattening semantics, 37 built-ins, the `@function` registry |
+| `sclpl/tables/`, `sclpl/functions/`, `sclpl/ext/` | `Table` + backend protocol + pandas backend, format dispatch, the §10 flattening semantics, 43 built-ins, the `@function` registry |
+| `sclpl/state/` | SQLite run history, tags, retention, pinned runs, NDJSON logs, secrets |
+| `sclpl/plugins_bundled/` | `sqlite`, `fs`, `text`, `example`, all through the public plugin API |
 
-**Five things to know before M6**
+**Five things to know now**
 
 1. **`bootstrap.load()` is how anything gets registered.** Built-ins first, then plugins, so a
    plugin that shadows one is doing it deliberately. Tests that touch the catalogue call it; the CLI
@@ -217,7 +216,7 @@ archive.
    emitter, which grow with the grammar) out of `run/` (which grows with what the runner does).
    Totals are in SPEC §19. A third revision needs a better reason than the first two.
 
-**Not done, deliberately:** pagination is parsed but not followed (M6, and preflight says so);
-`foreach`/`while`/`parallel`/`use` parse and raise a named error rather than silently doing nothing;
-`state/` and `plugins_bundled/` are empty directories with budgets, not stubs. `--help` still never
-advertises anything that does not work.
+**Not done, deliberately:** `use` workflow invocation raises a named error rather than silently
+doing nothing; Arrow IPC handoff to a process lane is still pickle-backed; lane assignment does not
+yet learn from run history; `--http-cache` stores validators but does not yet perform revalidation
+round trips; fan-out progress is correct but still row-per-iteration noisy for very large loops.
