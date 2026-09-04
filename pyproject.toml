@@ -62,7 +62,7 @@ exclude = "docs/attic"
 warn_unreachable = true
 
 [[tool.mypy.overrides]]
-module = ["pyarrow.*", "pandas.*", "numpy.*", "keyring.*", "cryptography.*"]
+module = ["pyarrow.*", "pandas.*", "numpy", "numpy.*", "keyring.*", "cryptography.*"]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]
