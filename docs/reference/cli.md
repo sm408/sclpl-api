@@ -11,6 +11,7 @@
 | `sclpl run` | Run a workflow by name or path. |
 | `sclpl validate` | Check a workflow without running it. |
 | `sclpl explain` | Show the execution plan. |
+| `sclpl graph` | Render the execution DAG as Mermaid. |
 | `sclpl fmt` | Rewrite a workflow in canonical form. |
 | `sclpl convert` | Convert between the JSON and SCLPLL surfaces. |
 | `sclpl import` | Register a workflow file. |
