@@ -36,6 +36,7 @@ class Store:
         self.root = root
         self.blobs = root / "blobs"
         self.blobs.mkdir(parents=True, exist_ok=True)
+        self._used: set[Path] = set()
 
     def record(self, fixture: Fixture) -> Path:
         digest = hashlib.sha256(fixture.body).hexdigest()
@@ -67,6 +68,7 @@ class Store:
                 "fixture mismatch", remedies=["record this request", "check request occurrence"]
             )
         payload: Any = json.loads(path.read_text(encoding="utf-8"))
+        self._used.add(path)
         if not isinstance(payload, dict) or payload.get("schema") != SCHEMA_VERSION:
             raise ValidationError(f"unsupported fixture schema at {path}")
         digest = payload.get("body_digest")
@@ -83,6 +85,10 @@ class Store:
             headers=dict(payload["headers"]),
             body=body,
         )
+
+    def unused(self) -> list[Path]:
+        """Recorded request metadata that strict replay did not consume."""
+        return sorted(path for path in self.root.glob("*.json") if path not in self._used)
 
 
 def _safe_headers(headers: dict[str, str]) -> dict[str, str]:
