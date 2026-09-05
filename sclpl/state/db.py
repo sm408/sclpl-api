@@ -26,6 +26,7 @@ from pathlib import Path
 from typing import Any
 
 from sclpl.errors import ValidationError, did_you_mean
+from sclpl.state import migrations
 
 KEEP_DEFAULT = 5
 
@@ -146,9 +147,10 @@ class History:
         self._root = root or default_root()
         self._logs = self._root / "logs"
         self._logs.mkdir(parents=True, exist_ok=True)
-        self._db = sqlite3.connect(self._root / "history.db", isolation_level=None)
+        path = self._root / "history.db"
+        migrations.migrate(path, _SCHEMA)
+        self._db = sqlite3.connect(path, isolation_level=None)
         self._db.row_factory = sqlite3.Row
-        self._db.executescript(_SCHEMA)
 
     # -- writing -----------------------------------------------------------------
 

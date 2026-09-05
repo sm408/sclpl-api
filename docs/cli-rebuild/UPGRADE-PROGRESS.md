@@ -26,5 +26,6 @@ verification behind it; unchecked work remains release scope.
 - [x] C1 canonical workflow identity from source and effective non-secret settings.
 - [x] C2 explicit `workflow lock` generation, side-effect-free `--check` verification,
   and `run --locked` admission.
-- [ ] C3-C5 migrations, run provenance, and process coordination.
+- [x] C3 versioned SQLite migration with pre-migration backups and newer-schema refusal.
+- [ ] C4-C5 run provenance and process coordination.
 - [ ] D through J remain in the dependency order defined by the plan.
