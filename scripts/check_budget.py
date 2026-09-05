@@ -31,7 +31,7 @@ PACKAGE = ROOT / "sclpl"
 # which grows with the language surface, while `expr` proper is the machinery that
 # reads it. Holding them to one number would let either hide growth in the other.
 BUDGETS: dict[str, int] = {
-    "cli": 1400,
+    "cli": 1800,
     "render": 1300,
     "catalog": 500,
     "run": 3600,
@@ -44,9 +44,10 @@ BUDGETS: dict[str, int] = {
     "state": 900,
     "functions": 1200,
     "plugins_bundled": 600,
+    "project": 1200,
 }
 
-TOTAL_BUDGET = 16000
+TOTAL_BUDGET = 18400
 
 _HAS_DOCSTRING = (ast.Module, ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef)
 
@@ -106,6 +107,16 @@ def count_loose() -> int:
     return sum(count_lines(path) for path in sorted(PACKAGE.glob("*.py")))
 
 
+def unbudgeted_packages() -> list[str]:
+    """Top-level Python packages that would otherwise evade the line budget."""
+    budgeted = {name.split("/", 1)[0] for name in BUDGETS}
+    return sorted(
+        path.name
+        for path in PACKAGE.iterdir()
+        if path.is_dir() and (path / "__init__.py").is_file() and path.name not in budgeted
+    )
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Check the sclpl line budget.")
     parser.add_argument("--report", action="store_true", help="Report without failing.")
@@ -116,6 +127,7 @@ def main() -> int:
         return 1
 
     over: list[str] = []
+    over.extend(f"unbudgeted package: sclpl/{name}" for name in unbudgeted_packages())
     used_total = count_loose()
 
     width = max(12, max(len(name) for name in BUDGETS) + 1)

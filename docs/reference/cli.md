@@ -17,9 +17,13 @@
 | `sclpl list` | List registered and local workflows. |
 | `sclpl show` | Show a workflow's ports, modes, and steps. |
 | `sclpl remove` | Unregister a workflow. |
+| `sclpl init` | Create a project without overwriting files. |
 | `sclpl doctor` | Check the installation and say what is missing. |
 | `sclpl completion` | Print a shell completion script. |
 | `sclpl plugin` |  |
+| `sclpl project` |  |
+| `sclpl env` |  |
+| `sclpl workflow` |  |
 | `sclpl runs` |  |
 | `sclpl secret` |  |
 | `sclpl docs` |  |

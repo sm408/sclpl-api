@@ -90,21 +90,28 @@ def scan() -> tuple[dict[tuple[str, str], set[str]], set[str]]:
     return edges, packages
 
 
-def cycles(edges: dict[tuple[str, str], set[str]]) -> list[tuple[str, str]]:
+def cycles(edges: dict[tuple[str, str], set[str]]) -> list[list[str]]:
+    """Every directed package cycle, including cycles longer than two edges."""
     adjacency: dict[str, set[str]] = defaultdict(set)
     for source, target in edges:
         adjacency[source].add(target)
 
-    found: list[tuple[str, str]] = []
-    for source in sorted(adjacency):
-        for target in sorted(adjacency[source]):
-            if source == ROOT or target == ROOT:
-                continue  # the entry point, not coupling
-            if source in adjacency.get(target, set()):
-                pair = (min(source, target), max(source, target))
-                if pair not in found:
-                    found.append(pair)
-    return found
+    found: set[tuple[str, ...]] = set()
+
+    def visit(start: str, node: str, path: list[str]) -> None:
+        for target in sorted(adjacency.get(node, set())):
+            if target == ROOT:
+                continue
+            if target == start:
+                cycle = path[:]
+                rotations = [tuple(cycle[index:] + cycle[:index]) for index in range(len(cycle))]
+                found.add(min(rotations))
+            elif target not in path:
+                visit(start, target, [*path, target])
+
+    for source in sorted(name for name in adjacency if name != ROOT):
+        visit(source, source, [source])
+    return [list(cycle) for cycle in sorted(found)]
 
 
 def mermaid(edges: dict[tuple[str, str], set[str]], packages: set[str]) -> str:
@@ -152,10 +159,14 @@ def main() -> int:
         return 0
 
     print("\ncycles:", file=sys.stderr)
-    for source, target in found:
-        print(f"  {source} <-> {target}", file=sys.stderr)
-        for pair in ((source, target), (target, source)):
-            print(f"    {pair[0]} -> {pair[1]}: {', '.join(sorted(edges[pair]))}", file=sys.stderr)
+    for cycle in found:
+        route = [*cycle, cycle[0]]
+        print(f"  {' -> '.join(route)}", file=sys.stderr)
+        for source, target in zip(route, route[1:], strict=True):
+            print(
+                f"    {source} -> {target}: {', '.join(sorted(edges[(source, target)]))}",
+                file=sys.stderr,
+            )
     print(
         "\nOne of the two directions is the wrong way round. Move what is shared to the "
         "package that owns the concept, or defer the import if it is genuinely optional.",

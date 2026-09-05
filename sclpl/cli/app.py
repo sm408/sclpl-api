@@ -18,7 +18,9 @@ from sclpl.cli import (
     docs_cmd,
     launcher,
     plugin_cmd,
+    project_cmd,
     workflow_cmd,
+    workflow_project_cmd,
 )
 from sclpl.cli import run as call_cmd
 from sclpl.cli.options import (
@@ -69,6 +71,8 @@ call_cmd.register(app)
 workflow_cmd.register(app)
 catalog_cmd.register(app)
 plugin_cmd.register(app)
+project_cmd.register(app)
+workflow_project_cmd.register(app)
 admin_cmd.register(app)
 docs_cmd.register(app)
 

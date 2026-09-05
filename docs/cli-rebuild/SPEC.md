@@ -665,17 +665,18 @@ Revised by **ADR 0001** (23 Aug 2026): the original ~7,150 was estimated before 
 existed and omitted `expr/ops/` and `plugins_bundled/` entirely. Revised again by
 **ADR 0002** (31 Aug 2026), which split `run/sclpll/` -- a lexer, parser, and emitter
 that grows with the *grammar* -- out of `run/`, which grows with what the runner *does*.
-Current target **~16,000 lines**, against ~59,100 deleted. Enforced in CI by
+Current target **~18,400 lines**, against ~59,100 deleted. Enforced in CI by
 `scripts/check_budget.py`, which counts code and excludes docstrings.
 
 | Package | Budget | | Package | Budget |
 |---|---:|---|---|---:|
-| `cli/` | 1,400 | | `expr/` | 1,500 |
+| `cli/` | 1,800 | | `expr/` | 1,500 |
 | `render/` | 1,300 | | `expr/ops/` | 1,400 |
 | `catalog/` | 500 | | `tables/` | 900 |
 | `run/` | 3,600 | | `ext/` | 700 |
 | `run/sclpll/` | 1,200 | | `state/` | 900 |
 | `values/` | 1,000 | | `plugins_bundled/` | 600 |
+| `project/` | 1,200 | | | |
 | built-in functions | 1,200 | | | |
 
 A `parent/child` key is counted on its own and excluded from its parent, so `expr/ops/`
