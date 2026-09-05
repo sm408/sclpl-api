@@ -264,11 +264,20 @@ def explain(
             typer.echo(f"  {binding.direction}: {binding.name} -> {binding.describe()}")
 
 
-def graph(ctx: typer.Context, workflow: WorkflowArg, mode: ModeOpt = None) -> None:
+def graph(
+    ctx: typer.Context,
+    workflow: WorkflowArg,
+    mode: ModeOpt = None,
+    format: Annotated[
+        str, typer.Option("--format", help="Graph format; currently mermaid.")
+    ] = "mermaid",
+) -> None:
     """Render the validated execution DAG in stable Mermaid syntax."""
     doc = _load(workflow)
     report = preflight(doc, mode=mode, check_files=False, require_ports=False)
     del ctx
+    if format != "mermaid":
+        raise typer.BadParameter("only 'mermaid' is supported", param_hint="--format")
     if not report.ok:
         for problem in report.problems:
             typer.echo(str(problem), err=True)
