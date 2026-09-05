@@ -17,6 +17,8 @@ import typer
 from sclpl.catalog import resolve as catalog
 from sclpl.cli.options import options_of
 from sclpl.errors import EXIT_INTERRUPTED, EXIT_USAGE, EXIT_VALIDATION, SclplError
+from sclpl.project import context as project_context
+from sclpl.project import identity, lock
 from sclpl.render.reporter import build_reporter
 from sclpl.run import compile_json
 from sclpl.run.ir import WorkflowDoc
@@ -83,6 +85,10 @@ def run(
         bool,
         typer.Option("--http-cache", help="Revalidate with ETag; a 304 counts as a hit."),
     ] = False,
+    locked: Annotated[
+        bool,
+        typer.Option("--locked", help="Require the project workflow lock before running."),
+    ] = False,
     name: Annotated[
         str | None, typer.Option("--name", help="Call this run something in the history.")
     ] = None,
@@ -99,7 +105,21 @@ def run(
         ),
     ] = None,
 ) -> None:
-    doc = _load(workflow)
+    located = _locate(workflow)
+    doc = located.doc
+    if locked:
+        resolved_project = project_context.load()
+        if resolved_project is None:
+            typer.echo("--locked requires a project; run sclpl init first", err=True)
+            raise typer.Exit(EXIT_VALIDATION)
+        try:
+            lock.verify(
+                resolved_project,
+                identity.identify(doc.name, located.path, resolved_project),
+            )
+        except SclplError as error:
+            typer.echo(str(error), err=True)
+            raise typer.Exit(error.exit_code) from error
     options = Options(
         mode=mode,
         named_in=_pairs(in_, "--in"),
@@ -294,8 +314,16 @@ def _new_run_id() -> str:
 
 
 def _load(target: str) -> WorkflowDoc:
+    return _locate(target).doc
+
+
+def _locate(target: str) -> catalog.Located:
     try:
-        return catalog.resolve(target).doc
+        resolved_project = project_context.load()
+        return catalog.resolve(
+            target,
+            extra_dirs=resolved_project.workflow_dirs if resolved_project is not None else None,
+        )
     except SclplError as error:
         typer.echo(str(error), err=True)
         raise typer.Exit(error.exit_code) from error
