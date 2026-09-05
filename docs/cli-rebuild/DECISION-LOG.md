@@ -129,3 +129,11 @@ the decision, its tradeoff, and the evidence available when it was made.
   target to 19,100 lines.
 - **Tradeoff:** The increase is explicit and reviewable; contract code cannot evade the
   architecture gate by living in an unlisted directory.
+
+## 2026-09-05 — Local contract command
+
+- **Decision:** Expose `contract check VALUE CONTRACT` for local JSON values and local
+  JSON contract files only.
+- **Tradeoff:** Contract-reference network access is deliberately absent; it needs
+  explicit allowlist and caching policy before becoming a supported behavior.
+- **Evidence:** command help, Ruff, and mypy validate the route and typed input surface.

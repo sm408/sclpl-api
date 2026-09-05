@@ -15,6 +15,7 @@ from sclpl import __version__, bootstrap
 from sclpl.cli import (
     admin_cmd,
     catalog_cmd,
+    contract_cmd,
     docs_cmd,
     launcher,
     plugin_cmd,
@@ -70,6 +71,7 @@ app = typer.Typer(
 call_cmd.register(app)
 workflow_cmd.register(app)
 catalog_cmd.register(app)
+contract_cmd.register(app)
 plugin_cmd.register(app)
 project_cmd.register(app)
 workflow_project_cmd.register(app)
