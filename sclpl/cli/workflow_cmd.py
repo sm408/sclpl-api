@@ -283,13 +283,17 @@ def graph(
             typer.echo(str(problem), err=True)
         raise typer.Exit(report.problems[0].exit_code)
     assert report.plan is not None
+    typer.echo(_mermaid(report.plan))
+
+
+def _mermaid(plan: Any) -> str:
     lines = ["graph TD"]
-    for step_id in report.plan.topological():
+    for step_id in plan.topological():
         lines.append(f'  {step_id}["{step_id}"]')
-    for step_id in report.plan.topological():
-        for need in sorted(report.plan.nodes[step_id].needs):
+    for step_id in plan.topological():
+        for need in sorted(plan.nodes[step_id].needs):
             lines.append(f"  {need} --> {step_id}")
-    typer.echo("\n".join(lines))
+    return "\n".join(lines)
 
 
 def fmt(
