@@ -30,7 +30,7 @@ def check(
     if not isinstance(schema, dict):
         raise ValidationError("contract root must be a JSON object", where=str(contract))
     try:
-        check_contract(payload, schema)
+        check_contract(payload, schema, source=contract.resolve())
     except AssertionFailed as error:
         typer.echo(str(error), err=True)
         raise typer.Exit(error.exit_code) from error

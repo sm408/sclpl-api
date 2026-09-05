@@ -155,3 +155,12 @@ the decision, its tradeoff, and the evidence available when it was made.
   state and remain offline by default.
 - **Evidence:** discovery, field validation, and fixture-path escape tests cover the
   local manifest boundary. ADR 0005 records the new package budget.
+
+## 2026-09-05 — Local contract references
+
+- **Decision:** Resolve local JSON contract `$ref` values relative to the current
+  contract file and reject remote references and paths escaping the contract root.
+- **Tradeoff:** The supported dialect is intentionally small: JSON-pointer fragments
+  and local JSON documents only. Remote fetch, caching, and trust policy remain absent.
+- **Evidence:** focused tests cover a local referenced definition and remote-reference
+  refusal; contract checks continue to use assertion exit semantics.
