@@ -34,6 +34,11 @@ See [the decision log](DECISION-LOG.md) for implementation tradeoffs and evidenc
   can require that storage admission through `--require-provenance`.
 - [ ] C5 process coordination: workflow-lock mutation admission is protected; output
   ownership and remaining project mutations are still required.
-- [ ] D through J remain in the dependency order defined by the plan.
+- [x] D5-D6 foundation: versioned, redacted request/response fixtures support offline
+  replay, recording, occurrence tracking, digest verification, and opt-in unused-fixture refusal.
+- [ ] D1-D4 and D7 remain in the dependency order defined by the plan.
 - [x] E3 foundation: schema-versioned, project-contained test manifests execute through
-  the regular runner with fixture replay offline, isolated scratch state, and expected-exit checks.
+  the regular runner with fixture replay offline, isolated scratch state, expected-exit,
+  local contract assertions, and JSON expected-output checks.
+- [x] E5 foundation: `graph WORKFLOW --format mermaid` renders a deterministic validated DAG.
+- [ ] E4 and E6-E9 remain in the dependency order defined by the plan.
