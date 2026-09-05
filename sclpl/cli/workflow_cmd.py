@@ -32,6 +32,7 @@ def register(app: typer.Typer) -> None:
     app.command("run", help="Run a workflow by name or path.")(run)
     app.command("validate", help="Check a workflow without running it.")(validate)
     app.command("explain", help="Show the execution plan.")(explain)
+    app.command("graph", help="Render the execution DAG as Mermaid.")(graph)
     app.command("fmt", help="Rewrite a workflow in canonical form.")(fmt)
     app.command("convert", help="Convert between the JSON and SCLPLL surfaces.")(convert)
 
@@ -261,6 +262,25 @@ def explain(
     if report.bindings:
         for binding in report.bindings.all():
             typer.echo(f"  {binding.direction}: {binding.name} -> {binding.describe()}")
+
+
+def graph(ctx: typer.Context, workflow: WorkflowArg, mode: ModeOpt = None) -> None:
+    """Render the validated execution DAG in stable Mermaid syntax."""
+    doc = _load(workflow)
+    report = preflight(doc, mode=mode, check_files=False, require_ports=False)
+    del ctx
+    if not report.ok:
+        for problem in report.problems:
+            typer.echo(str(problem), err=True)
+        raise typer.Exit(report.problems[0].exit_code)
+    assert report.plan is not None
+    lines = ["graph TD"]
+    for step_id in report.plan.topological():
+        lines.append(f'  {step_id}["{step_id}"]')
+    for step_id in report.plan.topological():
+        for need in sorted(report.plan.nodes[step_id].needs):
+            lines.append(f"  {need} --> {step_id}")
+    typer.echo("\n".join(lines))
 
 
 def fmt(

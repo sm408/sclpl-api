@@ -230,6 +230,12 @@ the decision, its tradeoff, and the evidence available when it was made.
 - **Evidence:** the isolated workflow test verifies both an integer contract and its
   expected JSON value.
 
+## 2026-09-05 — Workflow Mermaid graph
+
+- **Decision:** Expose `graph WORKFLOW` using the existing validated plan, emitting
+  stable Mermaid nodes and dependency edges.
+- **Evidence:** a two-step workflow smoke test emitted its two nodes and one edge.
+
 ## 2026-09-05 — Offline manifest test execution
 
 - **Decision:** `test run` executes one validated project manifest through the regular
