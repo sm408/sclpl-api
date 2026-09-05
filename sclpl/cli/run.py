@@ -14,6 +14,7 @@ from __future__ import annotations
 import asyncio
 import sys
 import time
+from pathlib import Path
 from typing import Annotated, Any
 
 import httpx
@@ -23,6 +24,7 @@ from sclpl.cli.options import options_of
 from sclpl.errors import EXIT_STEP_FAILED, EXIT_USAGE, SclplError
 from sclpl.render.events import RunFinished, RunStarted, StepFinished, StepStarted
 from sclpl.render.reporter import Reporter, build_reporter
+from sclpl.run.fixtures import Store as FixtureStore
 from sclpl.run.retry import Retry
 from sclpl.run.transport import Pool, TransportLimits, summarise
 
@@ -53,6 +55,9 @@ def call(
     timeout: Annotated[
         float, typer.Option("--timeout", help="Seconds to wait per attempt.")
     ] = 30.0,
+    replay: Annotated[
+        Path | None, typer.Option("--replay", help="Serve this recorded fixture directory offline.")
+    ] = None,
 ) -> None:
     verb = method.upper()
     if verb not in METHODS:
@@ -75,7 +80,9 @@ def call(
         plain=options.plain,
         no_color=options.no_color,
     )
-    exit_code = asyncio.run(_call(reporter, verb, url, headers, data, Retry(max=retries), timeout))
+    exit_code = asyncio.run(
+        _call(reporter, verb, url, headers, data, Retry(max=retries), timeout, replay)
+    )
     if exit_code:
         raise typer.Exit(exit_code)
 
@@ -114,6 +121,7 @@ async def _call(
     data: str | None,
     retry: Retry,
     timeout: float,
+    replay: Path | None = None,
 ) -> int:
     host = httpx.URL(url).host
     step = method.lower()
@@ -123,7 +131,11 @@ async def _call(
         reporter.emit(StepStarted(id=step, kind="http"))
         step_started = time.perf_counter()
 
-        async with Pool(TransportLimits(timeout=timeout), retry) as pool:
+        async with Pool(
+            TransportLimits(timeout=timeout),
+            retry,
+            fixtures=FixtureStore(replay) if replay else None,
+        ) as pool:
             try:
                 attempt = await pool.request(
                     method,

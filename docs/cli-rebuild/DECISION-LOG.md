@@ -70,3 +70,12 @@ the decision, its tradeoff, and the evidence available when it was made.
   before client creation; repeated requests consume separate occurrence fixtures.
 - **Tradeoff:** CLI flags and recording still need to supply the store in a later slice.
 - **Evidence:** isolated offline transport smoke test completed without a live client.
+
+## 2026-09-05 — CLI single-request replay
+
+- **Decision:** Add `sclpl call ... --replay PATH` as the first public consumer of the
+  fixture transport.
+- **Tradeoff:** It establishes offline request behavior before workflow-wide recording
+  and replay options are added, keeping one transport path rather than a mock client.
+- **Evidence:** CLI smoke test returned the recorded body from `offline.test` without a
+  network request.
