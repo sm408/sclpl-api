@@ -23,7 +23,7 @@ from sclpl.run.plan import Node
 from sclpl.run.preflight import Report, preflight
 from sclpl.run.schedule import JOIN_SUFFIX, ExpandSpec, Limits, Outcome, Scheduler
 from sclpl.run.transport import Pool, TransportLimits
-from sclpl.state import db
+from sclpl.state import db, safe_args
 from sclpl.tables.io import STDIO
 from sclpl.values import cache, governor
 from sclpl.values.governor import parse_budget
@@ -245,7 +245,7 @@ def _remember(
             peak_rss_bytes=governor.rss(),
             env=options.env,
             tags=list(options.tags),
-            argv=" ".join(sys.argv[1:]),
+            argv=safe_args.render(sys.argv[1:]),
             steps=[db.StepRecord(step_id=name, status="ok") for name in outcome.succeeded]
             + [
                 db.StepRecord(step_id=name, status="failed", error=str(error))
