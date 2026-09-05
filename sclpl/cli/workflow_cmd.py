@@ -89,6 +89,10 @@ def run(
         Path | None,
         typer.Option("--replay", help="Serve HTTP requests from this fixture directory offline."),
     ] = None,
+    record_fixture: Annotated[
+        Path | None,
+        typer.Option("--record", help="Record HTTP responses into this fixture directory."),
+    ] = None,
     locked: Annotated[
         bool,
         typer.Option("--locked", help="Require the project workflow lock before running."),
@@ -148,6 +152,7 @@ def run(
         offline=offline,
         http_cache=http_cache,
         fixture_root=replay,
+        record_fixture_root=record_fixture,
     )
     globals_ = options_of(ctx)
     reporter = build_reporter(

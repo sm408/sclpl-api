@@ -68,6 +68,7 @@ class Options:
     #: Persisted before scheduling so a killed run remains identifiable.
     started_at: str = ""
     fixture_root: Path | None = None
+    record_fixture_root: Path | None = None
 
 
 @dataclass(slots=True)
@@ -156,6 +157,7 @@ async def run_workflow(doc: WorkflowDoc, options: Options, reporter: Reporter) -
     async with Pool(
         transport,
         fixtures=FixtureStore(options.fixture_root) if options.fixture_root else None,
+        recorder=FixtureStore(options.record_fixture_root) if options.record_fixture_root else None,
     ) as pool:
         runtime = Runtime(
             doc=doc,

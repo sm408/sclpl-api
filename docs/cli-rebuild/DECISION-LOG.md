@@ -106,3 +106,11 @@ the decision, its tradeoff, and the evidence available when it was made.
   thin follow-up option over this same hook.
 - **Evidence:** static checks pass; the fixture-origin recording bypass was caught and
   corrected during the record/replay smoke exercise.
+
+## 2026-09-05 — Workflow fixture recording
+
+- **Decision:** Add `run NAME --record PATH`, passing the recorder through immutable
+  runner options to the same transport pool used for workflow HTTP steps.
+- **Tradeoff:** A workflow run can now record and replay with shared primitives; policy
+  validation and richer fixture selection remain later Batch D work.
+- **Evidence:** CLI help, Ruff, and mypy validate the public contract and wiring.
