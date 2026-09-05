@@ -137,3 +137,11 @@ the decision, its tradeoff, and the evidence available when it was made.
 - **Tradeoff:** Contract-reference network access is deliberately absent; it needs
   explicit allowlist and caching policy before becoming a supported behavior.
 - **Evidence:** command help, Ruff, and mypy validate the route and typed input surface.
+
+## 2026-09-05 — Local contract generation
+
+- **Decision:** Generate conservative candidate contracts from local JSON samples and
+  require a new `--into` destination when saving.
+- **Tradeoff:** A single sample cannot prove optionality or heterogeneous shapes, so the
+  output is explicitly a candidate and never overwrites an accepted baseline.
+- **Evidence:** nested candidate generation tests pass alongside the contract checks.

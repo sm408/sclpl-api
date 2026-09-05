@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from sclpl.contracts import check
+from sclpl.contracts import check, generate
 from sclpl.errors import AssertionFailed
 
 
@@ -20,6 +20,12 @@ def test_nested_contract_accepts_a_compatible_value() -> None:
             },
         },
     )
+
+
+def test_generation_creates_a_reviewable_nested_candidate() -> None:
+    candidate = generate({"id": 1, "items": [{"name": "Ada"}]})
+    assert candidate["required"] == ["id", "items"]
+    assert candidate["properties"]["items"]["items"]["properties"]["name"]["type"] == "string"
 
 
 @pytest.mark.parametrize(

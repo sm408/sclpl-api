@@ -7,6 +7,22 @@ from typing import Any
 from sclpl.errors import AssertionFailed
 
 
+def generate(value: Any) -> dict[str, Any]:
+    """Infer a conservative candidate contract from one local sample value."""
+    if isinstance(value, dict):
+        return {
+            "type": "object",
+            "required": sorted(value),
+            "properties": {name: generate(item) for name, item in sorted(value.items())},
+        }
+    if isinstance(value, list):
+        if not value:
+            return {"type": "array"}
+        first = generate(value[0])
+        return {"type": "array", "items": first}
+    return {"type": _type(value)}
+
+
 def check(value: Any, contract: dict[str, Any], *, path: str = "$") -> None:
     """Validate a value against the supported contract subset with useful paths."""
     wanted = contract.get("type")
