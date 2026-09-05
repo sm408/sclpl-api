@@ -97,3 +97,12 @@ the decision, its tradeoff, and the evidence available when it was made.
 - **Tradeoff:** One runner path keeps retry, scheduling, diagnostics, and fixture behavior
   consistent; command code contains no second execution implementation.
 - **Evidence:** generated command help confirms the required workflow name and fixture path.
+
+## 2026-09-05 — Fixture recording transport hook
+
+- **Decision:** Let the shared transport record successful response metadata and bodies
+  into the fixture store, including fixture-served responses.
+- **Tradeoff:** CLI recording starts with `call --record`; workflow recording remains a
+  thin follow-up option over this same hook.
+- **Evidence:** static checks pass; the fixture-origin recording bypass was caught and
+  corrected during the record/replay smoke exercise.

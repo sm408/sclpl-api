@@ -24,6 +24,7 @@ import httpx
 from sclpl.errors import StepFailed
 from sclpl.render.events import StepRetrying
 from sclpl.render.reporter import Reporter
+from sclpl.run.fixtures import Fixture
 from sclpl.run.fixtures import Store as FixtureStore
 from sclpl.run.retry import (
     Adaptive,
@@ -129,6 +130,7 @@ class Pool:
         "_closed",
         "_adaptive_on",
         "_fixtures",
+        "_recorder",
         "_occurrences",
     )
 
@@ -139,6 +141,7 @@ class Pool:
         *,
         adaptive: bool = True,
         fixtures: FixtureStore | None = None,
+        recorder: FixtureStore | None = None,
     ) -> None:
         self._limits = limits if limits is not None else TransportLimits()
         self._retry = retry if retry is not None else Retry()
@@ -149,6 +152,7 @@ class Pool:
         self._lock = asyncio.Lock()
         self._closed = False
         self._fixtures = fixtures
+        self._recorder = recorder
         self._occurrences: dict[tuple[str, str], int] = {}
 
     async def client(self, profile: Profile) -> httpx.AsyncClient:
@@ -210,10 +214,10 @@ class Pool:
         an open circuit, raises.
         """
         policy = retry if retry is not None else self._retry
+        occurrence_key = (method.upper(), url)
+        occurrence = self._occurrences.get(occurrence_key, 0)
+        self._occurrences[occurrence_key] = occurrence + 1
         if self._fixtures is not None:
-            occurrence_key = (method.upper(), url)
-            occurrence = self._occurrences.get(occurrence_key, 0)
-            self._occurrences[occurrence_key] = occurrence + 1
             fixture = self._fixtures.replay(method, url, occurrence=occurrence)
             response = httpx.Response(
                 fixture.status,
@@ -221,6 +225,17 @@ class Pool:
                 content=fixture.body,
                 request=httpx.Request(method, url),
             )
+            if self._recorder is not None:
+                self._recorder.record(
+                    Fixture(
+                        method,
+                        url,
+                        occurrence,
+                        response.status_code,
+                        dict(response.headers),
+                        response.content,
+                    )
+                )
             return Attempt(response=response, attempts=1, duration_ms=0)
         profile = Profile.of(url, verify=self._limits.verify)
         breaker = self.breaker(profile.host)
@@ -269,6 +284,17 @@ class Pool:
                 breaker.record_failure()
             else:
                 breaker.record_success()
+            if self._recorder is not None:
+                self._recorder.record(
+                    Fixture(
+                        method,
+                        url,
+                        occurrence,
+                        response.status_code,
+                        dict(response.headers),
+                        response.content,
+                    )
+                )
             return Attempt(
                 response=response,
                 attempts=attempt + 1,

@@ -58,6 +58,9 @@ def call(
     replay: Annotated[
         Path | None, typer.Option("--replay", help="Serve this recorded fixture directory offline.")
     ] = None,
+    record: Annotated[
+        Path | None, typer.Option("--record", help="Record this response into a fixture directory.")
+    ] = None,
 ) -> None:
     verb = method.upper()
     if verb not in METHODS:
@@ -81,7 +84,7 @@ def call(
         no_color=options.no_color,
     )
     exit_code = asyncio.run(
-        _call(reporter, verb, url, headers, data, Retry(max=retries), timeout, replay)
+        _call(reporter, verb, url, headers, data, Retry(max=retries), timeout, replay, record)
     )
     if exit_code:
         raise typer.Exit(exit_code)
@@ -122,6 +125,7 @@ async def _call(
     retry: Retry,
     timeout: float,
     replay: Path | None = None,
+    record: Path | None = None,
 ) -> int:
     host = httpx.URL(url).host
     step = method.lower()
@@ -135,6 +139,7 @@ async def _call(
             TransportLimits(timeout=timeout),
             retry,
             fixtures=FixtureStore(replay) if replay else None,
+            recorder=FixtureStore(record) if record else None,
         ) as pool:
             try:
                 attempt = await pool.request(
