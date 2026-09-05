@@ -288,3 +288,15 @@ the decision, its tradeoff, and the evidence available when it was made.
   containing a resolved secret is scrubbed before it reaches the history database, while an
   ordinary error is left readable. `tests/unit/test_reporter.py` covers the new `scrub()`
   method and the `active_reporter()` context var directly.
+
+## 2026-09-06 — A1 compatibility baseline
+
+- **Decision:** Pin the top-level command list, exit code numbers, `runs export` JSON
+  top-level shape, plugin ABI field set, and the `call --json` event sequence in
+  `docs/cli-rebuild/BASELINE.md`, enforced by `tests/integration/test_compat_baseline.py`.
+- **Tradeoff:** Performance budgets (plan section 8) are deliberately out of scope here;
+  they need a stable benchmark machine to calibrate against and belong with J3. This
+  baseline fixes the *shape* of the public surface, not its throughput.
+- **Evidence:** `test_compat_baseline.py` fails if a baseline command disappears, an exit
+  code is renumbered, `runs export`'s top-level keys change, or a required `Plugin` field
+  is removed. Batch A is now fully closed (A1-A5).

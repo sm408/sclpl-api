@@ -12,7 +12,9 @@ See [the decision log](DECISION-LOG.md) for implementation tradeoffs and evidenc
   policy for every later persistent format.
 - [x] A4 architectural gates: budget checking refuses unbudgeted packages and layering
   checking detects directed cycles of any length.
-- [ ] A1 compatibility baseline and regression fixtures.
+- [x] A1 compatibility baseline: command surface, exit codes, `runs export` shape,
+  plugin ABI fields, and the `call --json` event sequence are pinned in
+  [BASELINE.md](BASELINE.md) and enforced by `tests/integration/test_compat_baseline.py`.
 - [x] A3 metadata-first plugin activation: static discovery and CLI help avoid plugin
   import; approved inventory activation follows capability-policy validation.
 - [x] A5 credential-sink audit: `secret()` now registers its resolved value with the
