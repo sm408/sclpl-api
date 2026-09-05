@@ -193,6 +193,16 @@ the decision, its tradeoff, and the evidence available when it was made.
 - **Evidence:** static inspection reports bundled plugins as unactivated and the denial
   sentinel test confirms refused modules are never imported.
 
+## 2026-09-05 — Required run provenance
+
+- **Decision:** Preserve best-effort history for ordinary runs, while
+  `run --require-provenance` refuses to schedule when its initial provenance record
+  cannot be written.
+- **Tradeoff:** Audited runs trade availability for a durable pre-side-effect identity;
+  ordinary interactive use retains the prior nonfatal history behavior.
+- **Evidence:** a storage-fault test verifies that scheduler admission fails before the
+  workflow can execute.
+
 ## 2026-09-05 — Offline manifest test execution
 
 - **Decision:** `test run` executes one validated project manifest through the regular

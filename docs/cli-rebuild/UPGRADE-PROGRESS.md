@@ -30,7 +30,9 @@ See [the decision log](DECISION-LOG.md) for implementation tradeoffs and evidenc
 - [x] C2 explicit `workflow lock` generation, side-effect-free `--check` verification,
   and `run --locked` admission.
 - [x] C3 versioned SQLite migration with pre-migration backups and newer-schema refusal.
-- [ ] C4-C5 run provenance and process coordination.
+- [x] C4 run provenance: a running record is persisted before scheduling; audited runs
+  can require that storage admission through `--require-provenance`.
+- [ ] C5 process coordination.
 - [ ] D through J remain in the dependency order defined by the plan.
 - [x] E3 foundation: schema-versioned, project-contained test manifests execute through
   the regular runner with fixture replay offline, isolated scratch state, and expected-exit checks.

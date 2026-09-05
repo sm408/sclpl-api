@@ -104,6 +104,12 @@ def run(
     no_record: Annotated[
         bool, typer.Option("--no-record", help="Do not write it to the history.")
     ] = False,
+    require_provenance: Annotated[
+        bool,
+        typer.Option(
+            "--require-provenance", help="Refuse to start unless run provenance is stored."
+        ),
+    ] = False,
     memory_budget: Annotated[
         str | None,
         typer.Option(
@@ -146,6 +152,7 @@ def run(
         name=name,
         tags=list(tag or []),
         record=not no_record,
+        require_provenance=require_provenance,
         run_id=_new_run_id(),
         no_cache=no_cache,
         refresh=refresh,

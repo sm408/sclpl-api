@@ -14,11 +14,12 @@ from typing import Any
 import pytest
 
 from sclpl import bootstrap
-from sclpl.errors import StepFailed
+from sclpl.errors import StepFailed, ValidationError
 from sclpl.render.plain import PlainSink
 from sclpl.render.reporter import Reporter
 from sclpl.run.runner import Options, run_workflow
 from sclpl.run.sclpll import parse
+from sclpl.state import db
 
 bootstrap.load(plugins=False)
 
@@ -41,6 +42,23 @@ HEAD = "@workflow t\n\n@step ids\n  let [1, 2, 3, 4]\n\n"
 async def test_a_foreach_runs_its_body_once_per_element() -> None:
     values = await run(HEAD + "@step loop\n  foreach @ids as n\n    step twice\n      let @n * 2\n")
     assert values["loop"] == [2, 4, 6, 8]
+
+
+async def test_required_provenance_refuses_to_schedule_when_history_is_unwritable(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class BrokenHistory:
+        def __enter__(self) -> None:
+            raise OSError("read only")
+
+        def __exit__(self, *args: object) -> None:
+            return None
+
+    monkeypatch.setattr(db, "History", BrokenHistory)
+    doc = parse("@workflow t\n\n@step value\n  let 1\n")
+    async with Reporter([PlainSink(io.StringIO(), verbosity=-2)]) as reporter:
+        with pytest.raises(ValidationError, match="required run provenance"):
+            await run_workflow(doc, Options(validate=False, require_provenance=True), reporter)
 
 
 async def test_the_result_is_in_element_order_not_completion_order() -> None:

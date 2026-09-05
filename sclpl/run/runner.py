@@ -13,7 +13,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from sclpl.errors import EXIT_INTERRUPTED, EXIT_STEP_FAILED, SclplError
+from sclpl.errors import EXIT_INTERRUPTED, EXIT_STEP_FAILED, SclplError, ValidationError
 from sclpl.render.events import RunFinished, RunStarted
 from sclpl.render.reporter import Reporter
 from sclpl.run import lanes
@@ -57,6 +57,8 @@ class Options:
     env: str | None = None
     #: History is written unless this is off, which is for tests and one-off `call`s.
     record: bool = True
+    #: Audited/resumable runs cannot begin unless their provenance row is durable.
+    require_provenance: bool = False
     keep: int = db.KEEP_DEFAULT
     #: Decided before the run so the event log can be written *during* it. A log
     #: assembled afterwards from memory is a log that is missing whatever crashed.
@@ -303,7 +305,12 @@ def _remember_start(doc: WorkflowDoc, options: Options, report: Report, started:
                     tags=list(options.tags),
                 )
             )
-    except Exception:  # noqa: BLE001 - ordinary history remains best effort
+    except Exception as error:  # noqa: BLE001 - storage implementations vary by platform
+        if options.require_provenance:
+            raise ValidationError(
+                "cannot persist required run provenance",
+                remedies=["repair writable history storage, then retry"],
+            ) from error
         return
 
 
