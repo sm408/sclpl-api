@@ -79,3 +79,13 @@ the decision, its tradeoff, and the evidence available when it was made.
   and replay options are added, keeping one transport path rather than a mock client.
 - **Evidence:** CLI smoke test returned the recorded body from `offline.test` without a
   network request.
+
+## 2026-09-05 — Workflow replay injection
+
+- **Decision:** Add `run NAME --replay PATH`, passing fixtures through runner options
+  into the existing pooled transport used by workflow steps.
+- **Tradeoff:** The target grouped `workflow replay NAME --fixture PATH` alias and
+  recording option remain follow-up CLI work; behavior is already exercised through
+  the regular scheduler and HTTP step path.
+- **Evidence:** an offline fixture-backed workflow completed successfully against
+  `offline.test` with no live transport client.

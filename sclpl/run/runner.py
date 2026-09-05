@@ -10,6 +10,7 @@ from __future__ import annotations
 import sys
 import time
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any
 
 from sclpl.errors import EXIT_INTERRUPTED, EXIT_STEP_FAILED, SclplError
@@ -18,6 +19,7 @@ from sclpl.render.reporter import Reporter
 from sclpl.run import lanes
 from sclpl.run.compile_plan import hosts
 from sclpl.run.execute import SKIPPED, Runtime, collect, run_injected, run_step
+from sclpl.run.fixtures import Store as FixtureStore
 from sclpl.run.ir import WorkflowDoc
 from sclpl.run.plan import Node
 from sclpl.run.preflight import Report, preflight
@@ -65,6 +67,7 @@ class Options:
     http_cache: bool = False
     #: Persisted before scheduling so a killed run remains identifiable.
     started_at: str = ""
+    fixture_root: Path | None = None
 
 
 @dataclass(slots=True)
@@ -150,7 +153,10 @@ async def run_workflow(doc: WorkflowDoc, options: Options, reporter: Reporter) -
         http_cache=options.http_cache,
     )
     store_cache = cache.Cache(cache.default_root(), policy=policy) if policy.enabled else None
-    async with Pool(transport) as pool:
+    async with Pool(
+        transport,
+        fixtures=FixtureStore(options.fixture_root) if options.fixture_root else None,
+    ) as pool:
         runtime = Runtime(
             doc=doc,
             store=store,

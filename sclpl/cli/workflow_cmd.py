@@ -85,6 +85,10 @@ def run(
         bool,
         typer.Option("--http-cache", help="Revalidate with ETag; a 304 counts as a hit."),
     ] = False,
+    replay: Annotated[
+        Path | None,
+        typer.Option("--replay", help="Serve HTTP requests from this fixture directory offline."),
+    ] = None,
     locked: Annotated[
         bool,
         typer.Option("--locked", help="Require the project workflow lock before running."),
@@ -143,6 +147,7 @@ def run(
         refresh=refresh,
         offline=offline,
         http_cache=http_cache,
+        fixture_root=replay,
     )
     globals_ = options_of(ctx)
     reporter = build_reporter(
