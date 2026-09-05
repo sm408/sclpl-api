@@ -54,10 +54,12 @@ def test_runs_a_manifest_offline_with_isolated_state(tmp_path) -> None:
     fixtures = tmp_path / "fixtures" / "one"
     fixtures.mkdir(parents=True)
     (tmp_path / "value.contract.json").write_text('{"type":"integer"}', encoding="utf-8")
+    (tmp_path / "value.expected.json").write_text("1", encoding="utf-8")
     path = tmp_path / "one.test.toml"
     path.write_text(
         "workflow = 'one'\nfixture = 'fixtures/one'\n[[assertions]]\n"
-        "step = 'value'\ncontract = 'value.contract.json'\n",
+        "step = 'value'\ncontract = 'value.contract.json'\n"
+        "[expected_outputs]\nvalue = 'value.expected.json'\n",
         encoding="utf-8",
     )
     outcome = run(load(path, project), project)

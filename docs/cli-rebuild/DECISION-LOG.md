@@ -221,6 +221,15 @@ the decision, its tradeoff, and the evidence available when it was made.
 - **Evidence:** a project test workflow produces an integer that satisfies its declared
   local contract during isolated execution.
 
+## 2026-09-05 — Manifest expected outputs
+
+- **Decision:** Expected outputs map produced step names to local JSON files and compare
+  values deterministically after successful test execution.
+- **Tradeoff:** This establishes exact JSON value checks; logical table snapshots and
+  update workflows remain separate snapshot work.
+- **Evidence:** the isolated workflow test verifies both an integer contract and its
+  expected JSON value.
+
 ## 2026-09-05 — Offline manifest test execution
 
 - **Decision:** `test run` executes one validated project manifest through the regular

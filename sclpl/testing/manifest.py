@@ -83,6 +83,11 @@ def _validate(raw: dict[str, Any], path: Path) -> None:
     for key in ("inputs", "expected_outputs"):
         if key in raw and not isinstance(raw[key], dict):
             raise ValidationError(f"{key} must be a table", where=str(path))
+    if "expected_outputs" in raw and not all(
+        isinstance(name, str) and isinstance(value, str) and value
+        for name, value in raw["expected_outputs"].items()
+    ):
+        raise ValidationError("expected_outputs must map steps to JSON files", where=str(path))
     if "expected_exit" in raw and (
         not isinstance(raw["expected_exit"], int) or isinstance(raw["expected_exit"], bool)
     ):

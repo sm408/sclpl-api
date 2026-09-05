@@ -78,3 +78,14 @@ def _assert(manifest: Manifest, result: Result) -> None:
         if not isinstance(contract, dict):
             raise AssertionFailed(f"{manifest.path}: assertion contract must be an object")
         check_contract(value, contract, path=f"${step}", source=contract_path)
+    for step, expected_path in manifest.expected_outputs.items():
+        try:
+            actual = result.store.get(step)
+            path = manifest.path.parent / expected_path
+            expected = json.loads(path.read_text(encoding="utf-8"))
+        except (KeyError, OSError, json.JSONDecodeError) as error:
+            raise AssertionFailed(
+                f"{manifest.path}: invalid expected output for {step!r}"
+            ) from error
+        if actual != expected:
+            raise AssertionFailed(f"${step}: expected output differs from {expected_path}")
