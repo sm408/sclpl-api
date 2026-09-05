@@ -63,6 +63,8 @@ class Options:
     refresh: bool = False
     offline: bool = False
     http_cache: bool = False
+    #: Persisted before scheduling so a killed run remains identifiable.
+    started_at: str = ""
 
 
 @dataclass(slots=True)
@@ -108,6 +110,8 @@ async def run_workflow(doc: WorkflowDoc, options: Options, reporter: Reporter) -
         return Result(report=report, exit_code=problem.exit_code)
 
     assert report.plan is not None and report.resolved is not None
+    if options.record:
+        _remember_start(doc, options, report, started)
 
     reporter.emit(
         RunStarted(
@@ -232,7 +236,7 @@ def _remember(
             workflow=doc.name,
             workflow_version=doc.version,
             mode=report.resolved.name if report.resolved else options.mode,
-            started_at=db.now(),
+            started_at=options.started_at or db.now(),
             finished_at=db.now(),
             duration_ms=outcome.duration_ms,
             status=outcome.status,
@@ -263,6 +267,31 @@ def _remember(
             history.record(record)
             history.prune(options.keep)
     except Exception:  # noqa: BLE001 - history is a convenience, never the run's verdict
+        return
+
+
+def _remember_start(doc: WorkflowDoc, options: Options, report: Report, started: float) -> None:
+    """Persist safe run provenance before any scheduled side effects begin."""
+    try:
+        identifier = options.run_id or db.run_id(doc.name, started)
+        options.run_id = identifier
+        options.started_at = db.now()
+        with db.History() as history:
+            history.record(
+                db.RunRecord(
+                    id=identifier,
+                    name=options.name or db.default_name(doc.name, options.mode),
+                    workflow=doc.name,
+                    workflow_version=doc.version,
+                    mode=report.resolved.name if report.resolved else options.mode,
+                    started_at=options.started_at,
+                    status="running",
+                    env=options.env,
+                    argv=safe_args.render(sys.argv[1:]),
+                    tags=list(options.tags),
+                )
+            )
+    except Exception:  # noqa: BLE001 - ordinary history remains best effort
         return
 
 
