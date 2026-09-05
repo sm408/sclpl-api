@@ -89,3 +89,11 @@ the decision, its tradeoff, and the evidence available when it was made.
   the regular scheduler and HTTP step path.
 - **Evidence:** an offline fixture-backed workflow completed successfully against
   `offline.test` with no live transport client.
+
+## 2026-09-05 — Grouped replay command
+
+- **Decision:** Expose `workflow replay NAME --fixture PATH` as a thin CLI adapter to
+  the existing runner replay option.
+- **Tradeoff:** One runner path keeps retry, scheduling, diagnostics, and fixture behavior
+  consistent; command code contains no second execution implementation.
+- **Evidence:** generated command help confirms the required workflow name and fixture path.

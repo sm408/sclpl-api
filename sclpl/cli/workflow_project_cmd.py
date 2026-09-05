@@ -2,9 +2,13 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+from typing import Annotated
+
 import typer
 
 from sclpl.catalog import resolve
+from sclpl.cli import workflow_cmd
 from sclpl.project import context, identity, lock
 
 
@@ -12,6 +16,7 @@ def register(root: typer.Typer) -> None:
     app = typer.Typer(no_args_is_help=True, help="Project workflow operations.")
     app.command("list", help="List workflows declared by the project.")(list_workflows)
     app.command("lock", help="Write or verify project workflow identities.")(lock_workflows)
+    app.command("replay", help="Run a workflow using recorded fixtures offline.")(replay)
     root.add_typer(app, name="workflow")
 
 
@@ -47,3 +52,12 @@ def lock_workflows(
         return
     path = lock.write(loaded, identified)
     typer.echo(f"wrote {path}")
+
+
+def replay(
+    ctx: typer.Context,
+    name: Annotated[str, typer.Argument(help="Project workflow name or path.")],
+    fixture: Annotated[Path, typer.Option("--fixture", help="Recorded fixture directory.")],
+) -> None:
+    """Delegate to the normal workflow runner with its live transport replaced."""
+    workflow_cmd.run(ctx, name, replay=fixture)
