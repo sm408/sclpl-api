@@ -145,3 +145,13 @@ the decision, its tradeoff, and the evidence available when it was made.
 - **Tradeoff:** A single sample cannot prove optionality or heterogeneous shapes, so the
   output is explicitly a candidate and never overwrites an accepted baseline.
 - **Evidence:** nested candidate generation tests pass alongside the contract checks.
+
+## 2026-09-05 — Project test-manifest discovery
+
+- **Decision:** Use schema-versioned TOML manifests discovered only below declared,
+  project-contained test directories; validate them before any run is eligible.
+- **Tradeoff:** This slice does not execute workflows yet. It makes fixture, expected
+  exit, assertions, and output expectations explicit so the later runner can isolate
+  state and remain offline by default.
+- **Evidence:** discovery, field validation, and fixture-path escape tests cover the
+  local manifest boundary. ADR 0005 records the new package budget.

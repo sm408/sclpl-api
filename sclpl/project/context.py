@@ -42,6 +42,16 @@ class ProjectContext:
             )
         return [self.resolve_path(item) for item in paths]
 
+    @property
+    def test_dirs(self) -> list[Path]:
+        """Directories containing versioned project test manifests."""
+        paths = _table(self.manifest, "tests").get("paths", ["tests"])
+        if not isinstance(paths, list) or not all(isinstance(item, str) for item in paths):
+            raise ValidationError(
+                "tests.paths must be an array of paths", where=str(self.manifest_path)
+            )
+        return [self.resolve_path(item) for item in paths]
+
     def resolve_path(self, value: str) -> Path:
         path = Path(value)
         if path.is_absolute():
@@ -59,6 +69,7 @@ class ProjectContext:
             "environment_source": self.environment_source,
             "settings": self.settings,
             "workflow_paths": [str(path) for path in self.workflow_dirs],
+            "test_paths": [str(path) for path in self.test_dirs],
         }
 
 
@@ -124,7 +135,16 @@ def _environment(raw: dict[str, Any], root: Path, explicit: str | None) -> tuple
 
 
 def _validate(raw: dict[str, Any], path: Path) -> None:
-    allowed = {"project", "workflows", "environments", "auth", "policy", "outputs", "notifications"}
+    allowed = {
+        "project",
+        "workflows",
+        "tests",
+        "environments",
+        "auth",
+        "policy",
+        "outputs",
+        "notifications",
+    }
     unknown = set(raw) - allowed
     if unknown:
         raise ValidationError(f"unknown manifest key {sorted(unknown)[0]!r}", where=str(path))

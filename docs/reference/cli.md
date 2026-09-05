@@ -24,6 +24,7 @@
 | `sclpl plugin` |  |
 | `sclpl project` |  |
 | `sclpl env` |  |
+| `sclpl test` |  |
 | `sclpl workflow` |  |
 | `sclpl runs` |  |
 | `sclpl secret` |  |

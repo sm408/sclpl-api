@@ -31,3 +31,5 @@ See [the decision log](DECISION-LOG.md) for implementation tradeoffs and evidenc
 - [x] C3 versioned SQLite migration with pre-migration backups and newer-schema refusal.
 - [ ] C4-C5 run provenance and process coordination.
 - [ ] D through J remain in the dependency order defined by the plan.
+- [x] E3 foundation: schema-versioned, project-contained test manifest discovery and
+  validation, with explicit workflow, fixture, expected-exit, assertions, and outputs.
