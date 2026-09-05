@@ -20,8 +20,7 @@ def generate(value: Any) -> dict[str, Any]:
     if isinstance(value, list):
         if not value:
             return {"type": "array"}
-        first = generate(value[0])
-        return {"type": "array", "items": first}
+        return {"type": "array", "items": _merge([generate(item) for item in value])}
     return {"type": _type(value)}
 
 
@@ -95,6 +94,30 @@ def _type(value: Any) -> str:
     if isinstance(value, dict):
         return "object"
     return type(value).__name__
+
+
+def _merge(candidates: list[dict[str, Any]]) -> dict[str, Any]:
+    """Keep only constraints supported by every observed array element."""
+    if not candidates or any(
+        candidate.get("type") != candidates[0].get("type") for candidate in candidates
+    ):
+        return {}
+    first = candidates[0]
+    if first.get("type") != "object":
+        return first
+    properties: dict[str, dict[str, Any]] = {}
+    names = set().union(*(set(candidate.get("properties", {})) for candidate in candidates))
+    for name in names:
+        present = [
+            candidate["properties"][name]
+            for candidate in candidates
+            if name in candidate.get("properties", {})
+        ]
+        properties[name] = _merge(present)
+    required = sorted(
+        set.intersection(*(set(candidate.get("required", [])) for candidate in candidates))
+    )
+    return {"type": "object", "required": required, "properties": dict(sorted(properties.items()))}
 
 
 def _resolve(

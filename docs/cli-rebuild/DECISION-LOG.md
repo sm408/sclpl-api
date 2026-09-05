@@ -164,3 +164,12 @@ the decision, its tradeoff, and the evidence available when it was made.
   and local JSON documents only. Remote fetch, caching, and trust policy remain absent.
 - **Evidence:** focused tests cover a local referenced definition and remote-reference
   refusal; contract checks continue to use assertion exit semantics.
+
+## 2026-09-05 — Conservative array contract candidates
+
+- **Decision:** Merge all observed array elements when generating a candidate: retain
+  only common required object fields and leave heterogeneous item constraints open.
+- **Tradeoff:** Candidate contracts avoid false breakage from one incomplete or mixed
+  sample, at the cost of requiring a reviewer to strengthen deliberately loose fields.
+- **Evidence:** focused tests cover optional fields inferred from differing samples and
+  unconstrained heterogeneous arrays.

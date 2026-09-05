@@ -28,6 +28,17 @@ def test_generation_creates_a_reviewable_nested_candidate() -> None:
     assert candidate["properties"]["items"]["items"]["properties"]["name"]["type"] == "string"
 
 
+def test_generation_makes_array_fields_optional_when_samples_differ() -> None:
+    candidate = generate([{"id": 1, "name": "Ada"}, {"id": 2}])
+    items = candidate["items"]
+    assert items["required"] == ["id"]
+    assert "name" in items["properties"]
+
+
+def test_generation_leaves_heterogeneous_array_items_unconstrained() -> None:
+    assert generate([1, "one"])["items"] == {}
+
+
 def test_contract_uses_a_local_reference(tmp_path: Path) -> None:
     shared = tmp_path / "shared.json"
     shared.write_text('{"$defs":{"id":{"type":"integer"}}}', encoding="utf-8")
