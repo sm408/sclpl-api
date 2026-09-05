@@ -236,6 +236,15 @@ the decision, its tradeoff, and the evidence available when it was made.
   stable Mermaid nodes and dependency edges.
 - **Evidence:** a two-step workflow smoke test emitted its two nodes and one edge.
 
+## 2026-09-05 — Strict replay fixture consumption
+
+- **Decision:** `run --strict-replay` rejects successful replay when any recorded
+  request fixture remains unused.
+- **Tradeoff:** Strictness is explicit so partial or intentionally broad fixture sets
+  retain the existing replay behavior unless the caller opts in.
+- **Evidence:** fixture tests track consumed metadata separately by occurrence, and the
+  run command exposes the strict admission option.
+
 ## 2026-09-05 — Offline manifest test execution
 
 - **Decision:** `test run` executes one validated project manifest through the regular
