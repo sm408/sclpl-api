@@ -110,7 +110,9 @@ async def run_workflow(doc: WorkflowDoc, options: Options, reporter: Reporter) -
         return Result(report=report, exit_code=problem.exit_code)
 
     assert report.plan is not None and report.resolved is not None
-    if options.record:
+    # A dry run has no scheduler or durable run outcome to resume, so retain the
+    # established behavior of not creating a history row for it.
+    if options.record and not options.dry_run:
         _remember_start(doc, options, report, started)
 
     reporter.emit(

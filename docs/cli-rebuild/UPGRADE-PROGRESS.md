@@ -4,6 +4,8 @@ This checklist records implementation evidence for
 [the unified upgrade plan](UNIFIED-UPGRADE-PLAN.md). A checked item has code and focused
 verification behind it; unchecked work remains release scope.
 
+See [the decision log](DECISION-LOG.md) for implementation tradeoffs and evidence.
+
 ## Batch A
 
 - [x] A2 format/version ownership: ADR 0003 defines project schema handling and the
