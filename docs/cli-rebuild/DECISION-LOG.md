@@ -173,3 +173,11 @@ the decision, its tradeoff, and the evidence available when it was made.
   sample, at the cost of requiring a reviewer to strengthen deliberately loose fields.
 - **Evidence:** focused tests cover optional fields inferred from differing samples and
   unconstrained heterogeneous arrays.
+
+## 2026-09-05 — Plugin metadata before activation
+
+- **Decision:** Plugin discovery can return manifests without importing modules; the
+  `plugin list --static` surface uses this path.
+- **Tradeoff:** Entry-point metadata without a discoverable manifest remains minimally
+  described until explicit activation; inspection never executes its module to fill gaps.
+- **Evidence:** an import-sentinel local plugin remains unexecuted during static discovery.

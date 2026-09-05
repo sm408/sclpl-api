@@ -67,6 +67,15 @@ def test_the_bundled_plugins_declare_what_they_do() -> None:
     assert registry.plugins["example"].capabilities == frozenset()
 
 
+def test_static_discovery_does_not_import_a_local_plugin(tmp_path: Path) -> None:
+    marker = tmp_path / "imported.txt"
+    body = f"from pathlib import Path\nPath({str(marker)!r}).write_text('x')\n"
+    make_plugin(tmp_path, "sentinel", body=body)
+    registry = ext.discover(include_bundled=False, extra_dirs=[tmp_path], activate=False)
+    assert "sentinel" in registry.plugins
+    assert not marker.exists()
+
+
 def test_a_manifest_declaring_a_connector_gets_it_registered() -> None:
     """A manifest naming something the code forgot is a bug worth being able to see."""
     from sclpl.ext.functions import REGISTRY

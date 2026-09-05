@@ -144,8 +144,9 @@ def discover(
     denied: Iterable[str] | None = None,
     include_bundled: bool = True,
     extra_dirs: Iterable[Path] = (),
+    activate: bool = True,
 ) -> Registry:
-    """Find every plugin, load the ones that fit, and record why the rest did not.
+    """Find plugin metadata, activating compatible plugins only when requested.
 
     Never raises for a bad plugin. One plugin with a malformed manifest should not stop
     a run that does not use it -- it is recorded as refused, listed by `plugin list`, and
@@ -167,8 +168,9 @@ def discover(
         for found in _from_directory(directory):
             REGISTRY.add(found)
 
-    for plugin in REGISTRY.plugins.values():
-        _load(plugin, denied_set)
+    if activate:
+        for plugin in REGISTRY.plugins.values():
+            _load(plugin, denied_set)
     return REGISTRY
 
 
@@ -262,15 +264,17 @@ def _entry_points() -> list[Plugin]:
 
     for point in points:
         plugin = Plugin(name=point.name, module=point.value, source="entry-point")
-        # A packaged plugin may ship its manifest beside the module. Reading it is how
-        # the capabilities and the ABI get declared; without one, it declares nothing
-        # and is refused for having no module only if the entry point is also empty.
+        # Inspection must never import plugin code. Activation happens only after the
+        # caller applies policy and explicitly chooses it.
         try:
-            module_root = Path(str(point.load().__file__)).parent
+            if point.dist is None:
+                found.append(plugin)
+                continue
+            manifest = point.dist.locate_file(f"{point.name}/{MANIFEST}")
         except Exception:  # noqa: BLE001 - loading to find the manifest must not throw
             found.append(plugin)
             continue
-        described = _read_manifest(module_root, "entry-point")
+        described = _read_manifest(manifest.parent, "entry-point")
         if described is not None:
             described.module = point.value
             described.name = described.name or point.name

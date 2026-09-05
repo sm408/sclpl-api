@@ -25,9 +25,12 @@ def list_plugins(
     refused: Annotated[
         bool, typer.Option("--refused", help="Only the ones that did not load.")
     ] = False,
+    static: Annotated[
+        bool, typer.Option("--static", help="Inspect metadata without importing plugins.")
+    ] = False,
 ) -> None:
     """What is installed, where it came from, and what it may do."""
-    registry = ext.discover()
+    registry = ext.discover(activate=not static)
     found = registry.refused() if refused else list(registry.plugins.values())
 
     if not found:
