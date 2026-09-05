@@ -126,7 +126,7 @@ the decision, its tradeoff, and the evidence available when it was made.
 ## 2026-09-05 — Contract package budget
 
 - **Decision:** Add `sclpl/contracts/` as a 700-line budgeted package and raise the total
-  target to 19,100 lines.
+  target to 19,100 lines; record the change in ADR 0004.
 - **Tradeoff:** The increase is explicit and reviewable; contract code cannot evade the
   architecture gate by living in an unlisted directory.
 

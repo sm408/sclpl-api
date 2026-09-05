@@ -20,6 +20,7 @@
 | `sclpl init` | Create a project without overwriting files. |
 | `sclpl doctor` | Check the installation and say what is missing. |
 | `sclpl completion` | Print a shell completion script. |
+| `sclpl contract` |  |
 | `sclpl plugin` |  |
 | `sclpl project` |  |
 | `sclpl env` |  |

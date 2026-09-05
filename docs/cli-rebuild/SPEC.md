@@ -665,7 +665,8 @@ Revised by **ADR 0001** (23 Aug 2026): the original ~7,150 was estimated before 
 existed and omitted `expr/ops/` and `plugins_bundled/` entirely. Revised again by
 **ADR 0002** (31 Aug 2026), which split `run/sclpll/` -- a lexer, parser, and emitter
 that grows with the *grammar* -- out of `run/`, which grows with what the runner *does*.
-Current target **~19,100 lines**, against ~59,100 deleted. Enforced in CI by
+Current target **~19,100 lines**, against ~59,100 deleted. The contract-package
+increase is recorded in [ADR 0004](../adr/0004-budget-contracts-package.md). Enforced in CI by
 `scripts/check_budget.py`, which counts code and excludes docstrings.
 
 | Package | Budget | | Package | Budget |
