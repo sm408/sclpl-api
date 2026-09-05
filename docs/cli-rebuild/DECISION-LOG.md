@@ -63,3 +63,10 @@ the decision, its tradeoff, and the evidence available when it was made.
   recording/replay remain the next integration slices.
 - **Evidence:** isolated record/replay smoke check confirms authorization headers are
   excluded from metadata and body lookup is digest-verified.
+
+## 2026-09-05 — Offline transport injection
+
+- **Decision:** `Pool` accepts an optional fixture store and serves matching responses
+  before client creation; repeated requests consume separate occurrence fixtures.
+- **Tradeoff:** CLI flags and recording still need to supply the store in a later slice.
+- **Evidence:** isolated offline transport smoke test completed without a live client.

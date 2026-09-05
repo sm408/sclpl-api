@@ -24,6 +24,7 @@ import httpx
 from sclpl.errors import StepFailed
 from sclpl.render.events import StepRetrying
 from sclpl.render.reporter import Reporter
+from sclpl.run.fixtures import Store as FixtureStore
 from sclpl.run.retry import (
     Adaptive,
     Breaker,
@@ -127,6 +128,8 @@ class Pool:
         "_lock",
         "_closed",
         "_adaptive_on",
+        "_fixtures",
+        "_occurrences",
     )
 
     def __init__(
@@ -135,6 +138,7 @@ class Pool:
         retry: Retry | None = None,
         *,
         adaptive: bool = True,
+        fixtures: FixtureStore | None = None,
     ) -> None:
         self._limits = limits if limits is not None else TransportLimits()
         self._retry = retry if retry is not None else Retry()
@@ -144,6 +148,8 @@ class Pool:
         self._adaptive_on = adaptive
         self._lock = asyncio.Lock()
         self._closed = False
+        self._fixtures = fixtures
+        self._occurrences: dict[tuple[str, str], int] = {}
 
     async def client(self, profile: Profile) -> httpx.AsyncClient:
         """The client for this profile, created once."""
@@ -204,6 +210,18 @@ class Pool:
         an open circuit, raises.
         """
         policy = retry if retry is not None else self._retry
+        if self._fixtures is not None:
+            occurrence_key = (method.upper(), url)
+            occurrence = self._occurrences.get(occurrence_key, 0)
+            self._occurrences[occurrence_key] = occurrence + 1
+            fixture = self._fixtures.replay(method, url, occurrence=occurrence)
+            response = httpx.Response(
+                fixture.status,
+                headers=fixture.headers,
+                content=fixture.body,
+                request=httpx.Request(method, url),
+            )
+            return Attempt(response=response, attempts=1, duration_ms=0)
         profile = Profile.of(url, verify=self._limits.verify)
         breaker = self.breaker(profile.host)
         client = await self.client(profile)
