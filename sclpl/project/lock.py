@@ -10,6 +10,7 @@ from typing import Any
 from sclpl.errors import ValidationError
 from sclpl.project.context import ProjectContext
 from sclpl.project.identity import WorkflowIdentity
+from sclpl.state.locking import Lock
 
 LOCK_NAME = "sclpl.lock"
 SCHEMA_VERSION = 1
@@ -52,9 +53,10 @@ def write(context: ProjectContext, identities: list[WorkflowIdentity]) -> Path:
             for identity in sorted(identities, key=lambda item: item.name)
         },
     }
-    temporary = path.with_suffix(".lock.tmp")
-    temporary.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-    temporary.replace(path)
+    with Lock(context.root / ".sclpl" / "locks" / "workflow.lock"):
+        temporary = path.with_suffix(".lock.tmp")
+        temporary.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        temporary.replace(path)
     return path
 
 

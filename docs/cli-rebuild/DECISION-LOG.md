@@ -203,6 +203,15 @@ the decision, its tradeoff, and the evidence available when it was made.
 - **Evidence:** a storage-fault test verifies that scheduler admission fails before the
   workflow can execute.
 
+## 2026-09-05 — Project mutation lock
+
+- **Decision:** Use a short OS-backed lock for workflow-lock writes, with bounded waits
+  and a separate owner marker for Windows-readable contention diagnostics.
+- **Tradeoff:** This first integration protects project metadata; output ownership and
+  additional project mutations will use the same primitive in later slices.
+- **Evidence:** focused contention testing reports the holder PID, and workflow lock
+  generation/verification regression tests pass.
+
 ## 2026-09-05 — Offline manifest test execution
 
 - **Decision:** `test run` executes one validated project manifest through the regular

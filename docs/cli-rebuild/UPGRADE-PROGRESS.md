@@ -32,7 +32,8 @@ See [the decision log](DECISION-LOG.md) for implementation tradeoffs and evidenc
 - [x] C3 versioned SQLite migration with pre-migration backups and newer-schema refusal.
 - [x] C4 run provenance: a running record is persisted before scheduling; audited runs
   can require that storage admission through `--require-provenance`.
-- [ ] C5 process coordination.
+- [ ] C5 process coordination: workflow-lock mutation admission is protected; output
+  ownership and remaining project mutations are still required.
 - [ ] D through J remain in the dependency order defined by the plan.
 - [x] E3 foundation: schema-versioned, project-contained test manifests execute through
   the regular runner with fixture replay offline, isolated scratch state, and expected-exit checks.
