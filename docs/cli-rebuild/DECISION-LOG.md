@@ -365,3 +365,27 @@ the decision, its tradeoff, and the evidence available when it was made.
   succeeds, while one targeting a different output is never slowed down. Batch C is
   now fully closed (C1-C5). Note for D: `run`'s budget headroom is down to 96 lines
   (of 3600); the D batch will likely need a budget revision.
+
+## 2026-09-06 — D1 transport service injection
+
+- **Decision:** Add `run/retry.Clock` (`now`, `sleep`, `jitter`, real by default) and
+  thread it through `transport.Pool` (constructor `clock=` parameter, replacing direct
+  `time.perf_counter`/`asyncio.sleep` calls) and `retry.Breaker` (`now=` field,
+  replacing direct `time.monotonic()`), and give `Retry.delay_for` an optional
+  `jitter` parameter that a caller can supply instead of it drawing its own via
+  `random.random()`.
+- **Why:** D2's virtual-time breaker-transition testing and any deterministic backoff
+  test need to advance time and fix randomness without a real wait or monkeypatching
+  a stdlib module global (which would affect every other test in the process). Every
+  default stays real time and real randomness, so this is additive infrastructure,
+  not a behavior change.
+- **Tradeoff:** Also budgeted `run/` up from 3,600 to 4,800 lines (ADR 0006, total
+  19,800 to 21,000) ahead of D2-D4/D7, since D1 alone used the package's last 81
+  lines of headroom and every remaining D task lands in `run/`.
+- **Evidence:** All existing transport/retry/call/pagination/scheduling tests pass
+  unchanged (the explicit D1 accept criterion). New tests: an injected `jitter` makes
+  `delay_for` deterministic while an uninjected call still draws real randomness; an
+  injected `Breaker.now` proves the exact reset-window boundary without a
+  `reset_after=0.0` trick; a `VirtualClock`-backed `Pool` retries a real flaky local
+  endpoint against a 100-second nominal backoff and the test still completes in well
+  under a second, with the chosen delays recorded rather than actually waited out.

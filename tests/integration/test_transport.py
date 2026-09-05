@@ -10,8 +10,24 @@ import pytest
 from sclpl.errors import StepFailed
 from sclpl.render.plain import PlainSink
 from sclpl.render.reporter import Reporter
-from sclpl.run.retry import Retry
+from sclpl.run.retry import Clock, Retry
 from sclpl.run.transport import Pool, Profile, TransportLimits, decode, summarise
+
+
+class VirtualClock:
+    """No real time passes: `sleep` advances a counter instead of waiting."""
+
+    def __init__(self) -> None:
+        self.slept: list[float] = []
+
+    def now(self) -> float:
+        return float(len(self.slept))
+
+    async def sleep(self, delay: float) -> None:
+        self.slept.append(delay)
+
+    def jitter(self) -> float:
+        return 0.5
 
 
 def reporter(stream: io.StringIO | None = None) -> Reporter:
@@ -67,6 +83,22 @@ async def test_a_flaky_endpoint_succeeds_on_retry(server_url: str) -> None:
     assert attempt.response.status_code == 200
     assert attempt.attempts == 3
     assert attempt.retried
+
+
+async def test_a_virtual_clock_never_actually_waits_out_the_backoff(
+    server_url: str,
+) -> None:
+    """D1: a huge nominal backoff costs this test nothing, because `sleep` here is a
+    bookkeeping call, not a wait. `slept` still records what the policy chose.
+    """
+    clock = VirtualClock()
+    retry = Retry(max=3, base_delay=100.0, max_delay=1000.0)
+    async with Pool(retry=retry, clock=Clock(clock.now, clock.sleep, clock.jitter)) as pool:
+        attempt = await pool.request("GET", f"{server_url}/flaky/2")
+    assert attempt.response.status_code == 200
+    assert attempt.attempts == 3
+    assert len(clock.slept) == 2  # two retries before the third attempt succeeded
+    assert all(delay > 0 for delay in clock.slept)
 
 
 async def test_retries_are_reported(server_url: str) -> None:

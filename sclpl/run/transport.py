@@ -14,7 +14,6 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
-import time
 from dataclasses import dataclass, field
 from types import TracebackType
 from typing import Any
@@ -27,8 +26,10 @@ from sclpl.render.reporter import Reporter
 from sclpl.run.fixtures import Fixture
 from sclpl.run.fixtures import Store as FixtureStore
 from sclpl.run.retry import (
+    REAL_CLOCK,
     Adaptive,
     Breaker,
+    Clock,
     Retry,
     is_retryable_error,
     response_retry_after,
@@ -132,6 +133,7 @@ class Pool:
         "_fixtures",
         "_recorder",
         "_occurrences",
+        "_clock",
     )
 
     def __init__(
@@ -142,6 +144,7 @@ class Pool:
         adaptive: bool = True,
         fixtures: FixtureStore | None = None,
         recorder: FixtureStore | None = None,
+        clock: Clock | None = None,
     ) -> None:
         self._limits = limits if limits is not None else TransportLimits()
         self._retry = retry if retry is not None else Retry()
@@ -154,6 +157,7 @@ class Pool:
         self._fixtures = fixtures
         self._recorder = recorder
         self._occurrences: dict[tuple[str, str], int] = {}
+        self._clock = clock if clock is not None else REAL_CLOCK
 
     async def client(self, profile: Profile) -> httpx.AsyncClient:
         """The client for this profile, created once."""
@@ -186,7 +190,7 @@ class Pool:
     def breaker(self, host: str) -> Breaker:
         existing = self._breakers.get(host)
         if existing is None:
-            existing = Breaker()
+            existing = Breaker(now=self._clock.now)
             self._breakers[host] = existing
         return existing
 
@@ -240,7 +244,7 @@ class Pool:
         profile = Profile.of(url, verify=self._limits.verify)
         breaker = self.breaker(profile.host)
         client = await self.client(profile)
-        started = time.perf_counter()
+        started = self._clock.now()
 
         if not breaker.allows():
             raise StepFailed(
@@ -253,7 +257,7 @@ class Pool:
 
         last_error: BaseException | None = None
         for attempt in range(policy.max + 1):
-            attempt_started = time.perf_counter()
+            attempt_started = self._clock.now()
             try:
                 response = await client.request(method, url, **kwargs)
             except Exception as error:  # noqa: BLE001 - classified just below
@@ -264,7 +268,7 @@ class Pool:
                 await self._wait(reporter, step, attempt, policy, None, error, None)
                 continue
 
-            latency = time.perf_counter() - attempt_started
+            latency = self._clock.now() - attempt_started
             self._observe(profile.host, latency, response.status_code)
 
             if policy.should_retry_status(response.status_code) and attempt < policy.max:
@@ -298,7 +302,7 @@ class Pool:
             return Attempt(
                 response=response,
                 attempts=attempt + 1,
-                duration_ms=int((time.perf_counter() - started) * 1000),
+                duration_ms=int((self._clock.now() - started) * 1000),
                 retried=attempt > 0,
             )
 
@@ -319,7 +323,7 @@ class Pool:
         error: BaseException | None,
         retry_after: float | None,
     ) -> None:
-        delay = policy.delay_for(attempt, retry_after)
+        delay = policy.delay_for(attempt, retry_after, jitter=self._clock.jitter())
         if reporter is not None:
             reporter.emit(
                 StepRetrying(
@@ -330,7 +334,7 @@ class Pool:
                     delay_s=delay,
                 )
             )
-        await asyncio.sleep(delay)
+        await self._clock.sleep(delay)
 
     def _exhausted(
         self,

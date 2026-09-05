@@ -13,9 +13,11 @@ recovering server gets knocked back down. `random() * base * 2**attempt` spreads
 
 from __future__ import annotations
 
+import asyncio
 import email.utils
 import random
 import time
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -26,6 +28,25 @@ RETRY_STATUSES: frozenset[int] = frozenset({408, 425, 429, 500, 502, 503, 504})
 #: Beyond this a "retry" is really a hang. A server asking for an hour needs a
 #: scheduled run, not a held connection.
 MAX_RETRY_AFTER_SECONDS = 300.0
+
+
+@dataclass(frozen=True, slots=True)
+class Clock:
+    """Time, sleep, and randomness, gathered so a test can replace all three at once.
+
+    D1: the transport used to reach directly for `time.perf_counter`, `asyncio.sleep`,
+    and `random.random`, which means testing backoff timing or breaker recovery meant
+    either a real wait or monkeypatching a stdlib module out from under every other
+    test in the process. Real time and real randomness by default; a test builds its
+    own `Clock` with a controllable `now`/`sleep`/`jitter` instead.
+    """
+
+    now: Callable[[], float] = time.monotonic
+    sleep: Callable[[float], Awaitable[None]] = asyncio.sleep
+    jitter: Callable[[], float] = random.random
+
+
+REAL_CLOCK = Clock()
 
 
 @dataclass(slots=True)
@@ -39,15 +60,22 @@ class Retry:
     #: Retry on connection errors and timeouts as well as statuses.
     on_transport_error: bool = True
 
-    def delay_for(self, attempt: int, retry_after: float | None = None) -> float:
-        """How long to wait before ``attempt``, honouring the server if it spoke."""
+    def delay_for(
+        self, attempt: int, retry_after: float | None = None, *, jitter: float | None = None
+    ) -> float:
+        """How long to wait before ``attempt``, honouring the server if it spoke.
+
+        ``jitter`` is a spread factor in ``[0, 1)``; the caller supplies one already
+        drawn (from a `Clock`, ordinarily) rather than this method drawing its own, so
+        a deterministic test can pin the exact delay instead of asserting a range.
+        """
         if retry_after is not None:
             return min(max(0.0, retry_after), MAX_RETRY_AFTER_SECONDS)
         # `2 ** attempt` types as Any (it is float for a negative exponent), so pin it.
         growth: float = float(2**attempt)
         ceiling = min(self.max_delay, self.base_delay * growth)
-        jitter: float = random.random()  # noqa: S311 - spreading load, not cryptography
-        return jitter * ceiling
+        drawn = jitter if jitter is not None else random.random()  # noqa: S311 - spreading load
+        return drawn * ceiling
 
     def should_retry_status(self, status: int) -> bool:
         return status in self.statuses
@@ -81,6 +109,9 @@ class Breaker:
 
     threshold: int = 5
     reset_after: float = 30.0
+    #: Monotonic time source. Real by default; a test injects one it controls so a
+    #: reset window does not mean an actual wait.
+    now: Callable[[], float] = time.monotonic
     _failures: int = 0
     _opened_at: float | None = None
     _probing: bool = False
@@ -94,7 +125,7 @@ class Breaker:
     def allows(self) -> bool:
         if self._opened_at is None:
             return True
-        if time.monotonic() - self._opened_at >= self.reset_after:
+        if self.now() - self._opened_at >= self.reset_after:
             self._probing = True
             return True
         return False
@@ -109,10 +140,10 @@ class Breaker:
         if self._probing:
             # The probe failed: back to fully open, and start the timer again.
             self._probing = False
-            self._opened_at = time.monotonic()
+            self._opened_at = self.now()
             return
         if self._failures >= self.threshold:
-            self._opened_at = time.monotonic()
+            self._opened_at = self.now()
 
 
 @dataclass(slots=True)

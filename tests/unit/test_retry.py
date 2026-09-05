@@ -82,6 +82,23 @@ def test_unparseable_retry_after_is_ignored(value: str | None) -> None:
     assert parse_retry_after(value) is None
 
 
+# -- injected clock and randomness (D1) -------------------------------------------
+
+
+def test_an_injected_jitter_makes_the_delay_deterministic() -> None:
+    policy = Retry(base_delay=1.0, max_delay=100.0)
+    assert policy.delay_for(3, jitter=0.5) == policy.delay_for(3, jitter=0.5)
+    assert policy.delay_for(3, jitter=0.0) == 0.0
+    assert policy.delay_for(3, jitter=1.0) == min(100.0, 1.0 * 2**3)
+
+
+def test_an_injected_jitter_does_not_disturb_the_uninjected_default() -> None:
+    """Existing callers that never pass `jitter` still get real randomness."""
+    policy = Retry(base_delay=1.0, max_delay=100.0)
+    samples = {policy.delay_for(3) for _ in range(20)}
+    assert len(samples) > 1
+
+
 # -- circuit breaker -------------------------------------------------------------
 
 
@@ -124,6 +141,16 @@ def test_a_successful_probe_closes_the_circuit() -> None:
     breaker.allows()
     breaker.record_success()
     assert breaker.state == "closed"
+
+
+def test_an_injected_clock_governs_the_reset_window_exactly() -> None:
+    """No `reset_after=0.0` trick needed: a virtual clock proves the exact boundary."""
+    ticks = iter([0.0, 29.9, 30.0])
+    breaker = Breaker(threshold=1, reset_after=30.0, now=lambda: next(ticks))
+    breaker.record_failure()  # opens at t=0
+    assert not breaker.allows()  # checked at t=29.9: still open
+    assert breaker.allows()  # checked at t=30.0: exactly at the boundary, half-open
+    assert breaker.state == "half-open"
 
 
 # -- adaptive concurrency --------------------------------------------------------

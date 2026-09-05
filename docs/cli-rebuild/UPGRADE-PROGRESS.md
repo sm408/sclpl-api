@@ -57,7 +57,11 @@ See [the decision log](DECISION-LOG.md) for implementation tradeoffs and evidenc
   primitive as those slices land (H, E8).
 - [x] D5-D6 foundation: versioned, redacted request/response fixtures support offline
   replay, recording, occurrence tracking, digest verification, and opt-in unused-fixture refusal.
-- [ ] D1-D4 and D7 remain in the dependency order defined by the plan.
+- [x] D1 transport service injection: `run/retry.Clock` (injectable `now`/`sleep`/
+  jitter) threads through `Pool`, `Breaker`, and `Retry.delay_for`; real time and
+  randomness by default, fully deterministic "virtual time" for tests. Budget for
+  the rest of Batch D recorded in ADR 0006 (`run/` 3,600 to 4,800 lines).
+- [ ] D2-D4 and D7 remain in the dependency order defined by the plan.
 - [x] E3 foundation: schema-versioned, project-contained test manifests execute through
   the regular runner with fixture replay offline, isolated scratch state, expected-exit,
   local contract assertions, and JSON expected-output checks.
