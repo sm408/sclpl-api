@@ -114,3 +114,18 @@ the decision, its tradeoff, and the evidence available when it was made.
 - **Tradeoff:** A workflow run can now record and replay with shared primitives; policy
   validation and richer fixture selection remain later Batch D work.
 - **Evidence:** CLI help, Ruff, and mypy validate the public contract and wiring.
+
+## 2026-09-05 — Shared contract evaluator
+
+- **Decision:** Start contracts with a strict documented JSON-compatible subset and
+  raise the existing `AssertionFailed` diagnostic type.
+- **Tradeoff:** Remote references and broader JSON Schema dialect features remain disabled
+  until they have explicit security and compatibility rules.
+- **Evidence:** nested type, required-field, enum, and bounds tests exercise value paths.
+
+## 2026-09-05 — Contract package budget
+
+- **Decision:** Add `sclpl/contracts/` as a 700-line budgeted package and raise the total
+  target to 19,100 lines.
+- **Tradeoff:** The increase is explicit and reviewable; contract code cannot evade the
+  architecture gate by living in an unlisted directory.
