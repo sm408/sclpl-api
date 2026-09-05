@@ -90,6 +90,9 @@ def run(
         Path | None,
         typer.Option("--replay", help="Serve HTTP requests from this fixture directory offline."),
     ] = None,
+    strict_replay: Annotated[
+        bool, typer.Option("--strict-replay", help="Fail if replay leaves fixtures unused.")
+    ] = False,
     record_fixture: Annotated[
         Path | None,
         typer.Option("--record", help="Record HTTP responses into this fixture directory."),
@@ -160,6 +163,7 @@ def run(
         offline=offline,
         http_cache=http_cache,
         fixture_root=replay,
+        strict_replay=strict_replay,
         record_fixture_root=record_fixture,
     )
     globals_ = options_of(ctx)

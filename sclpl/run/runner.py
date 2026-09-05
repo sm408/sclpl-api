@@ -71,6 +71,7 @@ class Options:
     started_at: str = ""
     fixture_root: Path | None = None
     record_fixture_root: Path | None = None
+    strict_replay: bool = False
     #: Parent directory for temporary spill data; test execution supplies an isolated root.
     scratch_dir: Path | None = None
 
@@ -158,9 +159,10 @@ async def run_workflow(doc: WorkflowDoc, options: Options, reporter: Reporter) -
         http_cache=options.http_cache,
     )
     store_cache = cache.Cache(cache.default_root(), policy=policy) if policy.enabled else None
+    fixtures = FixtureStore(options.fixture_root) if options.fixture_root else None
     async with Pool(
         transport,
-        fixtures=FixtureStore(options.fixture_root) if options.fixture_root else None,
+        fixtures=fixtures,
         recorder=FixtureStore(options.record_fixture_root) if options.record_fixture_root else None,
     ) as pool:
         runtime = Runtime(
@@ -214,6 +216,8 @@ async def run_workflow(doc: WorkflowDoc, options: Options, reporter: Reporter) -
                 store_cache.close()
 
     exit_code = _exit_code(outcome)
+    if options.strict_replay and fixtures is not None and fixtures.unused():
+        raise ValidationError("strict replay left unused fixtures")
     reporter.emit(
         RunFinished(
             status=outcome.status,  # type: ignore[arg-type]
