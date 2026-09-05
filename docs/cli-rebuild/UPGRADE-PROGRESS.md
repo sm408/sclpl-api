@@ -46,8 +46,15 @@ See [the decision log](DECISION-LOG.md) for implementation tradeoffs and evidenc
 - [x] C3 versioned SQLite migration with pre-migration backups and newer-schema refusal.
 - [x] C4 run provenance: a running record is persisted before scheduling; audited runs
   can require that storage admission through `--require-provenance`.
-- [ ] C5 process coordination: workflow-lock mutation admission is protected; output
-  ownership and remaining project mutations are still required.
+- [x] C5 process coordination: `state/locking.output_locks` extends the same
+  OS-backed primitive from workflow-lock mutation to managed output destinations,
+  canonicalized (resolved, case-folded on Windows) and acquired in one fixed sorted
+  order so competing writers to the *same* output wait or fail with an owner while
+  writers to *different* outputs never block each other. Held for a run's whole
+  duration, from before the first step through scheduler completion. Verified across
+  real separate OS processes. Remaining project-mutation call sites (package
+  install, publication, environment selection, artifact pruning) adopt the same
+  primitive as those slices land (H, E8).
 - [x] D5-D6 foundation: versioned, redacted request/response fixtures support offline
   replay, recording, occurrence tracking, digest verification, and opt-in unused-fixture refusal.
 - [ ] D1-D4 and D7 remain in the dependency order defined by the plan.

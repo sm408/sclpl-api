@@ -27,7 +27,7 @@ from sclpl.run.plan import Node
 from sclpl.run.preflight import Report, preflight
 from sclpl.run.schedule import JOIN_SUFFIX, ExpandSpec, Limits, Outcome, Scheduler
 from sclpl.run.transport import Pool, TransportLimits
-from sclpl.state import db, safe_args
+from sclpl.state import db, locking, safe_args
 from sclpl.tables.io import STDIO
 from sclpl.values import cache, governor
 from sclpl.values.governor import parse_budget
@@ -76,6 +76,8 @@ class Options:
     strict_replay: bool = False
     #: Parent directory for temporary spill data; test execution supplies an isolated root.
     scratch_dir: Path | None = None
+    #: How long to wait for exclusive ownership of a managed output another run holds.
+    output_lock_timeout: float = 30.0
 
 
 @dataclass(slots=True)
@@ -162,56 +164,67 @@ async def run_workflow(doc: WorkflowDoc, options: Options, reporter: Reporter) -
     )
     store_cache = cache.Cache(cache.default_root(), policy=policy) if policy.enabled else None
     fixtures = FixtureStore(options.fixture_root) if options.fixture_root else None
-    async with Pool(
-        transport,
-        fixtures=fixtures,
-        recorder=FixtureStore(options.record_fixture_root) if options.record_fixture_root else None,
-    ) as pool:
-        runtime = Runtime(
-            doc=doc,
-            store=store,
-            reporter=reporter,
-            pool=pool,
-            vars=variables,
-            stubs=dict(report.resolved.stubs),
-            outputs=_output_paths(report),
-            pools=pools,
-            cache=store_cache,
-            auth_profiles=_auth_profiles(doc, options),
-        )
-        for name, value in report.resolved.stubs.items():
-            # A stub stands in for a producer the mode pruned. It is pinned, because
-            # nothing produced it and its refcount would otherwise free it early.
-            store.put(name, value, readers=report.plan.readers_of(name), pinned=True)
+    outputs = _output_paths(report)
+    # C5: exclusive ownership of every managed destination for the run's whole
+    # duration, acquired before any step -- including the first one -- can write.
+    # Two runs targeting different files never wait on each other; two racing the
+    # same one do, in a fixed order, so neither can deadlock the other.
+    output_paths = [Path(path) for path in outputs.values() if path != STDIO]
+    with locking.output_locks(output_paths, timeout=options.output_lock_timeout):
+        async with Pool(
+            transport,
+            fixtures=fixtures,
+            recorder=FixtureStore(options.record_fixture_root)
+            if options.record_fixture_root
+            else None,
+        ) as pool:
+            runtime = Runtime(
+                doc=doc,
+                store=store,
+                reporter=reporter,
+                pool=pool,
+                vars=variables,
+                stubs=dict(report.resolved.stubs),
+                outputs=outputs,
+                pools=pools,
+                cache=store_cache,
+                auth_profiles=_auth_profiles(doc, options),
+            )
+            for name, value in report.resolved.stubs.items():
+                # A stub stands in for a producer the mode pruned. It is pinned, because
+                # nothing produced it and its refcount would otherwise free it early.
+                store.put(name, value, readers=report.plan.readers_of(name), pinned=True)
 
-        async def runner(node: Node) -> Any:
-            # Three kinds of node reach here. Most are steps someone wrote. The rest the
-            # run grew for itself: a copy of a loop body, and the barrier that gathers
-            # one. Only the first kind is in the document.
-            if node.id.endswith(JOIN_SUFFIX):
-                return collect(node.id[: -len(JOIN_SUFFIX)], runtime)
-            if node.id in runtime.injected:
-                value = await run_injected(node.id, runtime)
+            async def runner(node: Node) -> Any:
+                # Three kinds of node reach here. Most are steps someone wrote. The
+                # rest the run grew for itself: a copy of a loop body, and the barrier
+                # that gathers one. Only the first kind is in the document.
+                if node.id.endswith(JOIN_SUFFIX):
+                    return collect(node.id[: -len(JOIN_SUFFIX)], runtime)
+                if node.id in runtime.injected:
+                    value = await run_injected(node.id, runtime)
+                    return None if value is SKIPPED else value
+
+                step = doc.step(node.id)
+                if step is None:  # pragma: no cover - the plan is built from these steps
+                    raise SclplError(f"no such step {node.id!r}")
+                value = await run_step(step, node, runtime)
                 return None if value is SKIPPED else value
 
-            step = doc.step(node.id)
-            if step is None:  # pragma: no cover - the plan is built from these steps
-                raise SclplError(f"no such step {node.id!r}")
-            value = await run_step(step, node, runtime)
-            return None if value is SKIPPED else value
+            scheduler = Scheduler(report.plan, store, reporter, limits)
 
-        scheduler = Scheduler(report.plan, store, reporter, limits)
+            def expand(
+                parent: str, specs: list[ExpandSpec], tag_limit: tuple[str, int] | None
+            ) -> None:
+                scheduler.expand(parent, specs, tag_limit=tag_limit)
 
-        def expand(parent: str, specs: list[ExpandSpec], tag_limit: tuple[str, int] | None) -> None:
-            scheduler.expand(parent, specs, tag_limit=tag_limit)
-
-        runtime.expand = expand
-        try:
-            outcome = await scheduler.run(runner)
-        finally:
-            # Pools outlive the event loop unless closed, and a lingering process pool
-            # keeps the interpreter alive after the CLI has printed its summary.
-            pools.close()
+            runtime.expand = expand
+            try:
+                outcome = await scheduler.run(runner)
+            finally:
+                # Pools outlive the event loop unless closed, and a lingering process
+                # pool keeps the interpreter alive after the CLI has printed its summary.
+                pools.close()
             if store_cache is not None:
                 if store_cache.stats.hits or store_cache.stats.writes:
                     reporter.log("info", store_cache.stats.summary())

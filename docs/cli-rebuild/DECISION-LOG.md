@@ -333,3 +333,35 @@ the decision, its tradeoff, and the evidence available when it was made.
   `run_workflow` for each kind against a real server, including the conflict refusal,
   the unknown-profile error, the 401-refresh-and-retry, and the cross-origin redirect
   case. Batch B is now fully closed (B1-B6).
+
+## 2026-09-06 — C5 output ownership
+
+- **Decision:** Extend the OS-backed `Lock` primitive already used for workflow-lock
+  writes (`sclpl/state/locking.py`) to managed output destinations. A new
+  `output_locks(paths)` canonicalizes each path (resolved, case-folded on Windows),
+  deduplicates, sorts them into one fixed order, and acquires a lock file beside each
+  destination (`<file>.sclpl-lock`) rather than in a project-wide registry, since a
+  managed output need not live inside any project. `runner.run_workflow` holds these
+  locks for the run's entire duration -- from before the first step runs through
+  scheduler completion -- over every port-bound output, before any step can write.
+- **Why:** Two runs racing the same output file could interleave writes into it with
+  nothing stopping them; a workflow with several output ports needs its locks
+  acquired in the same order every time, or two runs wanting the same two outputs in
+  opposite order could deadlock each other.
+- **Tradeoff:** Only port-bound (`-> name`) outputs are covered -- an ad-hoc
+  `save_csv(..., "/explicit/path")` inside a function call is, per section 3.5, an
+  explicit side effect outside managed publication, so it is not locked here. The
+  lock is acquired with a blocking, synchronously-polling primitive; that is fine
+  because each `sclpl run` is its own OS process with nothing else on its event loop
+  at that point, but it means two `run_workflow` calls sharing one event loop
+  (as in-process tests sometimes do) would stall each other rather than run
+  concurrently -- real usage is unaffected.
+- **Evidence:** `tests/unit/test_locking.py` proves non-conflicting outputs never
+  wait on each other, the same output is exclusive, case/relative-segment aliases on
+  Windows collide on one lock, opposite acquisition orders never deadlock (two real
+  threads, both complete), and a *separate process* holding the lock is a visible,
+  named owner. `tests/integration/test_output_locking.py` proves it through the real
+  CLI: a `sclpl run` targeting an output another process holds waits for it and then
+  succeeds, while one targeting a different output is never slowed down. Batch C is
+  now fully closed (C1-C5). Note for D: `run`'s budget headroom is down to 96 lines
+  (of 3600); the D batch will likely need a budget revision.
