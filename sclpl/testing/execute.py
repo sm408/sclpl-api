@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 
 from sclpl.catalog import resolve as catalog
+from sclpl.contracts import check as check_contract
 from sclpl.errors import AssertionFailed
 from sclpl.project.context import ProjectContext
 from sclpl.render.plain import QuietSink
@@ -50,4 +52,29 @@ def run(manifest: Manifest, project: ProjectContext) -> Outcome:
         raise AssertionFailed(
             f"{manifest.path}: expected exit {manifest.expected_exit}, got {result.exit_code}"
         )
+    if result.exit_code == 0:
+        _assert(manifest, result)
     return Outcome(manifest, result, state_dir)
+
+
+def _assert(manifest: Manifest, result: Result) -> None:
+    if result.store is None:
+        raise AssertionFailed(f"{manifest.path}: successful run produced no value store")
+    for assertion in manifest.assertions:
+        step = assertion["step"]
+        try:
+            value = result.store.get(step)
+        except KeyError as error:
+            raise AssertionFailed(
+                f"{manifest.path}: assertion step {step!r} was not produced"
+            ) from error
+        contract_path = (manifest.path.parent / assertion["contract"]).resolve()
+        try:
+            contract = json.loads(contract_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as error:
+            raise AssertionFailed(
+                f"{manifest.path}: invalid assertion contract {contract_path}"
+            ) from error
+        if not isinstance(contract, dict):
+            raise AssertionFailed(f"{manifest.path}: assertion contract must be an object")
+        check_contract(value, contract, path=f"${step}", source=contract_path)

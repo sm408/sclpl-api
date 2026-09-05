@@ -212,6 +212,15 @@ the decision, its tradeoff, and the evidence available when it was made.
 - **Evidence:** focused contention testing reports the holder PID, and workflow lock
   generation/verification regression tests pass.
 
+## 2026-09-05 — Manifest contract assertions
+
+- **Decision:** Test manifests name a produced step and a local contract file; successful
+  offline runs validate that stored value through the shared contract evaluator.
+- **Tradeoff:** Assertions are deliberately local and explicit. Snapshot and structured
+  output comparison remain separate test-runner work.
+- **Evidence:** a project test workflow produces an integer that satisfies its declared
+  local contract during isolated execution.
+
 ## 2026-09-05 — Offline manifest test execution
 
 - **Decision:** `test run` executes one validated project manifest through the regular

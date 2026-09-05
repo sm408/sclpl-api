@@ -24,7 +24,7 @@ def test_discovers_and_loads_a_versioned_manifest(tmp_path) -> None:
     path = tests / "orders.test.toml"
     path.write_text(
         "workflow = 'orders'\nfixture = '../fixtures/orders'\nexpected_exit = 4\n"
-        "[inputs]\nregion = 'eu'\n[[assertions]]\npath = '$.id'\n"
+        "[inputs]\nregion = 'eu'\n[[assertions]]\nstep = 'orders'\ncontract = 'orders.json'\n"
         "[expected_outputs]\norders = 'snapshot.json'\n",
         encoding="utf-8",
     )
@@ -53,8 +53,13 @@ def test_runs_a_manifest_offline_with_isolated_state(tmp_path) -> None:
     )
     fixtures = tmp_path / "fixtures" / "one"
     fixtures.mkdir(parents=True)
+    (tmp_path / "value.contract.json").write_text('{"type":"integer"}', encoding="utf-8")
     path = tmp_path / "one.test.toml"
-    path.write_text("workflow = 'one'\nfixture = 'fixtures/one'\n", encoding="utf-8")
+    path.write_text(
+        "workflow = 'one'\nfixture = 'fixtures/one'\n[[assertions]]\n"
+        "step = 'value'\ncontract = 'value.contract.json'\n",
+        encoding="utf-8",
+    )
     outcome = run(load(path, project), project)
     assert outcome.result.exit_code == 0
     assert outcome.state_dir.is_relative_to(tmp_path / ".sclpl" / "tests")

@@ -89,9 +89,14 @@ def _validate(raw: dict[str, Any], path: Path) -> None:
         raise ValidationError("expected_exit must be an integer", where=str(path))
     if "assertions" in raw and (
         not isinstance(raw["assertions"], list)
-        or not all(isinstance(item, dict) for item in raw["assertions"])
+        or not all(
+            isinstance(item, dict)
+            and set(item) == {"step", "contract"}
+            and all(isinstance(item[key], str) and item[key] for key in item)
+            for item in raw["assertions"]
+        )
     ):
-        raise ValidationError("assertions must be an array of tables", where=str(path))
+        raise ValidationError("assertions must contain step and contract strings", where=str(path))
 
 
 def _path(value: str, manifest: Path, project: ProjectContext) -> Path:
