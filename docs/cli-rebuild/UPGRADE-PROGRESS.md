@@ -15,7 +15,11 @@ See [the decision log](DECISION-LOG.md) for implementation tradeoffs and evidenc
 - [ ] A1 compatibility baseline and regression fixtures.
 - [x] A3 metadata-first plugin activation: static discovery and CLI help avoid plugin
   import; approved inventory activation follows capability-policy validation.
-- [ ] A5 credential-sink audit and regression helpers.
+- [x] A5 credential-sink audit: `secret()` now registers its resolved value with the
+  run's active reporter, closing a gap where nothing ever called `Reporter.secret()`
+  despite the module docstring promising it; `call --header` registers credential-shaped
+  header values the same way; a failed step's persisted error is scrubbed through the
+  same reporter. Command-line argv redaction was already closed separately (`safe_args`).
 
 ## Batch B
 

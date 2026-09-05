@@ -253,3 +253,38 @@ the decision, its tradeoff, and the evidence available when it was made.
   work; this slice establishes the isolated, offline execution boundary they require.
 - **Evidence:** an end-to-end manifest test runs a project workflow and verifies its
   scratch directory is contained below `.sclpl/tests`.
+
+## 2026-09-06 — A5 credential-sink audit closes the dead redaction path
+
+- **Decision:** `secrets_fns.secret()` now looks up the currently active `Reporter`
+  through a new `sclpl.render.reporter.active_reporter()` context var and registers its
+  resolved value with it (`reporter.secret(found)`), instead of only returning the value.
+  `sclpl call --header` registers header values under known credential-shaped names
+  (`authorization`, `proxy-authorization`, `cookie`, `x-api-key`, `api-key`) the same way.
+  A new `Reporter.scrub(text)` method exposes the reporter's redaction outside the event
+  pipeline, and `runner._remember` now uses it to scrub a failed step's persisted error.
+- **Why:** `secrets_fns.py`'s own module docstring has promised since it was written that
+  "redaction happens in the reporter, keyed on the set of resolved secret values, so this
+  can return the real thing and every sink still shows it redacted" — but nothing in the
+  codebase ever called `Reporter.secret()`. Every workflow that used `secret()` (the
+  documented pattern is `@var token = "{{secret('api_token')}}"` feeding a header) had its
+  real credential value flow through every event the reporter processes with no redaction
+  at all, because the redactor's value set was always empty. Command-line argv redaction
+  had already been closed separately (`sclpl/state/safe_args.py`, commit `d7f338f`), but
+  that fix does not cover values a workflow resolves at runtime rather than typing on the
+  command line, and it does not cover step failure messages.
+- **Tradeoff:** The context var only crosses an `async with Reporter(...)` boundary on the
+  same OS thread; a function dispatched to a process lane would not see it. `secret()` is a
+  small, synchronous, string-returning call, so it is never assigned a process lane in
+  practice, but this is a real limitation rather than a general-purpose mechanism, and a
+  future secret-resolving builtin that legitimately needs a process lane will need its own
+  registration path. Header credential detection is name-based (a fixed list mirrored from
+  `run/fixtures.py`'s own forbidden-header set, extended with common API-key spellings) —
+  it protects known-shaped credentials, not arbitrary secret-carrying headers.
+- **Evidence:** `tests/unit/test_secrets_fns.py` proves a value resolved via `secret()`
+  inside an expression is unreadable through the same reporter immediately afterward, and
+  that a missing/too-short secret is still handled correctly. `tests/unit/test_call_headers.py`
+  covers the same for `call --header`. `tests/unit/test_runner.py` proves a step error
+  containing a resolved secret is scrubbed before it reaches the history database, while an
+  ordinary error is left readable. `tests/unit/test_reporter.py` covers the new `scrub()`
+  method and the `active_reporter()` context var directly.

@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import contextvars
 import sys
 from collections.abc import Sequence
 from pathlib import Path
@@ -25,6 +26,19 @@ from sclpl.render.jsonl import JsonlSink
 from sclpl.render.plain import PlainSink, QuietSink
 from sclpl.render.redact import Redactor
 from sclpl.render.term import Caps, TerminalGuard, probe
+
+#: The reporter for whichever run is currently executing, if any. Lets a builtin like
+#: `secret()` register a resolved value for redaction without every function signature
+#: in the project carrying a reporter parameter it will almost never use -- the
+#: alternative was a leak, since nothing else ever called `Reporter.secret()` at all.
+_ACTIVE: contextvars.ContextVar[Reporter | None] = contextvars.ContextVar(
+    "sclpl_active_reporter", default=None
+)
+
+
+def active_reporter() -> Reporter | None:
+    """The reporter registered by the innermost enclosing run, or None outside one."""
+    return _ACTIVE.get()
 
 
 @runtime_checkable
@@ -46,7 +60,7 @@ _STOP = _Sentinel()
 class Reporter:
     """Fan-out to every configured sink, through a single writer task."""
 
-    __slots__ = ("_sinks", "_redactor", "_queue", "_pump", "_guard", "_closed")
+    __slots__ = ("_sinks", "_redactor", "_queue", "_pump", "_guard", "_closed", "_token")
 
     def __init__(
         self,
@@ -61,6 +75,7 @@ class Reporter:
         self._pump: asyncio.Task[None] | None = None
         self._guard = guard
         self._closed = False
+        self._token: contextvars.Token[Reporter | None] | None = None
 
     # -- producer side -----------------------------------------------------------
 
@@ -77,9 +92,18 @@ class Reporter:
         """Register a resolved secret so every later event is scrubbed of it."""
         self._redactor.add(value)
 
+    def scrub(self, text: str) -> str:
+        """``text`` with every secret registered so far masked out.
+
+        For sinks that do not go through `emit` -- run history, a printed replay
+        command -- and so never pass through `_run_pump`'s redaction.
+        """
+        return self._redactor.scrub(text)
+
     # -- lifecycle ---------------------------------------------------------------
 
     async def __aenter__(self) -> Reporter:
+        self._token = _ACTIVE.set(self)
         if self._guard is not None:
             self._guard.arm()
         for sink in self._sinks:
@@ -117,6 +141,9 @@ class Reporter:
                 sink.close()
         if self._guard is not None:
             self._guard.restore()
+        if self._token is not None:
+            _ACTIVE.reset(self._token)
+            self._token = None
 
     # -- consumer side -----------------------------------------------------------
 
@@ -211,4 +238,4 @@ def build_reporter(
     return Reporter(sinks, guard=guard)
 
 
-__all__ = ["Reporter", "Sink", "build_reporter"]
+__all__ = ["Reporter", "Sink", "active_reporter", "build_reporter"]

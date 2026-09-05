@@ -227,7 +227,7 @@ async def run_workflow(doc: WorkflowDoc, options: Options, reporter: Reporter) -
         )
     )
     if options.record:
-        _remember(doc, options, report, outcome, exit_code, started, store_cache)
+        _remember(doc, options, report, outcome, exit_code, started, store_cache, reporter)
     return Result(outcome=outcome, report=report, store=store, exit_code=exit_code)
 
 
@@ -239,6 +239,7 @@ def _remember(
     exit_code: int,
     started: float,
     store_cache: cache.Cache | None,
+    reporter: Reporter,
 ) -> None:
     """Write the run to history, and prune.
 
@@ -270,7 +271,7 @@ def _remember(
             argv=safe_args.render(sys.argv[1:]),
             steps=[db.StepRecord(step_id=name, status="ok") for name in outcome.succeeded]
             + [
-                db.StepRecord(step_id=name, status="failed", error=str(error))
+                db.StepRecord(step_id=name, status="failed", error=reporter.scrub(str(error)))
                 for name, error in outcome.failed.items()
             ]
             + [db.StepRecord(step_id=name, status="skipped") for name in outcome.skipped],

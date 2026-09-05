@@ -12,8 +12,12 @@ chance to.
 
 from __future__ import annotations
 
+import contextlib
+
 from sclpl.errors import ValidationError
 from sclpl.ext.functions import function
+from sclpl.render.redact import TooShortToRedact
+from sclpl.render.reporter import active_reporter
 from sclpl.state import secrets as store
 
 
@@ -34,6 +38,15 @@ def secret(name: str, *, env: str = "default") -> str:
                 f"or set SCLPL_SECRET_{name.upper().replace('-', '_')} for CI",
             ],
         )
+    # Registering here, at the one place the real value comes into existence, is what
+    # makes the module docstring's promise true rather than aspirational: nothing
+    # called `Reporter.secret()` before this, so every sink saw the value in the clear.
+    reporter = active_reporter()
+    if reporter is not None:
+        # A secret too short to redact safely (see redact.MIN_LENGTH) is a workflow
+        # author's problem, not a reason to fail a request that already succeeded.
+        with contextlib.suppress(TooShortToRedact):
+            reporter.secret(found)
     return found
 
 

@@ -11,7 +11,7 @@ from sclpl.render.events import Event, LogRecord, RunFinished, RunStarted, StepF
 from sclpl.render.human import HumanSink
 from sclpl.render.jsonl import JsonlSink
 from sclpl.render.plain import PlainSink, QuietSink
-from sclpl.render.reporter import Reporter, build_reporter
+from sclpl.render.reporter import Reporter, active_reporter, build_reporter
 from sclpl.render.term import Caps
 
 
@@ -66,6 +66,29 @@ async def test_secrets_are_scrubbed_before_any_sink_sees_them() -> None:
     message = recorder.events[0]
     assert isinstance(message, LogRecord)
     assert "top-secret-key" not in message.message
+
+
+async def test_scrub_masks_a_registered_secret_outside_the_event_pipeline() -> None:
+    """For sinks that never go through `emit` -- run history, a printed replay line."""
+    async with Reporter([Recorder()]) as reporter:
+        reporter.secret("s3cret-token-value")
+        assert "s3cret-token-value" not in reporter.scrub("argv was s3cret-token-value")
+
+
+def test_scrub_is_a_passthrough_with_nothing_registered() -> None:
+    reporter = Reporter([Recorder()])
+    assert reporter.scrub("nothing secret here") == "nothing secret here"
+
+
+async def test_no_active_reporter_outside_a_run() -> None:
+    assert active_reporter() is None
+
+
+async def test_the_entered_reporter_is_the_active_one() -> None:
+    """`secret()` has no reporter parameter; it finds this one instead."""
+    async with Reporter([Recorder()]) as reporter:
+        assert active_reporter() is reporter
+    assert active_reporter() is None
 
 
 async def test_emit_after_close_is_dropped_not_raised() -> None:

@@ -12,6 +12,7 @@ not registered until they work, so `--help` never advertises something that does
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import sys
 import time
 from pathlib import Path
@@ -23,6 +24,7 @@ import typer
 from sclpl.cli.options import options_of
 from sclpl.errors import EXIT_STEP_FAILED, EXIT_USAGE, SclplError
 from sclpl.render.events import RunFinished, RunStarted, StepFinished, StepStarted
+from sclpl.render.redact import TooShortToRedact
 from sclpl.render.reporter import Reporter, build_reporter
 from sclpl.run.fixtures import Store as FixtureStore
 from sclpl.run.retry import Retry
@@ -116,6 +118,23 @@ def _body_kwargs(data: str | None) -> dict[str, Any]:
         return {"content": data.encode()}
 
 
+#: Header names that typically carry a credential rather than a routing detail --
+#: the same shape `fixtures._safe_headers` strips before a recording hits disk, plus
+#: the common API-key spellings that live requests still send. A `call` command is a
+#: debugging tool -- showing the request is the point -- but a bearer token or cookie
+#: should not then turn up in a retry log or in an error body a server echoed back.
+_SENSITIVE_HEADERS = frozenset(
+    {"authorization", "proxy-authorization", "cookie", "x-api-key", "api-key"}
+)
+
+
+def _register_sensitive_headers(headers: dict[str, str], reporter: Reporter) -> None:
+    for name, value in headers.items():
+        if name.lower() in _SENSITIVE_HEADERS:
+            with contextlib.suppress(TooShortToRedact):
+                reporter.secret(value)
+
+
 async def _call(
     reporter: Reporter,
     method: str,
@@ -131,6 +150,7 @@ async def _call(
     step = method.lower()
     started = time.perf_counter()
     async with reporter:
+        _register_sensitive_headers(headers, reporter)
         reporter.emit(RunStarted(workflow="call", steps_total=1, hosts=(host,)))
         reporter.emit(StepStarted(id=step, kind="http"))
         step_started = time.perf_counter()
