@@ -61,7 +61,16 @@ See [the decision log](DECISION-LOG.md) for implementation tradeoffs and evidenc
   jitter) threads through `Pool`, `Breaker`, and `Retry.delay_for`; real time and
   randomness by default, fully deterministic "virtual time" for tests. Budget for
   the rest of Batch D recorded in ADR 0006 (`run/` 3,600 to 4,800 lines).
-- [ ] D2-D4 and D7 remain in the dependency order defined by the plan.
+- [x] D2 host/proxy policy completion: unsafe HTTP methods (POST/PATCH) no longer
+  auto-retry a connection error or timeout unless `retry ... idempotent=true` opts
+  in explicitly (status-based retries, e.g. a 503 the server actually sent, are
+  unaffected -- the exchange already completed); `HttpConfig` gained `proxy`/`verify`
+  fields wired through to `Profile`/`Pool.client`, so a step-declared proxy or TLS
+  setting actually reaches the request and is partitioned per auth/proxy/verify
+  combination (no cross-profile leakage); a same-version wiring bug fixed along the
+  way (`step.retry.on`/`max_delay` were parsed but never reached the transport).
+  Retry-After date/delta and capped backoff were already correct from before D1.
+- [ ] D3-D4 and D7 remain in the dependency order defined by the plan.
 - [x] E3 foundation: schema-versioned, project-contained test manifests execute through
   the regular runner with fixture replay offline, isolated scratch state, expected-exit,
   local contract assertions, and JSON expected-output checks.

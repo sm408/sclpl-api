@@ -82,6 +82,24 @@ def test_unparseable_retry_after_is_ignored(value: str | None) -> None:
     assert parse_retry_after(value) is None
 
 
+# -- idempotency policy (D2) -------------------------------------------------------
+
+
+@pytest.mark.parametrize("method", ["GET", "HEAD", "OPTIONS", "PUT", "DELETE", "TRACE", "get"])
+def test_idempotent_methods_allow_a_transport_retry(method: str) -> None:
+    assert Retry().allows_transport_retry(method)
+
+
+@pytest.mark.parametrize("method", ["POST", "PATCH", "post"])
+def test_unsafe_methods_refuse_a_transport_retry_by_default(method: str) -> None:
+    assert not Retry().allows_transport_retry(method)
+
+
+@pytest.mark.parametrize("method", ["POST", "PATCH"])
+def test_the_idempotent_override_allows_any_method(method: str) -> None:
+    assert Retry(idempotent=True).allows_transport_retry(method)
+
+
 # -- injected clock and randomness (D1) -------------------------------------------
 
 

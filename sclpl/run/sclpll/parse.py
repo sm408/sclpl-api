@@ -36,7 +36,9 @@ from sclpl.run.sclpll.lex import Kind, Token, split_args, tokenize, unquote
 METHODS = ("get", "post", "put", "patch", "delete", "head", "options")
 
 #: Body verbs the parser handles itself. Anything else is resolved as a function.
-REQUEST_VERBS = frozenset({"header", "query", "body", "auth", "paginate", "timeout", "extract"})
+REQUEST_VERBS = frozenset(
+    {"header", "query", "body", "auth", "paginate", "timeout", "extract", "proxy", "verify"}
+)
 CONTROL_VERBS = frozenset(
     {"when", "assert", "retry", "lane", "tag", "cache", "keep", "skip_if", "retry_if"}
 )
@@ -400,6 +402,10 @@ class _Parser:
                     config["extract"] = line.rest.strip()
                 case "paginate":
                     config["paginate"] = self._paginate(line)
+                case "proxy":
+                    config["proxy"] = unquote(line.rest)
+                case "verify":
+                    config["verify"] = _literal(line.rest.strip())
 
     def _paginate(self, line: Token) -> dict[str, Any]:
         args = split_args(line.rest)

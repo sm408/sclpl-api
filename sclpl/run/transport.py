@@ -171,7 +171,12 @@ class Pool:
                 return existing
             created = httpx.AsyncClient(
                 http2=self._limits.use_http2,
-                verify=profile.verify and self._limits.verify,
+                # `profile.verify` is already the effective value -- the caller's
+                # explicit choice, or the pool's default when it made none -- so it
+                # is used as-is rather than ANDed with the pool default again, which
+                # would let a globally-insecure pool silently override a step that
+                # explicitly asked for verification.
+                verify=profile.verify,
                 follow_redirects=self._limits.follow_redirects,
                 timeout=httpx.Timeout(
                     self._limits.timeout,
@@ -209,6 +214,9 @@ class Pool:
         reporter: Reporter | None = None,
         step: str = "request",
         retry: Retry | None = None,
+        auth: str = "",
+        proxy: str | None = None,
+        verify: bool | None = None,
         **kwargs: Any,
     ) -> Attempt:
         """Send a request, retrying per policy. Returns the final response.
@@ -216,6 +224,11 @@ class Pool:
         A non-2xx status is *not* an exception: an API that answers 404 has answered,
         and the workflow may well want to branch on it. Only exhausting the retries, or
         an open circuit, raises.
+
+        ``auth``/``proxy``/``verify`` partition the connection pool (`Profile`), not
+        just this one call: two steps naming different auth profiles against the same
+        host never share a connection, so a proxy or TLS setting tied to one profile
+        can never leak onto a request made under another.
         """
         policy = retry if retry is not None else self._retry
         occurrence_key = (method.upper(), url)
@@ -241,7 +254,8 @@ class Pool:
                     )
                 )
             return Attempt(response=response, attempts=1, duration_ms=0)
-        profile = Profile.of(url, verify=self._limits.verify)
+        effective_verify = verify if verify is not None else self._limits.verify
+        profile = Profile.of(url, auth=auth, proxy=proxy, verify=effective_verify)
         breaker = self.breaker(profile.host)
         client = await self.client(profile)
         started = self._clock.now()
@@ -263,7 +277,11 @@ class Pool:
             except Exception as error:  # noqa: BLE001 - classified just below
                 last_error = error
                 breaker.record_failure()
-                if attempt >= policy.max or not is_retryable_error(error, policy):
+                if (
+                    attempt >= policy.max
+                    or not is_retryable_error(error, policy)
+                    or not policy.allows_transport_retry(method)
+                ):
                     raise self._exhausted(method, url, attempt, error, None) from error
                 await self._wait(reporter, step, attempt, policy, None, error, None)
                 continue

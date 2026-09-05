@@ -60,6 +60,10 @@ class Retry(Base):
     base_delay: float = Field(default=0.5, gt=0)
     max_delay: float = Field(default=30.0, gt=0)
     on: list[int] = Field(default_factory=list, description="Extra statuses to retry.")
+    idempotent: bool = Field(
+        default=False,
+        description="Retry a connection error/timeout even for POST/PATCH.",
+    )
 
 
 class CacheSpec(Base):
@@ -111,6 +115,8 @@ class HttpConfig(Base):
     timeout: float | None = Field(default=None, gt=0)
     #: Where to take the step's value from: the whole response, or part of it.
     extract: str | None = Field(default=None, description="Expression over the response.")
+    proxy: str | None = Field(default=None, description="Proxy URL for this request's host.")
+    verify: bool = Field(default=True, description="Verify the server's TLS certificate.")
 
 
 class FnConfig(Base):

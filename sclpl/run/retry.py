@@ -29,6 +29,13 @@ RETRY_STATUSES: frozenset[int] = frozenset({408, 425, 429, 500, 502, 503, 504})
 #: scheduled run, not a held connection.
 MAX_RETRY_AFTER_SECONDS = 300.0
 
+#: Safe to repeat without asking: HTTP itself defines these as idempotent, so a
+#: connection error or timeout that leaves the first attempt's outcome unknown is not
+#: a reason to withhold a second one. POST and PATCH are not here on purpose --
+#: resending a POST after a timeout can create the order twice, not zero or one times,
+#: because a timeout does not tell you whether the server ever saw the request.
+IDEMPOTENT_METHODS: frozenset[str] = frozenset({"GET", "HEAD", "OPTIONS", "PUT", "DELETE", "TRACE"})
+
 
 @dataclass(frozen=True, slots=True)
 class Clock:
@@ -59,6 +66,20 @@ class Retry:
     statuses: frozenset[int] = RETRY_STATUSES
     #: Retry on connection errors and timeouts as well as statuses.
     on_transport_error: bool = True
+    #: Explicit opt-in: retry a transport-level failure even for POST/PATCH, because
+    #: the caller knows the operation is idempotent (an upsert keyed by a client-
+    #: supplied id, say) even though its HTTP method does not promise it.
+    idempotent: bool = False
+
+    def allows_transport_retry(self, method: str) -> bool:
+        """Whether a connection error or timeout on ``method`` may be retried at all.
+
+        A received response -- even a 500 -- already completed the HTTP exchange, so
+        `should_retry_status` governs that case regardless of method. This method
+        answers a narrower question: after a failure with no response at all, is a
+        second attempt safe without being told so explicitly?
+        """
+        return self.idempotent or method.upper() in IDEMPOTENT_METHODS
 
     def delay_for(
         self, attempt: int, retry_after: float | None = None, *, jitter: float | None = None

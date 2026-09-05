@@ -389,3 +389,36 @@ the decision, its tradeoff, and the evidence available when it was made.
   `reset_after=0.0` trick; a `VirtualClock`-backed `Pool` retries a real flaky local
   endpoint against a 100-second nominal backoff and the test still completes in well
   under a second, with the chosen delays recorded rather than actually waited out.
+
+## 2026-09-06 — D2 host/proxy policy completion
+
+- **Decision:** `retry.Retry` gains `idempotent: bool = False` and
+  `allows_transport_retry(method)`; `Pool.request` consults it before retrying a
+  connection error or timeout (never before retrying a status the server actually
+  sent -- that exchange already completed, so `should_retry_status` is unaffected).
+  `HttpConfig`/the SCLPLL parser gain `proxy`/`verify` request verbs and `ir.Retry`
+  gains `idempotent`, both flowing generically through the existing
+  `model_validate`/`model_dump(exclude_defaults=True)` round trip with no new parser
+  cases needed for the retry field. `Pool.request` gains `auth`/`proxy`/`verify`
+  keyword parameters that build the connection `Profile`, so those three are
+  partitioned per-connection exactly like the host already is.
+- **Why:** GET/HEAD/OPTIONS/PUT/DELETE are safe to repeat blind because HTTP defines
+  them idempotent; POST/PATCH are not, and a timeout does not say whether the server
+  ever saw the request, so retrying it automatically risks a double-submit. Along the
+  way, found and fixed a real pre-existing gap: `step.retry.on` (extra retry statuses)
+  and `step.retry.max_delay` were parsed into the IR and round-tripped by `fmt`, but
+  `execute._http` never read them when building the transport `Retry`, so a workflow
+  declaring `retry 3 on=[400]` silently got the default status set instead.
+- **Tradeoff:** Also fixed a latent bug the new `verify` plumbing would otherwise have
+  introduced: `Pool.client` used to AND `profile.verify` with the pool's own default a
+  second time, which happened to be a no-op while `Profile.of` was always called with
+  the pool's default value, but would have let a globally-insecure pool silently
+  overrule a step that explicitly asked for verification. Fixed to use the
+  already-resolved `profile.verify` as-is.
+- **Evidence:** All existing transport/retry/call/pagination/workflow tests still
+  pass unchanged. New tests: a POST against a real closed port (a pure transport
+  failure, no response) is not retried by default and fails on the first attempt; the
+  same GET is retried twice per policy; `idempotent=True` lets the POST retry too; a
+  small local recording server proves a declared `proxy=` actually receives the
+  absolute-URI request line HTTP defines for forward proxies; `Profile.of` produces
+  distinct profiles for distinct auth/proxy/verify values against the same host.

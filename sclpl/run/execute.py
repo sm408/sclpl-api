@@ -33,7 +33,7 @@ from sclpl.run.ir import (
     WorkflowDoc,
 )
 from sclpl.run.plan import Node
-from sclpl.run.retry import Retry
+from sclpl.run.retry import RETRY_STATUSES, Retry
 from sclpl.run.schedule import ExpandSpec
 from sclpl.run.transport import Pool, decode
 from sclpl.values import cache as cache_mod
@@ -281,6 +281,7 @@ async def _http(step: Step, config: HttpConfig, node: Node, runtime: Runtime) ->
     }
     query = {name: await _interpolate(value, runtime) for name, value in config.query.items()}
     body = await _resolve(config.body, runtime) if config.body is not None else None
+    proxy = str(await _interpolate(config.proxy, runtime)) if config.proxy else None
 
     auth_profile = await _apply_auth(step, config, url, headers, query, body, runtime)
 
@@ -294,7 +295,13 @@ async def _http(step: Step, config: HttpConfig, node: Node, runtime: Runtime) ->
     if config.timeout is not None:
         kwargs["timeout"] = config.timeout
 
-    retry = Retry(max=step.retry.max, base_delay=step.retry.base_delay)
+    retry = Retry(
+        max=step.retry.max,
+        base_delay=step.retry.base_delay,
+        max_delay=step.retry.max_delay,
+        statuses=RETRY_STATUSES | frozenset(step.retry.on),
+        idempotent=step.retry.idempotent,
+    )
 
     async def fetch(
         extra_query: dict[str, Any],
@@ -316,6 +323,9 @@ async def _http(step: Step, config: HttpConfig, node: Node, runtime: Runtime) ->
             reporter=runtime.reporter,
             step=step.id,
             retry=retry,
+            auth=config.auth or "",
+            proxy=proxy,
+            verify=config.verify,
             **call,
         )
         response = attempt.response

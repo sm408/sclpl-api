@@ -128,6 +128,10 @@ def _step(step: Step, depth: int) -> list[str]:
                 lines.append(f"{body}body {_value(config.body)}")
             if config.auth:
                 lines.append(f"{body}auth {config.auth}")
+            if config.proxy:
+                lines.append(f"{body}proxy {config.proxy}")
+            if not config.verify:
+                lines.append(f"{body}verify false")
             if config.timeout is not None:
                 lines.append(f"{body}timeout {_number(config.timeout)}")
             if config.extract:
