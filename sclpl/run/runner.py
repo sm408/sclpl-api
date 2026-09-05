@@ -69,6 +69,8 @@ class Options:
     started_at: str = ""
     fixture_root: Path | None = None
     record_fixture_root: Path | None = None
+    #: Parent directory for temporary spill data; test execution supplies an isolated root.
+    scratch_dir: Path | None = None
 
 
 @dataclass(slots=True)
@@ -138,7 +140,7 @@ async def run_workflow(doc: WorkflowDoc, options: Options, reporter: Reporter) -
         return Result(report=report, exit_code=0)
 
     limits = _limits(doc, options)
-    store = ValueStore(keep_all=options.keep_all, scratch=Scratch())
+    store = ValueStore(keep_all=options.keep_all, scratch=Scratch(options.scratch_dir))
     variables = {**doc.vars, **report.resolved.vars, **options.overrides}
 
     transport = TransportLimits(

@@ -9,6 +9,7 @@ import typer
 
 from sclpl.project import context
 from sclpl.testing import discover, load
+from sclpl.testing import run as run_manifest
 
 app = typer.Typer(no_args_is_help=True, help="Discover and validate project test manifests.")
 
@@ -47,3 +48,16 @@ def validate(
     loaded = _project(project)
     manifest = load(path, loaded)
     typer.echo(f"{manifest.path}: valid", err=True)
+
+
+@app.command("run")
+def run(
+    path: Annotated[Path, typer.Argument(help="Test manifest path.")],
+    project: Annotated[
+        Path | None, typer.Option("--project", help="Project root or manifest.")
+    ] = None,
+) -> None:
+    """Run one manifest with fixtures offline and state isolated below `.sclpl/tests`."""
+    loaded = _project(project)
+    outcome = run_manifest(load(path, loaded), loaded)
+    typer.echo(f"{outcome.manifest.path}: passed", err=True)

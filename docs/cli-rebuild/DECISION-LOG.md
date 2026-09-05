@@ -181,3 +181,12 @@ the decision, its tradeoff, and the evidence available when it was made.
 - **Tradeoff:** Entry-point metadata without a discoverable manifest remains minimally
   described until explicit activation; inspection never executes its module to fill gaps.
 - **Evidence:** an import-sentinel local plugin remains unexecuted during static discovery.
+
+## 2026-09-05 — Offline manifest test execution
+
+- **Decision:** `test run` executes one validated project manifest through the regular
+  scheduler with fixture transport, no history, no cache, and a unique test-state root.
+- **Tradeoff:** Output snapshots and declarative assertion execution remain follow-up
+  work; this slice establishes the isolated, offline execution boundary they require.
+- **Evidence:** an end-to-end manifest test runs a project workflow and verifies its
+  scratch directory is contained below `.sclpl/tests`.
