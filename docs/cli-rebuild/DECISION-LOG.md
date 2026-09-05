@@ -54,3 +54,12 @@ the decision, its tradeoff, and the evidence available when it was made.
 - **Evidence:** safe-argument unit tests and a CLI provenance smoke test.
 - **Follow-up:** Dry runs must not create a `running` history row because they have no
   durable execution outcome. The correction is included in the next commit.
+
+## 2026-09-05 — Fixture storage primitive
+
+- **Decision:** Store versioned request metadata separately from content-addressed body
+  blobs, and identify repeated identical requests with an explicit occurrence number.
+- **Tradeoff:** This is a reusable storage primitive; transport interception and CLI
+  recording/replay remain the next integration slices.
+- **Evidence:** isolated record/replay smoke check confirms authorization headers are
+  excluded from metadata and body lookup is digest-verified.
