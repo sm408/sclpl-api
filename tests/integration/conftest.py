@@ -21,6 +21,10 @@ PAYLOAD = {"slideshow": {"title": "Sample", "slides": [{"title": "one"}, {"title
 #: Per-path attempt counters, so a route can fail the first N times and then succeed.
 ATTEMPTS: dict[str, int] = {}
 
+#: client_id -> number of tokens issued, so auth tests can prove a cached/shared
+#: token means one issuance rather than one per request.
+OAUTH_ISSUED: dict[str, int] = {}
+
 
 class Handler(BaseHTTPRequestHandler):
     protocol_version = "HTTP/1.1"
@@ -28,7 +32,26 @@ class Handler(BaseHTTPRequestHandler):
     def do_POST(self) -> None:  # noqa: N802 - name fixed by BaseHTTPRequestHandler
         length = int(self.headers.get("Content-Length", "0"))
         payload = self.rfile.read(length) if length else b""
+        if self.path.startswith("/oauth/token"):
+            self._oauth_token(payload)
+            return
         self._respond(201, json.dumps({"received": payload.decode("utf-8", "replace")}).encode())
+
+    def _oauth_token(self, payload: bytes) -> None:
+        from urllib.parse import parse_qs, urlsplit
+
+        fields = {k: v[0] for k, v in parse_qs(payload.decode()).items()}
+        query = parse_qs(urlsplit(self.path).query)
+        if fields.get("client_id") != "client-a" or fields.get("client_secret") != "secret-a":
+            self._respond(401, json.dumps({"error": "invalid_client"}).encode())
+            return
+        OAUTH_ISSUED[fields["client_id"]] = OAUTH_ISSUED.get(fields["client_id"], 0) + 1
+        ttl = int(query.get("ttl", ["3600"])[0])
+        body = {
+            "access_token": f"tok-{OAUTH_ISSUED[fields['client_id']]}",
+            "expires_in": ttl,
+        }
+        self._respond(200, json.dumps(body).encode())
 
     def do_GET(self) -> None:  # noqa: N802 - name fixed by BaseHTTPRequestHandler
         if self.path.startswith("/flaky/"):
@@ -87,6 +110,40 @@ class Handler(BaseHTTPRequestHandler):
         elif self.path == "/echo-header":
             value = self.headers.get("X-Probe", "")
             self._respond(200, json.dumps({"x-probe": value}).encode())
+        elif self.path == "/auth-once":
+            # Rejects exactly once per test, regardless of who is asking, so an
+            # oauth-backed step can prove it refreshed and retried after a 401.
+            seen = ATTEMPTS.get("/auth-once", 0)
+            ATTEMPTS["/auth-once"] = seen + 1
+            if seen == 0:
+                self.send_response(401)
+                self.send_header("Content-Length", "0")
+                self.end_headers()
+                return
+            value = self.headers.get("Authorization", "")
+            self._respond(200, json.dumps({"authorization": value}).encode())
+        elif self.path == "/echo-auth":
+            self._respond(
+                200,
+                json.dumps(
+                    {
+                        "authorization": self.headers.get("Authorization", ""),
+                        "x-api-key": self.headers.get("X-Api-Key", ""),
+                        "x-signature": self.headers.get("X-Signature", ""),
+                        "x-timestamp": self.headers.get("X-Timestamp", ""),
+                    }
+                ).encode(),
+            )
+        elif self.path.split("?")[0] == "/redirect":
+            query = dict(
+                part.split("=", 1) for part in self.path.partition("?")[2].split("&") if "=" in part
+            )
+            from urllib.parse import unquote
+
+            self.send_response(302)
+            self.send_header("Location", unquote(query["to"]))
+            self.send_header("Content-Length", "0")
+            self.end_headers()
         elif self.path == "/empty":
             self._respond(204, b"")
         else:
@@ -108,8 +165,10 @@ class Handler(BaseHTTPRequestHandler):
 def _reset_attempt_counters() -> Iterator[None]:
     """Each test gets the flaky routes back at attempt zero."""
     ATTEMPTS.clear()
+    OAUTH_ISSUED.clear()
     yield
     ATTEMPTS.clear()
+    OAUTH_ISSUED.clear()
 
 
 @pytest.fixture(scope="session")

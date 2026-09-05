@@ -28,7 +28,15 @@ See [the decision log](DECISION-LOG.md) for implementation tradeoffs and evidenc
 - [x] B1 strict manifest discovery and environment precedence.
 - [x] B2 project initialization, `project check`, and `workflow list`.
 - [x] B3 local environment selection and safe context reporting.
-- [ ] B4-B6 authentication providers.
+- [x] B4-B6 authentication providers: `auth <name>` resolves through one provider
+  interface (`sclpl/project/auth.py`) to bearer/basic/api-key/custom-header profiles;
+  OAuth2 client credentials (`oauth.py`) share a process-wide token cache with
+  per-key locking and a bounded single refresh-and-retry on a 401; HMAC-SHA256
+  request signing (`signing.py`) uses one documented canonical form. Every resolved
+  credential registers with the run's reporter for redaction (reusing A5's
+  `active_reporter`); a step that both names `auth` and hand-sets the same header is
+  refused; cross-origin redirects verified to drop the header (httpx's own behavior).
+  Known gap for D3: the step cache key partitions by auth profile *name*, not kind.
 
 ## Later batches
 

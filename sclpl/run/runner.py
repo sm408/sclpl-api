@@ -14,13 +14,15 @@ from pathlib import Path
 from typing import Any
 
 from sclpl.errors import EXIT_INTERRUPTED, EXIT_STEP_FAILED, SclplError, ValidationError
+from sclpl.project import auth as auth_mod
+from sclpl.project import context as project_context
 from sclpl.render.events import RunFinished, RunStarted
 from sclpl.render.reporter import Reporter
 from sclpl.run import lanes
 from sclpl.run.compile_plan import hosts
 from sclpl.run.execute import SKIPPED, Runtime, collect, run_injected, run_step
 from sclpl.run.fixtures import Store as FixtureStore
-from sclpl.run.ir import WorkflowDoc
+from sclpl.run.ir import HttpConfig, WorkflowDoc
 from sclpl.run.plan import Node
 from sclpl.run.preflight import Report, preflight
 from sclpl.run.schedule import JOIN_SUFFIX, ExpandSpec, Limits, Outcome, Scheduler
@@ -175,6 +177,7 @@ async def run_workflow(doc: WorkflowDoc, options: Options, reporter: Reporter) -
             outputs=_output_paths(report),
             pools=pools,
             cache=store_cache,
+            auth_profiles=_auth_profiles(doc, options),
         )
         for name, value in report.resolved.stubs.items():
             # A stub stands in for a producer the mode pruned. It is pinned, because
@@ -317,6 +320,28 @@ def _remember_start(doc: WorkflowDoc, options: Options, report: Report, started:
                 remedies=["repair writable history storage, then retry"],
             ) from error
         return
+
+
+def _auth_profiles(doc: WorkflowDoc, options: Options) -> dict[str, auth_mod.Profile]:
+    """Named auth profiles from the project manifest, or empty for a standalone run.
+
+    A manifest that fails to load or parse only fails *this* run when the workflow
+    actually names an auth profile. A standalone file sitting near an unrelated,
+    broken `sclpl.toml` above it must keep running exactly as it did before this
+    lookup existed (B1's "standalone execution works").
+    """
+    uses_auth = any(
+        isinstance(step.config, HttpConfig) and step.config.auth for step in doc.all_steps()
+    )
+    try:
+        context = project_context.load(env=options.env)
+        if context is None:
+            return {}
+        return auth_mod.parse_profiles(context.manifest, default_env=context.environment)
+    except ValidationError:
+        if uses_auth:
+            raise
+        return {}
 
 
 def _output_paths(report: Report) -> dict[str, str]:

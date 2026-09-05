@@ -14,6 +14,8 @@ from typing import Any
 from sclpl.errors import AssertionFailed, SclplError, StepFailed, ValidationError
 from sclpl.expr import Context, evaluate, parse, parse_interpolated
 from sclpl.expr.eval import _truthy
+from sclpl.project import auth as auth_mod
+from sclpl.project.auth import Profile as AuthProfile
 from sclpl.render.events import StepProgress
 from sclpl.render.reporter import Reporter
 from sclpl.run import control, lanes, paginate
@@ -78,6 +80,8 @@ class Runtime:
     joins: dict[str, str] = field(default_factory=dict)
     #: Injected node -> what that copy contributed, once `collect` has had its say.
     produced: dict[str, Any] = field(default_factory=dict)
+    #: Named auth profiles from the project manifest, by name. Empty outside a project.
+    auth_profiles: dict[str, AuthProfile] = field(default_factory=dict)
 
     def context(self, frame: Frame | None = None) -> Context:
         return Context(
@@ -220,6 +224,47 @@ async def _dispatch(step: Step, node: Node, runtime: Runtime, node_id: str) -> A
 # -- kinds -----------------------------------------------------------------------
 
 
+async def _apply_auth(
+    step: Step,
+    config: HttpConfig,
+    url: str,
+    headers: dict[str, str],
+    query: dict[str, Any],
+    body: Any,
+    runtime: Runtime,
+) -> AuthProfile | None:
+    """Resolve `auth <name>` into ``headers``/``query``, mutated in place.
+
+    Refuses rather than silently overwriting when a step also sets the header its own
+    auth profile would write: a step that both names `auth bearer` and hand-writes
+    `header Authorization: ...` has two ideas about what the request should carry, and
+    picking one quietly would hide the other author's intent.
+    """
+    if config.auth is None:
+        return None
+    profile = runtime.auth_profiles.get(config.auth)
+    if profile is None:
+        from sclpl.errors import did_you_mean
+
+        suggestion = did_you_mean(config.auth, runtime.auth_profiles)
+        raise ValidationError(
+            f"step {step.id!r} uses auth {config.auth!r}, which is not defined",
+            remedies=[suggestion]
+            if suggestion
+            else ["declare it under [auth.<name>] in sclpl.toml"],
+        )
+    conflict = profile.target_header()
+    if conflict and conflict in headers:
+        raise ValidationError(
+            f"step {step.id!r} sets {conflict!r} itself and also uses auth {config.auth!r}",
+            remedies=["remove the manual header, or drop `auth` and keep the header"],
+        )
+    applied = await auth_mod.apply(profile, method=config.method, url=url, query=query, body=body)
+    headers.update(applied.headers)
+    query.update(applied.query)
+    return profile
+
+
 async def _http(step: Step, config: HttpConfig, node: Node, runtime: Runtime) -> Any:
     url = await _interpolate(config.url, runtime)
     if not isinstance(url, str) or "://" not in url:
@@ -237,6 +282,8 @@ async def _http(step: Step, config: HttpConfig, node: Node, runtime: Runtime) ->
     query = {name: await _interpolate(value, runtime) for name, value in config.query.items()}
     body = await _resolve(config.body, runtime) if config.body is not None else None
 
+    auth_profile = await _apply_auth(step, config, url, headers, query, body, runtime)
+
     kwargs: dict[str, Any] = {}
     if headers:
         kwargs["headers"] = headers
@@ -250,7 +297,11 @@ async def _http(step: Step, config: HttpConfig, node: Node, runtime: Runtime) ->
     retry = Retry(max=step.retry.max, base_delay=step.retry.base_delay)
 
     async def fetch(
-        extra_query: dict[str, Any], extra_headers: dict[str, str], override: str | None
+        extra_query: dict[str, Any],
+        extra_headers: dict[str, str],
+        override: str | None,
+        *,
+        _retried_auth: bool = False,
     ) -> paginate.Page:
         """One request. The paginator supplies what differs between pages."""
         call = dict(kwargs)
@@ -258,7 +309,7 @@ async def _http(step: Step, config: HttpConfig, node: Node, runtime: Runtime) ->
             merged = {**query, **extra_query}
             call["params"] = {key: _query_value(value) for key, value in merged.items()}
         if extra_headers:
-            call["headers"] = {**headers, **extra_headers}
+            call["headers"] = {**call.get("headers", {}), **extra_headers}
         attempt = await runtime.pool.request(
             config.method,
             override or url,
@@ -268,6 +319,22 @@ async def _http(step: Step, config: HttpConfig, node: Node, runtime: Runtime) ->
             **call,
         )
         response = attempt.response
+        if (
+            response.status_code == 401
+            and not _retried_auth
+            and auth_profile is not None
+            and auth_profile.kind == "oauth2_client_credentials"
+        ):
+            # A bounded refresh, exactly once: the endpoint rejected the token this
+            # profile cached, so the cache is stale (or was always wrong) rather than
+            # the request being transiently bad. Looping here would just hide a
+            # misconfigured client behind a hang.
+            from sclpl.project import oauth
+
+            oauth.invalidate(auth_profile)
+            refreshed = await auth_mod.apply(auth_profile, method=config.method, url=url)
+            kwargs["headers"] = {**kwargs.get("headers", {}), **refreshed.headers}
+            return await fetch(extra_query, extra_headers, override, _retried_auth=True)
         return paginate.Page(
             body=decode(response),
             status=response.status_code,

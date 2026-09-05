@@ -300,3 +300,36 @@ the decision, its tradeoff, and the evidence available when it was made.
 - **Evidence:** `test_compat_baseline.py` fails if a baseline command disappears, an exit
   code is renumbered, `runs export`'s top-level keys change, or a required `Plugin` field
   is removed. Batch A is now fully closed (A1-A5).
+
+## 2026-09-06 — B4-B6 named auth profiles
+
+- **Decision:** One provider interface (`sclpl/project/auth.py`) resolves `auth <name>`
+  (already a defined but unused field on `HttpConfig`) into headers/query. Static kinds
+  (bearer, basic, api_key, header) resolve without network access; OAuth2 client
+  credentials (`sclpl/project/oauth.py`) and HMAC-SHA256 signing
+  (`sclpl/project/signing.py`) are separate modules dispatched from the same `apply()`.
+  `runner._auth_profiles` loads them from the project manifest's `[auth.<name>]` tables,
+  defaulting each profile's secret namespace to the project's currently selected
+  environment. `execute._apply_auth` refuses when a step both names `auth` and
+  hand-sets the header that profile would write, and retries exactly once, with a
+  freshly fetched token, when an oauth-backed request gets a 401.
+- **Why:** The field existed in the IR and was already used to partition the step cache
+  key, but nothing ever applied it to a request -- `auth bearer` on a step was silently
+  a no-op. Every workflow needing real authentication had to hand-write
+  `header Authorization: Bearer {{secret(...)}}` instead.
+- **Tradeoff:** The step cache key still partitions by the auth profile's *name*, not
+  its resolved kind/identity -- resolving that fully would mean doing the (possibly
+  network-touching) resolution just to compute a cache key, defeating the point of
+  caching. A workflow that changes a profile's `type` while keeping its name could see
+  a stale cached response; full "cached bodies never cross auth identities" is D3's
+  explicit job. Cross-origin redirect stripping relies on httpx's own behavior
+  (verified, not reimplemented) rather than a custom mechanism.
+- **Evidence:** `tests/unit/test_auth.py` and `test_signing.py` cover parsing,
+  validation, and the static/HMAC resolution paths, including a byte-exact HMAC vector.
+  `tests/integration/test_oauth.py` proves token caching, concurrent-request sharing
+  (twenty concurrent callers produce one issuance), expiry-triggered refresh, and
+  rejection handling against a real local token endpoint.
+  `tests/integration/test_auth_e2e.py` runs a full project workflow through
+  `run_workflow` for each kind against a real server, including the conflict refusal,
+  the unknown-profile error, the 401-refresh-and-retry, and the cross-origin redirect
+  case. Batch B is now fully closed (B1-B6).
