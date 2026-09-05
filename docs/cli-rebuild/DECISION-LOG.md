@@ -180,7 +180,8 @@ the decision, its tradeoff, and the evidence available when it was made.
   `plugin list --static` surface uses this path.
 - **Tradeoff:** Entry-point metadata without a discoverable manifest remains minimally
   described until explicit activation; inspection never executes its module to fill gaps.
-- **Evidence:** an import-sentinel local plugin remains unexecuted during static discovery.
+- **Evidence:** import sentinels remain unexecuted during static discovery and capability
+  refusal, so policy is evaluated before activation.
 
 ## 2026-09-05 — Offline manifest test execution
 

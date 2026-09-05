@@ -166,6 +166,20 @@ def test_a_denied_capability_refuses_the_plugin(tmp_path: Path) -> None:
         ext.discover()
 
 
+def test_a_denied_plugin_never_executes_its_import_sentinel(tmp_path: Path) -> None:
+    marker = tmp_path / "imported.txt"
+    body = f"from pathlib import Path\nPath({str(marker)!r}).write_text('x')\n"
+    make_plugin(tmp_path, "needsnet", capabilities='["network"]', body=body)
+    ext.DENIED.clear()
+    try:
+        plugin = ext.discover(denied=["network"], extra_dirs=[tmp_path]).plugins["needsnet"]
+        assert not plugin.loaded
+        assert not marker.exists()
+    finally:
+        ext.DENIED.clear()
+        ext.discover()
+
+
 def test_a_denial_survives_a_second_discovery(tmp_path: Path) -> None:
     """`plugin list` re-discovers, and must see the same refusals the run did."""
     ext.DENIED.clear()
