@@ -12,7 +12,8 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 
-_LOADED = False
+_BUILTINS_LOADED = False
+_PLUGINS_LOADED = False
 
 
 def load(*, plugins: bool = True, denied: Iterable[str] = ()) -> None:
@@ -24,21 +25,30 @@ def load(*, plugins: bool = True, denied: Iterable[str] = ()) -> None:
     read from the command line before this is called rather than through the option
     parser -- the denial has to precede the import, and the parser runs after it.
     """
-    global _LOADED
-    if _LOADED:
-        return
-    _LOADED = True
+    global _BUILTINS_LOADED
+    if not _BUILTINS_LOADED:
+        _BUILTINS_LOADED = True
 
-    # Registers every operator family. Importing is the registration.
-    import sclpl.expr  # noqa: F401
-    import sclpl.functions  # noqa: F401
+        # Registers every operator family. Importing is the registration.
+        import sclpl.expr  # noqa: F401
+        import sclpl.functions  # noqa: F401
 
-    # Registers the Parquet reader with `values/ref.py`, so a spilled table can come
-    # back without `values/` ever importing `tables/`.
-    import sclpl.tables  # noqa: F401
+        # Registers the Parquet reader with `values/ref.py`, so a spilled table can
+        # come back without `values/` ever importing `tables/`.
+        import sclpl.tables  # noqa: F401
 
     if plugins:
-        _load_plugins(denied)
+        activate_plugins(denied=denied)
+
+
+def activate_plugins(*, denied: Iterable[str] = ()) -> None:
+    """Activate plugins after the caller has resolved and enforced policy."""
+    global _PLUGINS_LOADED
+    load(plugins=False)
+    if _PLUGINS_LOADED:
+        return
+    _PLUGINS_LOADED = True
+    _load_plugins(denied)
 
 
 def _load_plugins(denied: Iterable[str] = ()) -> None:
@@ -56,5 +66,6 @@ def _load_plugins(denied: Iterable[str] = ()) -> None:
 
 def reset() -> None:
     """Forget that loading happened. For tests that need a clean registry."""
-    global _LOADED
-    _LOADED = False
+    global _BUILTINS_LOADED, _PLUGINS_LOADED
+    _BUILTINS_LOADED = False
+    _PLUGINS_LOADED = False

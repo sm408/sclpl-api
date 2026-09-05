@@ -183,6 +183,16 @@ the decision, its tradeoff, and the evidence available when it was made.
 - **Evidence:** import sentinels remain unexecuted during static discovery and capability
   refusal, so policy is evaluated before activation.
 
+## 2026-09-05 — CLI plugin activation boundary
+
+- **Decision:** CLI import registers built-ins only. The root callback validates denial
+  policy before activating plugins, while `plugin list --static` skips activation entirely.
+- **Tradeoff:** Plugin-provided runtime contributions are unavailable during command
+  routing, which keeps help and static inspection safe; activation occurs before normal
+  command execution.
+- **Evidence:** static inspection reports bundled plugins as unactivated and the denial
+  sentinel test confirms refused modules are never imported.
+
 ## 2026-09-05 — Offline manifest test execution
 
 - **Decision:** `test run` executes one validated project manifest through the regular

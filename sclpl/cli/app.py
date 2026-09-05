@@ -57,9 +57,15 @@ def _denied_capabilities() -> list[str]:
     return wanted
 
 
-# Built-ins and plugins register before any command can be routed, so `--help`,
-# completion, and preflight all see the same set a run would.
-bootstrap.load(denied=_denied_capabilities())
+def _is_static_plugin_inspection() -> bool:
+    """Whether the requested command promises not to import plugin modules."""
+    argv = sys.argv[1:]
+    return len(argv) >= 2 and argv[:2] == ["plugin", "list"] and "--static" in argv[2:]
+
+
+# Commands and help only need built-ins to route. Plugin activation follows policy
+# resolution in the root callback, preventing project code from running at import time.
+bootstrap.load(plugins=False)
 
 app = typer.Typer(
     name="sclpl",
@@ -111,9 +117,10 @@ def main(
         help="Print the version and exit.",
     ),
 ) -> None:
-    # Already acted on before any plugin was imported -- see `_denied_capabilities`.
-    # Validated here so a typo is an error rather than a denial of nothing.
+    # Validate policy before plugin activation, so a typo is not a silent no-op.
     parse_capabilities(deny_capability or [])
+    if not _is_static_plugin_inspection():
+        bootstrap.activate_plugins(denied=deny_capability or ())
 
     ctx.obj = GlobalOptions(
         verbosity=resolve_verbosity(quiet, verbose),

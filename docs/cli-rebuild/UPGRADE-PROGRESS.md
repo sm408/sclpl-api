@@ -13,7 +13,8 @@ See [the decision log](DECISION-LOG.md) for implementation tradeoffs and evidenc
 - [x] A4 architectural gates: budget checking refuses unbudgeted packages and layering
   checking detects directed cycles of any length.
 - [ ] A1 compatibility baseline and regression fixtures.
-- [ ] A3 metadata-first plugin activation.
+- [x] A3 metadata-first plugin activation: static discovery and CLI help avoid plugin
+  import; approved inventory activation follows capability-policy validation.
 - [ ] A5 credential-sink audit and regression helpers.
 
 ## Batch B
