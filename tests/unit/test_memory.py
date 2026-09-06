@@ -226,6 +226,22 @@ def test_the_credential_itself_is_not_in_the_key() -> None:
     assert "hunter2" not in key
 
 
+def test_a_different_pagination_spec_does_not_share_a_cache_entry() -> None:
+    """D7: `max_pages=1` against a URL must not read what `max_pages=40` cached for
+    it -- they are different extractions of the same source, not the same answer.
+    """
+    one_page = cache_mod.key_for(
+        step_kind="http", url="https://x/", paginate={"strategy": "cursor", "max_pages": 1}
+    )
+    all_pages = cache_mod.key_for(
+        step_kind="http", url="https://x/", paginate={"strategy": "cursor", "max_pages": 40}
+    )
+    unpaginated = cache_mod.key_for(step_kind="http", url="https://x/")
+    assert one_page != all_pages
+    assert one_page != unpaginated
+    assert all_pages != unpaginated
+
+
 def test_a_function_version_invalidates_its_entries() -> None:
     """Changing what a function computes must not silently mix old and new answers."""
     a = cache_mod.key_for(step_kind="fn", function="summarise", function_version=1)

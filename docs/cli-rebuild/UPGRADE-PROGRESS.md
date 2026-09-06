@@ -89,7 +89,20 @@ See [the decision log](DECISION-LOG.md) for implementation tradeoffs and evidenc
   body). Non-rewindable streamed *uploads* are out of scope for this slice --
   request bodies remain fully-buffered typed values, which are safely retryable, so
   no new non-rewindable-retry hazard was introduced.
-- [ ] D7 remains in the dependency order defined by the plan.
+- [x] D7 extraction completeness signals: a paginated step's result gains a
+  `completeness` field (`status: complete|partial|unknown`, `reason`, `pages`,
+  `items_received`) -- `"complete"` for natural exhaustion or a bound the workflow
+  or the caller actually declared (`max_pages`, `stop_when`, `--max-pages`);
+  `"partial"` only when the internal hard safety net (nobody's declared bound) cut
+  it short; `"unknown"` for a repeated-page anomaly, since that is neither side's
+  decision. No claim about the source's real total is ever made -- only what this
+  extraction covers within its own declared scope. Found and fixed a real
+  pre-existing bug while testing this: the HTTP step cache key never included the
+  pagination spec, so `max_pages=1` and `max_pages=40` against the same URL could
+  incorrectly share a cached entry.
+- Every Batch D checklist item is now checked (D1-D4, D5-D6 foundation, D7); D5-D6
+  remain foundation-scoped as noted above, not a claim of the full original D5-D6
+  task list.
 - [x] E3 foundation: schema-versioned, project-contained test manifests execute through
   the regular runner with fixture replay offline, isolated scratch state, expected-exit,
   local contract assertions, and JSON expected-output checks.

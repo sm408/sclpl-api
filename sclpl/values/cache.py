@@ -166,6 +166,7 @@ def key_for(
     inputs: Iterable[str] = (),
     plugin_version: str = "",
     credential: str | None = None,
+    paginate: dict[str, Any] | None = None,
 ) -> str:
     """The cache key for one step.
 
@@ -193,6 +194,10 @@ def key_for(
             if name.lower() not in VOLATILE_HEADERS
         ),
     )
+    # A different pagination spec against the same URL is a different extraction --
+    # fewer or more pages, a different stop condition -- so it is a different answer,
+    # not a cache hit on the first page's worth of it.
+    feed("paginate", paginate or {})
     feed("function", function or "")
     feed("function_version", function_version)
     feed("inputs", sorted(inputs))

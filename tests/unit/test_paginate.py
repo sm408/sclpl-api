@@ -117,6 +117,71 @@ async def test_max_pages_truncates_and_says_so() -> None:
     assert "max_pages" in followed.reason
 
 
+# -- completeness (D7) --------------------------------------------------------------
+
+
+async def test_a_workflows_own_max_pages_is_complete_for_its_declared_scope() -> None:
+    """Reaching a bound the workflow itself asked for is not a surprise."""
+    fetch, _ = fetcher("cursor")
+    spec = Pagination(strategy="cursor", cursor_path="next_cursor", param="cursor", max_pages=3)
+    followed = await paginate.follow(spec, fetch)
+    assert followed.completeness == "complete"
+
+
+async def test_a_callers_override_ceiling_is_also_a_declared_scope() -> None:
+    """`--max-pages 1` means it too, not "oops, stopped early"."""
+    fetch, _ = fetcher("cursor")
+    spec = Pagination(strategy="cursor", cursor_path="next_cursor", param="cursor", max_pages=40)
+    followed = await paginate.follow(spec, fetch, max_pages=1)
+    assert followed.completeness == "complete"
+
+
+async def test_the_hard_safety_net_is_partial_not_complete(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Nobody asked for exactly this many pages: there is more, and this says so."""
+    monkeypatch.setattr(paginate, "HARD_CEILING", 2)
+    fetch, _ = fetcher("cursor")
+    spec = Pagination(strategy="cursor", cursor_path="next_cursor", param="cursor")
+    followed = await paginate.follow(spec, fetch)
+    assert followed.count == 2
+    assert followed.truncated
+    assert not followed.declared
+    assert followed.completeness == "partial"
+
+
+async def test_natural_exhaustion_is_complete() -> None:
+    fetch, _ = fetcher("cursor")
+    spec = Pagination(strategy="cursor", cursor_path="next_cursor", param="cursor")
+    followed = await paginate.follow(spec, fetch, max_pages=40)
+    assert followed.completeness == "complete"
+    assert followed.items_received == TOTAL
+
+
+async def test_a_repeated_page_is_unknown_not_complete_or_partial() -> None:
+    """A looping API is an anomaly nobody declared; it is not a clean stop either way."""
+    fetch, _ = fetcher("stuck")
+    spec = Pagination(strategy="cursor", cursor_path="next_cursor", param="cursor", max_pages=40)
+    followed = await paginate.follow(spec, fetch)
+    assert followed.completeness == "unknown"
+
+
+async def test_stop_when_is_complete_for_its_declared_scope() -> None:
+    fetch, _ = fetcher("cursor")
+    spec = Pagination(strategy="cursor", cursor_path="next_cursor", param="cursor", max_pages=40)
+
+    async def stop(page: paginate.Page) -> bool:
+        return len(page.body["data"]) > 0 and page.body["data"][0]["id"] >= 20
+
+    followed = await paginate.follow(spec, fetch, stop_when=stop)
+    assert followed.completeness == "complete"
+
+
+async def test_items_received_counts_records_not_pages() -> None:
+    fetch, _ = fetcher("cursor")
+    spec = Pagination(strategy="cursor", cursor_path="next_cursor", param="cursor", max_pages=2)
+    followed = await paginate.follow(spec, fetch)
+    assert followed.items_received == SIZE * 2
+
+
 async def test_the_callers_ceiling_wins_when_it_is_lower() -> None:
     """A mode that says one page must mean it, even if the workflow says forty."""
     fetch, _ = fetcher("cursor")

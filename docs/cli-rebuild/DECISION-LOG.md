@@ -484,3 +484,35 @@ the decision, its tradeoff, and the evidence available when it was made.
   workflow step writes the body and reports matching metadata, a streamed step is
   never served from cache, and `paginate`/`extract` combined with `stream` are
   rejected before any request is made.
+
+## 2026-09-07 — D7 extraction completeness signals
+
+- **Decision:** `paginate.Follow` gains `declared: bool` and two properties:
+  `items_received` (a best-effort sum of records actually received, never a claim
+  about the source's real total) and `completeness` (`"complete"`, `"partial"`, or
+  `"unknown"`, per SPEC section 3.7). A paginated step's result gains a
+  `completeness` dict with that status plus the stop reason, page count, and item
+  count. `"partial"` only when the *hard safety net* (`HARD_CEILING`, which nobody
+  declared) cut the extraction short; reaching the workflow's own `max_pages`/
+  `stop_when`, or a mode/CLI `--max-pages` override, is `"complete"` for that
+  declared scope, because someone actually asked for exactly that. A repeated-page
+  loop is `"unknown"`, since that is an anomaly neither side decided on purpose.
+- **Why:** `Follow.truncated`/`reason` already existed but only reached a log line,
+  never the step's own value, and did not distinguish "an explicit bound was hit"
+  from "the safety net nobody asked for kicked in" -- both looked identical
+  (`truncated=True`) even though only one of them means there is real data this run
+  did not get.
+- **Tradeoff:** While testing this, found and fixed a real pre-existing bug it
+  exposed: `execute._cache_key`'s `HttpConfig` branch never included the pagination
+  spec, so `max_pages=1` and `max_pages=40` against the identical URL/headers/body
+  produced the *same* cache key -- a step declaring a smaller scope could silently
+  read back a larger, unrelated run's cached result. `values.cache.key_for` now
+  takes a `paginate` parameter fed into the hash. This is a caching-correctness fix
+  more than a D7 feature, but it was a direct, load-bearing consequence of adding a
+  second pagination-scope test against one server route without cache isolation.
+- **Evidence:** `tests/unit/test_paginate.py` covers all three completeness
+  outcomes directly, including a `HARD_CEILING` monkeypatch to trigger `"partial"`
+  without fetching thousands of fake pages. `tests/integration/test_completeness.py`
+  proves it through the real runner against a real paginated server route.
+  `tests/unit/test_memory.py` pins the cache-key fix: two different `paginate`
+  specs against the same URL now produce different keys.

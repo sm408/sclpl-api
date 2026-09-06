@@ -65,10 +65,35 @@ class Follow:
     reason: str = "exhausted"
     #: True when a ceiling cut it short, which is a different thing from finishing.
     truncated: bool = False
+    #: True when what stopped this was a bound someone actually asked for -- the
+    #: workflow's own `max_pages`/`stop_when`, or a mode/CLI `--max-pages` override --
+    #: rather than the hard safety net nobody set on purpose. Only meaningful
+    #: together with `truncated`/`reason`; see `completeness`.
+    declared: bool = False
 
     @property
     def count(self) -> int:
         return len(self.pages)
+
+    @property
+    def items_received(self) -> int:
+        """Best-effort total record count actually received, across every page."""
+        return sum(_items_in(page.body) for page in self.pages)
+
+    @property
+    def completeness(self) -> str:
+        """D7 / SPEC section 3.7: `"complete"`, `"partial"`, or `"unknown"`.
+
+        Never a claim about the *source*'s real total -- only about whether this
+        extraction covers everything within its own declared scope. `"repeated page"`
+        is an anomaly (a looping API), not a decision either side made on purpose, so
+        it is `"unknown"` rather than either of the other two.
+        """
+        if self.reason == "repeated page":
+            return "unknown"
+        if self.truncated and not self.declared:
+            return "partial"
+        return "complete"
 
 
 #: What `follow` calls to fetch one page. Given query overrides, header overrides, and
@@ -106,12 +131,16 @@ async def follow(
             on_page(index + 1, page)
 
         if stop_when is not None and await stop_when(page):
+            # The workflow's own condition, not a limit imposed on it: reaching it is
+            # the intended end of this extraction's declared scope.
             result.reason = "stop_when"
+            result.declared = True
             return result
 
         step = state.advance(page)
         if step is None:
             result.reason = state.reason
+            result.declared = True
             return result
 
         query, headers, url = step
@@ -125,6 +154,10 @@ async def follow(
 
     result.reason = f"max_pages ({ceiling})"
     result.truncated = True
+    # Someone actually asked for this many pages -- the workflow's own `max_pages`,
+    # or a mode/CLI override -- as opposed to the hard safety net nobody set on
+    # purpose; only the latter is a surprise truncation worth calling "partial".
+    result.declared = ceiling < HARD_CEILING
     return result
 
 

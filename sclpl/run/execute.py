@@ -177,6 +177,7 @@ async def _cache_key(step: Step, runtime: Runtime) -> str | None:
                 body=body,
                 headers=headers,
                 credential=config.auth,
+                paginate=config.paginate.model_dump() if config.paginate is not None else None,
             )
         case FnConfig() as config:
             if _touches_a_file(config.name):
@@ -513,16 +514,32 @@ async def _paginated(
         on_page=announce,
     )
 
-    if followed.truncated:
+    status = followed.completeness
+    if status == "partial":
         runtime.reporter.log(
             "warning",
-            f"stopped at {followed.count} pages ({followed.reason}); there may be more",
+            f"partial: stopped at {followed.count} pages ({followed.reason})",
+            step.id,
+        )
+    elif status == "unknown":
+        runtime.reporter.log(
+            "info",
+            f"unknown: stopped at {followed.count} pages ({followed.reason})",
             step.id,
         )
 
     last = followed.pages[-1]
     result = _response(last, pages=followed.count, truncated=followed.truncated)
     result["body"] = paginate.merge(followed.pages, spec.into, _extract_path)
+    # D7: what this extraction actually covers, distinct from whether it succeeded.
+    # Never a claim about the source's real total -- only about this run's own
+    # declared scope and what it actually received.
+    result["completeness"] = {
+        "status": status,
+        "reason": followed.reason,
+        "pages": followed.count,
+        "items_received": followed.items_received,
+    }
     return result
 
 
