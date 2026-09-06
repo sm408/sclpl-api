@@ -70,7 +70,16 @@ See [the decision log](DECISION-LOG.md) for implementation tradeoffs and evidenc
   combination (no cross-profile leakage); a same-version wiring bug fixed along the
   way (`step.retry.on`/`max_delay` were parsed but never reached the transport).
   Retry-After date/delta and capped backoff were already correct from before D1.
-- [ ] D3-D4 and D7 remain in the dependency order defined by the plan.
+- [x] D3 conditional HTTP caching: a past-TTL entry with a stored ETag/Last-Modified
+  is revalidated with a conditional request under `--http-cache` rather than served
+  blind or refetched outright; a 304 reconstructs the prior response and refreshes
+  its validators (and counts as a cache hit), a 200 replaces it. Scoped to a single
+  non-paginated, non-`extract`ing request, since a paginated step's cached value is
+  already a cross-page merge and an `extract`ing step's cached value is not the
+  response shape a 304 needs to rebuild -- both keep refetching outright as before.
+  Credential/environment partitioning was already in the cache key (`_salt`); this
+  batch only adds the request-level conditional exchange on top of it.
+- [ ] D4 and D7 remain in the dependency order defined by the plan.
 - [x] E3 foundation: schema-versioned, project-contained test manifests execute through
   the regular runner with fixture replay offline, isolated scratch state, expected-exit,
   local contract assertions, and JSON expected-output checks.

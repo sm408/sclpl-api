@@ -422,3 +422,35 @@ the decision, its tradeoff, and the evidence available when it was made.
   small local recording server proves a declared `proxy=` actually receives the
   absolute-URI request line HTTP defines for forward proxies; `Profile.of` produces
   distinct profiles for distinct auth/proxy/verify values against the same host.
+
+## 2026-09-07 — D3 conditional HTTP caching
+
+- **Decision:** `values.cache.Entry` gains `fresh: bool`; `Cache.get` returns a
+  past-TTL entry (instead of a miss) only when the policy allows revalidation *and*
+  the entry actually has an ETag or Last-Modified to send -- nothing to revalidate
+  with is the same as no permission to. `execute.Runtime` gains two small transient,
+  per-node dicts: `pending_revalidation` (a stale `Entry` for `_http` to consume) and
+  `cache_validators` (the ETag/Last-Modified a response carried, for `run_step` to
+  store once the step returns). `_http` adds `If-None-Match`/`If-Modified-Since` to a
+  revalidation request; a 304 reconstructs the prior stored response shape and
+  refreshes its validators (counting as a cache hit); a 200 replaces it outright.
+- **Why:** The storage half of this (the `etag`/`modified` columns, the `revalidate`
+  policy flag, the credential-salted key) already existed, but nothing ever sent a
+  conditional request or read a 304 -- `--http-cache` enabling `revalidate=True` on a
+  stale entry silently served the old value with no server contact at all, which is
+  not what "revalidate with ETag; a 304 counts as a hit" (the module's own docstring
+  table) promises.
+- **Tradeoff:** Deliberately scoped to one non-paginated, non-`extract`ing request.
+  A paginated step's cached value is a merge across pages with no per-page
+  validators tracked; an `extract`ing step's cached value is whatever expression it
+  computed, not a `{status, headers, body, url}` shape a 304 could reconstruct.
+  Both keep refetching outright on expiry, exactly as before this batch -- this is a
+  real limitation, not a hidden one, and matches "distinguish HTTP revalidation from
+  step-result caching" rather than conflating the two.
+- **Evidence:** `tests/unit/test_memory.py` proves the entry/miss/revalidatable
+  three-way split, including that a validator-less stale entry is still a plain
+  miss. `tests/integration/test_http_cache.py` runs the real runner against a real
+  local ETag-aware server: an unchanged resource is served via a confirmed 304 (one
+  real request per run, not zero); a changed resource replaces the cached value; a
+  still-fresh entry never touches the network at all; `--http-cache` off keeps the
+  pre-D3 behavior of an outright refetch on any stale entry.

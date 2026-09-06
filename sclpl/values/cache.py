@@ -133,6 +133,10 @@ class Entry:
     etag: str | None = None
     modified: str | None = None
     age: float = 0.0
+    #: False for a past-TTL entry returned only because the policy allows
+    #: revalidating it with the server instead of an outright miss. The caller must
+    #: check with the origin (a conditional request) before trusting the value.
+    fresh: bool = True
 
 
 @dataclass(slots=True)
@@ -258,7 +262,9 @@ class Cache:
             self.stats.misses += 1
             return None
 
-        if not fresh and not self._policy.revalidate:
+        if not fresh and not (self._policy.revalidate and (etag or modified)):
+            # No validator to revalidate with is the same as no permission to: there
+            # is nothing to send the server, so this is a plain miss either way.
             self.stats.misses += 1
             return None
 
@@ -281,6 +287,7 @@ class Cache:
             etag=etag,
             modified=modified,
             age=time.time() - created,
+            fresh=fresh,
         )
 
     def put(

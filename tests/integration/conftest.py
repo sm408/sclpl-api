@@ -25,6 +25,10 @@ ATTEMPTS: dict[str, int] = {}
 #: token means one issuance rather than one per request.
 OAUTH_ISSUED: dict[str, int] = {}
 
+#: /etag's current validator and body. A test mutates this directly to simulate the
+#: origin changing between two requests.
+ETAG_STATE = {"version": "v1", "n": 1}
+
 
 class Handler(BaseHTTPRequestHandler):
     protocol_version = "HTTP/1.1"
@@ -110,6 +114,21 @@ class Handler(BaseHTTPRequestHandler):
         elif self.path == "/echo-header":
             value = self.headers.get("X-Probe", "")
             self._respond(200, json.dumps({"x-probe": value}).encode())
+        elif self.path == "/etag":
+            version = ETAG_STATE["version"]
+            if self.headers.get("If-None-Match") == str(version):
+                self.send_response(304)
+                self.send_header("ETag", str(version))
+                self.send_header("Content-Length", "0")
+                self.end_headers()
+            else:
+                body = json.dumps({"n": ETAG_STATE["n"]}).encode()
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("ETag", str(version))
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
         elif self.path == "/auth-once":
             # Rejects exactly once per test, regardless of who is asking, so an
             # oauth-backed step can prove it refreshed and retried after a 401.
@@ -166,9 +185,11 @@ def _reset_attempt_counters() -> Iterator[None]:
     """Each test gets the flaky routes back at attempt zero."""
     ATTEMPTS.clear()
     OAUTH_ISSUED.clear()
+    ETAG_STATE.update(version="v1", n=1)
     yield
     ATTEMPTS.clear()
     OAUTH_ISSUED.clear()
+    ETAG_STATE.update(version="v1", n=1)
 
 
 @pytest.fixture(scope="session")

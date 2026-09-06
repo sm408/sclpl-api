@@ -270,6 +270,51 @@ def test_an_expired_entry_is_a_miss(tmp_path: Path) -> None:
         assert cache.get("k") is None
 
 
+# -- conditional revalidation (D3) -------------------------------------------------
+
+
+def test_an_expired_entry_with_a_validator_is_revalidatable_not_a_miss(
+    tmp_path: Path,
+) -> None:
+    policy = cache_mod.Policy(read=True, write=True, revalidate=True)
+    with cache_mod.Cache(tmp_path, policy=policy) as cache:
+        cache.put("k", {"body": 1}, ttl=0, etag='"abc"')
+        time.sleep(0.01)
+        entry = cache.get("k")
+    assert entry is not None
+    assert entry.fresh is False
+    assert entry.etag == '"abc"'
+
+
+def test_an_expired_entry_without_a_validator_is_still_a_plain_miss(
+    tmp_path: Path,
+) -> None:
+    """Nothing to send the server means nothing to revalidate with."""
+    policy = cache_mod.Policy(read=True, write=True, revalidate=True)
+    with cache_mod.Cache(tmp_path, policy=policy) as cache:
+        cache.put("k", {"body": 1}, ttl=0)
+        time.sleep(0.01)
+        assert cache.get("k") is None
+
+
+def test_revalidate_off_still_misses_an_expired_entry_even_with_a_validator(
+    tmp_path: Path,
+) -> None:
+    with cache_mod.Cache(tmp_path) as cache:  # default policy: revalidate=False
+        cache.put("k", {"body": 1}, ttl=0, etag='"abc"')
+        time.sleep(0.01)
+        assert cache.get("k") is None
+
+
+def test_a_fresh_entry_is_fresh_regardless_of_revalidate(tmp_path: Path) -> None:
+    policy = cache_mod.Policy(read=True, write=True, revalidate=True)
+    with cache_mod.Cache(tmp_path, policy=policy) as cache:
+        cache.put("k", {"body": 1}, etag='"abc"')
+        entry = cache.get("k")
+    assert entry is not None
+    assert entry.fresh is True
+
+
 def test_no_cache_neither_reads_nor_writes(tmp_path: Path) -> None:
     with cache_mod.Cache(tmp_path, policy=cache_mod.Policy(read=True, write=True)) as warm:
         warm.put("k", 1)

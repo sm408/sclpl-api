@@ -82,6 +82,12 @@ class Runtime:
     produced: dict[str, Any] = field(default_factory=dict)
     #: Named auth profiles from the project manifest, by name. Empty outside a project.
     auth_profiles: dict[str, AuthProfile] = field(default_factory=dict)
+    #: Node -> a past-TTL cache entry `--http-cache` may revalidate instead of an
+    #: outright refetch. Consumed (popped) by `_http` for that one node.
+    pending_revalidation: dict[str, cache_mod.Entry] = field(default_factory=dict)
+    #: Node -> the ETag/Last-Modified pair its response carried, for `run_step` to
+    #: store alongside the value once the step returns.
+    cache_validators: dict[str, tuple[str | None, str | None]] = field(default_factory=dict)
 
     def context(self, frame: Frame | None = None) -> Context:
         return Context(
@@ -101,25 +107,35 @@ async def run_step(step: Step, node: Node, runtime: Runtime, *, node_id: str = "
     if step.skip_if and await _condition(step.skip_if, runtime, step):
         return SKIPPED
 
+    effective_id = node_id or node.id
     key = await _cache_key(step, runtime)
     if key is not None:
         hit = runtime.cache.get(key) if runtime.cache else None
-        if hit is not None:
+        if hit is not None and hit.fresh:
             runtime.reporter.emit(StepProgress(id=step.id, detail="cached", current=1))
             if step.assert_:
                 # Still checked. A cached value that no longer satisfies an assertion is
                 # exactly the case the assertion exists for.
                 await _assert(step, hit.value, runtime)
             return hit.value
-        if runtime.cache is not None and runtime.cache.policy.require_hit:
+        if hit is not None and not hit.fresh:
+            # Past its TTL, but `--http-cache` allows checking with the server before
+            # refetching outright. `_http` consumes this to send a conditional
+            # request; a non-HTTP step ignores it (nothing pops it, so it is dropped
+            # with the rest of this run's transient state).
+            runtime.pending_revalidation[effective_id] = hit
+        elif runtime.cache is not None and runtime.cache.policy.require_hit:
             raise cache_mod.Missing(step.id)
 
-    value = await _dispatch(step, node, runtime, node_id or node.id)
+    value = await _dispatch(step, node, runtime, effective_id)
 
     if step.assert_:
         await _assert(step, value, runtime)
     if key is not None and runtime.cache is not None and value is not SKIPPED:
-        runtime.cache.put(key, value, ttl=step.cache.ttl, step=step.id)
+        etag, modified = runtime.cache_validators.pop(effective_id, (None, None))
+        runtime.cache.put(
+            key, value, ttl=step.cache.ttl, step=step.id, etag=etag, modified=modified
+        )
     return value
 
 
@@ -194,7 +210,7 @@ def _touches_a_file(name: str) -> bool:
 async def _dispatch(step: Step, node: Node, runtime: Runtime, node_id: str) -> Any:
     match step.config:
         case HttpConfig() as config:
-            return await _http(step, config, node, runtime)
+            return await _http(step, config, node, runtime, node_id)
         case FnConfig() as config:
             return await _fn(step, config, runtime)
         case LetConfig() as config:
@@ -265,7 +281,7 @@ async def _apply_auth(
     return profile
 
 
-async def _http(step: Step, config: HttpConfig, node: Node, runtime: Runtime) -> Any:
+async def _http(step: Step, config: HttpConfig, node: Node, runtime: Runtime, node_id: str) -> Any:
     url = await _interpolate(config.url, runtime)
     if not isinstance(url, str) or "://" not in url:
         raise StepFailed(
@@ -284,6 +300,19 @@ async def _http(step: Step, config: HttpConfig, node: Node, runtime: Runtime) ->
     proxy = str(await _interpolate(config.proxy, runtime)) if config.proxy else None
 
     auth_profile = await _apply_auth(step, config, url, headers, query, body, runtime)
+
+    # D3: revalidation is scoped to a single, non-paginated, non-extracted request.
+    # A paginated step's cached value is already a merge across pages with no
+    # per-page validators tracked; an `extract`ing step's cached value is whatever
+    # expression it computed, not the response shape a 304 needs to reconstruct.
+    # Both are refetched outright, as they were before this batch.
+    revalidatable = config.paginate is None and config.extract is None
+    stale = runtime.pending_revalidation.pop(node_id, None) if revalidatable else None
+    if stale is not None:
+        if stale.etag:
+            headers.setdefault("If-None-Match", stale.etag)
+        if stale.modified:
+            headers.setdefault("If-Modified-Since", stale.modified)
 
     kwargs: dict[str, Any] = {}
     if headers:
@@ -345,6 +374,32 @@ async def _http(step: Step, config: HttpConfig, node: Node, runtime: Runtime) ->
             refreshed = await auth_mod.apply(auth_profile, method=config.method, url=url)
             kwargs["headers"] = {**kwargs.get("headers", {}), **refreshed.headers}
             return await fetch(extra_query, extra_headers, override, _retried_auth=True)
+
+        if stale is not None and response.status_code == 304:
+            # Confirmed unchanged: the body never has one on a 304, so the value this
+            # step produces is the one already on disk, not `decode(response)`. A
+            # server is allowed to refresh the validators on a 304 even though the
+            # body did not change, so prefer whichever it sent this time.
+            if runtime.cache is not None:
+                runtime.cache.stats.hits += 1
+            runtime.cache_validators[node_id] = (
+                response.headers.get("etag", stale.etag),
+                response.headers.get("last-modified", stale.modified),
+            )
+            cached = stale.value
+            return paginate.Page(
+                body=cached["body"],
+                status=cached["status"],
+                headers=cached["headers"],
+                url=cached["url"],
+                elapsed_ms=attempt.duration_ms,
+            )
+
+        if runtime.cache is not None and revalidatable:
+            runtime.cache_validators[node_id] = (
+                response.headers.get("etag"),
+                response.headers.get("last-modified"),
+            )
         return paginate.Page(
             body=decode(response),
             status=response.status_code,
