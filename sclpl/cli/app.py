@@ -34,8 +34,10 @@ from sclpl.cli.options import (
     VerboseOption,
     resolve_verbosity,
 )
-from sclpl.errors import EXIT_USAGE, SclplError
+from sclpl.errors import EXIT_USAGE, SclplError, ValidationError
 from sclpl.ext.plugins import parse_capabilities
+from sclpl.project import context as project_context
+from sclpl.project import policy as policy_mod
 
 
 def _denied_capabilities() -> list[str]:
@@ -55,6 +57,29 @@ def _denied_capabilities() -> list[str]:
         elif item.startswith("--deny-capability="):
             wanted.append(item.split("=", 1)[1])
     return wanted
+
+
+def _project_denied_capabilities() -> frozenset[str]:
+    """A project's own declared capability denials, or empty for a standalone run.
+
+    A project that fails to load at all -- no manifest, or one broken for reasons
+    unrelated to policy -- denies nothing extra here, exactly like a workflow run
+    falls back to `policy.DEFAULT` when no project is found. A project that loads
+    but declares an unparsable `[policy]` table is different: this runs before any
+    subcommand's own error handling exists to report it well, so it is swallowed
+    here too and left for that subcommand -- `project check` or `run` -- to raise
+    with a proper diagnostic once it actually loads the project itself.
+    """
+    try:
+        context = project_context.load()
+    except ValidationError:
+        return frozenset()
+    if context is None:
+        return frozenset()
+    try:
+        return policy_mod.parse(context).deny_capabilities
+    except ValidationError:
+        return frozenset()
 
 
 def _is_static_plugin_inspection() -> bool:
@@ -118,9 +143,15 @@ def main(
     ),
 ) -> None:
     # Validate policy before plugin activation, so a typo is not a silent no-op.
-    parse_capabilities(deny_capability or [])
+    # A project's own `[policy] deny_capabilities` is folded in here too: activation
+    # happens once, at process startup, before any subcommand -- including `--project`
+    # -- has been parsed, so this can only see a project discoverable from the
+    # current directory. That is the same constraint auth profiles and output policy
+    # already accept for a standalone run; it is not a new limitation.
+    denied = frozenset(deny_capability or ()) | _project_denied_capabilities()
+    parse_capabilities(denied)
     if not _is_static_plugin_inspection():
-        bootstrap.activate_plugins(denied=deny_capability or ())
+        bootstrap.activate_plugins(denied=denied)
 
     ctx.obj = GlobalOptions(
         verbosity=resolve_verbosity(quiet, verbose),

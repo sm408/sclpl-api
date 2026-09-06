@@ -9,7 +9,7 @@ from typing import Annotated
 import typer
 
 from sclpl.errors import ValidationError
-from sclpl.project import context
+from sclpl.project import context, policy
 
 project_app = typer.Typer(no_args_is_help=True, help="Inspect the current project.")
 env_app = typer.Typer(no_args_is_help=True, help="Select project environments.")
@@ -73,13 +73,31 @@ def check(
     loaded = context.load(project=project, env=env)
     if loaded is None:
         raise ValidationError(f"no {context.MANIFEST} found", remedies=["run sclpl init"])
+    resolved_policy = policy.parse(loaded)  # raises on a malformed [policy] table
+    allowed_hosts = resolved_policy.allowed_hosts
     payload = loaded.describe()
+    payload["policy"] = {
+        "hosts": sorted(allowed_hosts) if allowed_hosts is not None else None,
+        "output_roots": [str(root) for root in resolved_policy.output_roots],
+        "overwrite": resolved_policy.overwrite,
+        "deny_capabilities": sorted(resolved_policy.deny_capabilities),
+    }
     if json_mode:
         typer.echo(json.dumps(payload, indent=2, sort_keys=True))
         return
     typer.echo(f"project: {payload['root']}")
     typer.echo(f"environment: {loaded.environment} ({loaded.environment_source})")
     typer.echo("manifest: valid")
+    if resolved_policy.restricts_hosts:
+        typer.echo(f"policy hosts: {', '.join(sorted(resolved_policy.allowed_hosts or ()))}")
+    if resolved_policy.output_roots:
+        roots = ", ".join(str(root) for root in resolved_policy.output_roots)
+        typer.echo(f"policy output roots: {roots}")
+    if not resolved_policy.overwrite:
+        typer.echo("policy overwrite: denied (pass --overwrite to run to override)")
+    if resolved_policy.deny_capabilities:
+        denied = ", ".join(sorted(resolved_policy.deny_capabilities))
+        typer.echo(f"policy deny capabilities: {denied}")
 
 
 @env_app.command("list")

@@ -125,4 +125,26 @@ See [the decision log](DECISION-LOG.md) for implementation tradeoffs and evidenc
   per test (subprocess, not mocked) covering renames-tracked changes, untracked
   fixture files, shared-dependency changes, project-manifest changes, and unrelated
   changes selecting nothing.
+- [x] E6 audit and enforced policy: a project's `[policy]` table (`hosts`,
+  `output_roots`, `overwrite`, `deny_capabilities`) is opt-in -- absent entirely, a
+  project behaves exactly as before -- and enforced at the point a side effect would
+  otherwise happen, never earlier and never by trusting a static check alone. Host
+  allowlisting is an httpx `request` event hook registered on every pooled client,
+  which httpx calls before sending the first request *and* before every redirect
+  hop, so an allowlisted step can't be routed to an unlisted host by a redirect it
+  never wrote. Output roots are checked against `Path.resolve()`, which follows both
+  `..` traversal and symlinks/junctions to where the bytes actually land, not the
+  literal path string. Overwrite is denied by default the moment a project declares
+  any `[policy]` table at all (an explicit `overwrite = true`, or the per-run
+  `--overwrite` flag, opts back in), checked once in `run_workflow` right after
+  preflight succeeds -- before the output lock, the pool, or a single step, so there
+  is nothing yet to undo. A policy denial is deliberately not a transport failure:
+  it bypasses the circuit breaker and retry budget entirely rather than being
+  retried or exhausting them. Project-declared `deny_capabilities` now also feeds
+  the pre-existing plugin-capability-denial mechanism (which already refused a
+  capability before importing the plugin module), merged with `--deny-capability`
+  at CLI startup. `sclpl project check` surfaces the fully resolved policy and fails
+  clearly on a malformed `[policy]` table rather than silently ignoring it.
+- Every Batch E checklist item now has at least foundation or full coverage (E3-E6
+  done; E5 foundation-scoped as noted above; E7-E9 remain).
 - [ ] E4 and E6-E9 remain in the dependency order defined by the plan.

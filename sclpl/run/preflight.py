@@ -15,6 +15,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from sclpl.errors import ValidationError, did_you_mean
+from sclpl.project.policy import Policy
 from sclpl.run import paginate
 from sclpl.run.compile_plan import compile_plan, function_names, hosts
 from sclpl.run.ir import WorkflowDoc
@@ -70,6 +71,7 @@ def preflight(
     from_cache: bool = False,
     check_files: bool = True,
     require_ports: bool = True,
+    policy: Policy | None = None,
 ) -> Report:
     """Check a workflow end to end without executing it.
 
@@ -140,6 +142,19 @@ def preflight(
             report.will_overwrite = check_writable(report.bindings)
         except ValidationError as error:
             report.problems.append(error)
+
+    # 6b. Output roots: independent of check_files, because "where is this allowed to
+    # land" is a property of the path, knowable without a filesystem, and a run that
+    # will be denied should be denied by `validate` too, not only discovered at `run`.
+    if policy is not None and policy.restricts_outputs and report.bindings is not None:
+        for binding in report.bindings.outputs.values():
+            if binding.is_stdio or not binding.bound:
+                continue
+            for path in binding.paths:
+                try:
+                    policy.check_output(path)
+                except ValidationError as error:
+                    report.problems.append(error)
 
     # 7. Optional extras the workflow will need.
     report.notes.extend(_check_extras(doc, report.resolved))

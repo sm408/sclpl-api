@@ -562,3 +562,68 @@ the decision, its tradeoff, and the evidence available when it was made.
   end to end: running with no path over a project directory, `--update-snapshots`
   rewriting a real mismatch, a real mismatch failing without it, and `--changed`
   outside any git repository still running everything.
+
+## 2026-09-07 — E6 audit and enforced policy
+
+- **Decision:** A new, opt-in `[policy]` table on the project manifest
+  (`sclpl/project/policy.py`) declares `hosts` (an allowlist, glob-matched),
+  `output_roots` (paths every output must resolve under), `overwrite` (default
+  `false` the moment the table exists at all), and `deny_capabilities`. Each is
+  enforced exactly where its side effect would otherwise happen: hosts via an
+  async `request` event hook httpx calls on every pooled client before sending
+  the first request of a call *and* before every redirect it takes (`Pool.client`
+  in `run/transport.py`); output roots via `Path.resolve()` against the bound
+  path, in `preflight()`, independent of `--no-validate`; overwrite via a check in
+  `run_workflow` right after preflight succeeds and before the output lock, the
+  pool, or any step; capabilities by folding a project's `deny_capabilities` into
+  the same `--deny-capability` set the CLI root callback already passes to
+  `bootstrap.activate_plugins()`, which already refuses a capability before
+  importing the plugin that declared it. A policy violation raises the new
+  `PolicyDenied(ValidationError)` and, in the transport layer, is explicitly
+  excluded from the retry loop and the circuit breaker -- it is not evidence the
+  host is unhealthy, so it must not consume the retry budget or count as a
+  breaker failure.
+- **Why:** The plan (E6) requires that "policy denial precedes side effects and
+  plugin import" and calls out path traversal, symlinks/junctions, and redirect
+  escapes by name as things to verify -- three ways a naive check (compare the
+  literal path or the literal request URL) would pass while the actual bytes
+  still ended up somewhere the policy meant to forbid. httpx's redirect handling
+  builds a new `Request` per hop and reapplies every registered hook to it before
+  sending, which is what makes one hook placement cover both the URL a step wrote
+  and every place a 3xx response could redirect it to. `Path.resolve()` was
+  already the right primitive for output roots because C5's locking code and A1's
+  project-path containment check both already lean on it for the same reason:
+  the literal path string is not where a symlink, a junction, or a `..` actually
+  writes.
+- **Tradeoff:** This is deliberately opt-in and additive: a project with no
+  `[policy]` table, or a standalone workflow with no project at all, behaves
+  exactly as it did before this batch -- overwrite still silently succeeds, no
+  host is refused, no output path is checked. The moment a project *does*
+  declare `[policy]`, `overwrite` flips to denied by default, which is the one
+  place this batch changes a default rather than only adding an opt-in
+  restriction; the reasoning is that declaring `[policy]` at all is itself a
+  signal the author is thinking about safety, and silently clobbering a file is
+  exactly the class of thing that default should stop doing. Capability denial
+  resolution happens once at CLI startup, before any subcommand (including
+  `--project`) is parsed, so it can only discover a project reachable from the
+  current directory -- the same constraint auth profiles and this batch's own
+  `output`/`overwrite` policy already accept for a standalone invocation, not a
+  new limitation this batch introduces.
+- **Evidence:** `tests/unit/test_policy.py` covers parsing (defaults, an absent
+  table, glob host matching, an explicit `overwrite = true`, unknown capability
+  names, unknown top-level keys, wrong-typed fields) and `check_host`/
+  `check_output` directly, including a `..` traversal and (skipped where the
+  platform refuses an unprivileged symlink) a symlink pointing outside every
+  declared root. `tests/integration/test_policy_e2e.py` proves enforcement
+  through the real runner and a real local server: an allowed host succeeds, a
+  disallowed one is denied, a redirect from the allowed host to the *same
+  physical server* reached through a different hostname is denied (proving the
+  hook fires on the redirect hop, not just the original URL), a denied request
+  never reaches the server and is not retried, an output inside/outside a
+  declared root is allowed/denied through the real `sclpl run` CLI, a path
+  traversal through `output_roots` is denied, overwrite is denied by default
+  once `[policy]` exists and can be overridden by `--overwrite` or `overwrite =
+  true`, a project or standalone run with no `[policy]` table still overwrites
+  as before, `sclpl project check` surfaces the resolved policy and fails
+  clearly on a malformed one, and a project's `deny_capabilities` reaches
+  `sclpl plugin list --refused` the same way `--deny-capability` already did.

@@ -66,6 +66,12 @@ def run(
     no_validate: Annotated[
         bool, typer.Option("--no-validate", help="Skip preflight. Not recommended.")
     ] = False,
+    overwrite: Annotated[
+        bool,
+        typer.Option(
+            "--overwrite", help="Replace existing outputs even if project policy denies it."
+        ),
+    ] = False,
     dry_run: Annotated[
         bool, typer.Option("--dry-run", help="Plan and validate, but execute nothing.")
     ] = False,
@@ -150,6 +156,7 @@ def run(
         retries=retries,
         keep_going=keep_going,
         validate=not no_validate,
+        overwrite=overwrite,
         dry_run=dry_run,
         keep_all=keep_all,
         memory_budget=memory_budget,

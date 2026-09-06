@@ -70,6 +70,15 @@ class ValidationError(SclplError):
     exit_code = EXIT_VALIDATION
 
 
+class PolicyDenied(ValidationError):
+    """A declared project policy blocked something before it could happen.
+
+    Deliberately a `ValidationError`: like an unresolved reference or a broken
+    graph, this is a reason the run cannot proceed as configured, found and
+    reported before any side effect -- not a step that ran and failed.
+    """
+
+
 class ExpressionError(ValidationError):
     """A malformed expression, or one that cannot resolve."""
 

@@ -13,9 +13,16 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from sclpl.errors import EXIT_INTERRUPTED, EXIT_STEP_FAILED, SclplError, ValidationError
+from sclpl.errors import (
+    EXIT_INTERRUPTED,
+    EXIT_STEP_FAILED,
+    PolicyDenied,
+    SclplError,
+    ValidationError,
+)
 from sclpl.project import auth as auth_mod
 from sclpl.project import context as project_context
+from sclpl.project import policy as policy_mod
 from sclpl.render.events import RunFinished, RunStarted
 from sclpl.render.reporter import Reporter
 from sclpl.run import lanes
@@ -78,6 +85,8 @@ class Options:
     scratch_dir: Path | None = None
     #: How long to wait for exclusive ownership of a managed output another run holds.
     output_lock_timeout: float = 30.0
+    #: Overrides a project policy's `overwrite = false` for this run only.
+    overwrite: bool = False
 
 
 @dataclass(slots=True)
@@ -97,6 +106,7 @@ class Result:
 async def run_workflow(doc: WorkflowDoc, options: Options, reporter: Reporter) -> Result:
     """Validate, plan, and execute a workflow."""
     started = time.perf_counter()
+    project_policy = _policy(options)
 
     report = preflight(
         doc,
@@ -105,6 +115,7 @@ async def run_workflow(doc: WorkflowDoc, options: Options, reporter: Reporter) -
         named_out=options.named_out,
         positional=options.positional,
         check_files=options.validate,
+        policy=project_policy,
     )
     for note in report.notes:
         reporter.log("info", note)
@@ -118,6 +129,28 @@ async def run_workflow(doc: WorkflowDoc, options: Options, reporter: Reporter) -
                 duration_ms=_ms(started),
                 counts={},
                 exit_code=problem.exit_code,
+            )
+        )
+        return Result(report=report, exit_code=problem.exit_code)
+
+    if report.will_overwrite and not (options.overwrite or project_policy.overwrite):
+        # Checked here rather than folded into `report.problems`: preflight itself
+        # has no opinion on overwriting, since `validate`/`explain` call it without
+        # ever intending to write anything. This is a `run`-specific decision, made
+        # before the output lock, the pool, or a single step -- nothing has happened
+        # yet that this denial needs to undo.
+        existing = ", ".join(str(path) for path in report.will_overwrite)
+        problem = PolicyDenied(
+            f"refusing to overwrite existing output(s): {existing}",
+            remedies=[
+                "pass --overwrite to replace them",
+                "or set [policy] overwrite = true in the project manifest",
+            ],
+        )
+        reporter.log("error", str(problem))
+        reporter.emit(
+            RunFinished(
+                status="failed", duration_ms=_ms(started), counts={}, exit_code=problem.exit_code
             )
         )
         return Result(report=report, exit_code=problem.exit_code)
@@ -177,6 +210,7 @@ async def run_workflow(doc: WorkflowDoc, options: Options, reporter: Reporter) -
             recorder=FixtureStore(options.record_fixture_root)
             if options.record_fixture_root
             else None,
+            policy=project_policy if project_policy.restricts_hosts else None,
         ) as pool:
             runtime = Runtime(
                 doc=doc,
@@ -355,6 +389,25 @@ def _auth_profiles(doc: WorkflowDoc, options: Options) -> dict[str, auth_mod.Pro
         if uses_auth:
             raise
         return {}
+
+
+def _policy(options: Options) -> policy_mod.Policy:
+    """The project's declared policy, or `DEFAULT` (unrestricted) for a standalone run.
+
+    Unlike `_auth_profiles`, a broken `[policy]` table is never swallowed once a
+    project has loaded: a project that opted into `hosts`/`output_roots`/`overwrite`
+    and typo'd one is a project whose safety boundary silently would not apply,
+    which is worse than refusing to run at all. A project that fails to *load* at
+    all -- unrelated broken TOML near a standalone workflow -- still must not break
+    standalone execution, so that case falls back to the default exactly as auth does.
+    """
+    try:
+        context = project_context.load(env=options.env)
+    except ValidationError:
+        return policy_mod.DEFAULT
+    if context is None:
+        return policy_mod.DEFAULT
+    return policy_mod.parse(context)
 
 
 def _output_paths(report: Report) -> dict[str, str]:

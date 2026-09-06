@@ -23,7 +23,8 @@ from typing import Any
 
 import httpx
 
-from sclpl.errors import StepFailed
+from sclpl.errors import PolicyDenied, StepFailed
+from sclpl.project.policy import Policy
 from sclpl.render.events import StepRetrying
 from sclpl.render.reporter import Reporter
 from sclpl.run.fixtures import Fixture
@@ -160,6 +161,7 @@ class Pool:
         "_recorder",
         "_occurrences",
         "_clock",
+        "_policy",
     )
 
     def __init__(
@@ -171,6 +173,7 @@ class Pool:
         fixtures: FixtureStore | None = None,
         recorder: FixtureStore | None = None,
         clock: Clock | None = None,
+        policy: Policy | None = None,
     ) -> None:
         self._limits = limits if limits is not None else TransportLimits()
         self._retry = retry if retry is not None else Retry()
@@ -184,6 +187,7 @@ class Pool:
         self._recorder = recorder
         self._occurrences: dict[tuple[str, str], int] = {}
         self._clock = clock if clock is not None else REAL_CLOCK
+        self._policy = policy
 
     async def client(self, profile: Profile) -> httpx.AsyncClient:
         """The client for this profile, created once."""
@@ -214,9 +218,18 @@ class Pool:
                     keepalive_expiry=self._limits.keepalive_expiry,
                 ),
                 proxy=profile.proxy,
+                # httpx calls every "request" hook before sending each request in a
+                # redirect chain -- the first one and every hop after it -- so one
+                # hook here is what makes a host allowlist apply to a redirect target
+                # too, not just the URL the step actually wrote.
+                event_hooks={"request": [self._check_host]} if self._policy is not None else {},
             )
             self._clients[profile] = created
             return created
+
+    async def _check_host(self, request: httpx.Request) -> None:
+        assert self._policy is not None
+        self._policy.check_host(request.url.host)
 
     def breaker(self, host: str) -> Breaker:
         existing = self._breakers.get(host)
@@ -300,6 +313,12 @@ class Pool:
             attempt_started = self._clock.now()
             try:
                 response = await client.request(method, url, **kwargs)
+            except PolicyDenied:
+                # Not a transport failure: the breaker and the retry budget both
+                # exist to characterize a flaky *host*, and a denial says nothing
+                # about the host's health -- it says this run was never allowed to
+                # ask it anything, on this attempt or the next one.
+                raise
             except Exception as error:  # noqa: BLE001 - classified just below
                 last_error = error
                 breaker.record_failure()
@@ -437,6 +456,8 @@ class Pool:
                         attempts=attempt + 1,
                         duration_ms=int((self._clock.now() - started) * 1000),
                     )
+            except PolicyDenied:
+                raise
             except Exception as error:  # noqa: BLE001 - classified just below
                 last_error = error
                 breaker.record_failure()
