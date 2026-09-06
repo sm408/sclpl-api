@@ -516,3 +516,49 @@ the decision, its tradeoff, and the evidence available when it was made.
   proves it through the real runner against a real paginated server route.
   `tests/unit/test_memory.py` pins the cache-key fix: two different `paginate`
   specs against the same URL now produce different keys.
+
+## 2026-09-07 — E4 snapshots and changed test selection
+
+- **Decision:** `sclpl test run --update-snapshots` rewrites an
+  `expected_outputs` file to match what the run actually produced instead of
+  failing the assertion, written atomically (scratch file + `os.replace`). The
+  "did this actually change" check compares *parsed* JSON values, not raw bytes,
+  so a hand-written or differently-formatted snapshot that already means the same
+  thing is left alone. `sclpl test run --changed --base REF` narrows the manifest
+  set to ones a `git diff --find-renames REF...HEAD` (plus `git ls-files --others
+  --exclude-standard`, since untracked files never show up in a diff against HEAD)
+  could plausibly affect: the manifest file itself, its fixture directory, or its
+  workflow's source file. A change under a shared `functions/`/`plugins/`
+  directory, or to the project manifest itself, selects every manifest rather than
+  trying to trace which ones actually depend on it. No git repository, or a `git
+  diff` that fails (unknown ref, git not installed), also selects everything. `test
+  run` with no path argument now discovers and runs every manifest in the project
+  instead of requiring exactly one.
+- **Why:** Without `--update-snapshots`, adopting snapshot-style
+  `expected_outputs` assertions means hand-editing JSON files after every
+  intentional output change, which nobody does reliably. Without `--changed`,
+  running the full test suite before every commit does not scale as a project's
+  test manifests grow. Both accept criteria in the plan (E4) explicitly demand
+  conservative fallbacks -- "unavailable Git base conservatively runs all" -- over
+  cleverness, since a false "this test doesn't need to run" is a correctness bug
+  and a false "run everything" is only a speed cost.
+- **Tradeoff:** Changed-selection is path-based, not a real dependency graph: a
+  workflow that dynamically references a function by name computed at runtime, or
+  a fixture referenced by a relative path outside its own manifest, would not be
+  detected as affected. This is deliberately conservative in the direction the
+  spec asks for (shared directories always select everything) rather than
+  precise. The atomic-write comparison reads back an existing snapshot file only
+  to answer "did anything change"; a first-time snapshot write with no prior file
+  is always treated as a real update.
+- **Evidence:** `tests/unit/test_test_manifests.py` covers a mismatched snapshot
+  failing with the `--update-snapshots` remedy, a successful rewrite, a no-op
+  when the value already matches (parsed, not byte-for-byte), and no leftover
+  scratch file after the atomic write. `tests/unit/test_test_select.py` builds a
+  real git repository per test (subprocess `git`, not mocked) covering: no
+  repository, an unresolvable base ref, a workflow-only change, a fixture-only
+  change, an untracked fixture file, a shared-function change, a project-manifest
+  change, and an unrelated change selecting nothing.
+  `tests/integration/test_test_cmd.py` exercises the actual `sclpl test run` CLI
+  end to end: running with no path over a project directory, `--update-snapshots`
+  rewriting a real mismatch, a real mismatch failing without it, and `--changed`
+  outside any git repository still running everything.

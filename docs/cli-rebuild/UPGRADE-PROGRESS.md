@@ -107,4 +107,22 @@ See [the decision log](DECISION-LOG.md) for implementation tradeoffs and evidenc
   the regular runner with fixture replay offline, isolated scratch state, expected-exit,
   local contract assertions, and JSON expected-output checks.
 - [x] E5 foundation: `graph WORKFLOW --format mermaid` renders a deterministic validated DAG.
+- [x] E4 snapshots and changed test selection: `sclpl test run --update-snapshots`
+  rewrites `expected_outputs` files in place instead of failing, comparing parsed
+  JSON values rather than raw bytes -- a hand-written or differently-formatted
+  snapshot that already means the same thing is left untouched, so a run never
+  touches a file nothing actually asked to change -- and writes atomically (scratch
+  file + `os.replace`) so a crash mid-write can never leave a half-written snapshot
+  the next run would trust. `sclpl test run --changed --base REF` selects only the
+  manifests a `git diff --find-renames` (plus untracked files, since a diff against
+  HEAD alone misses those) against `REF` could actually affect: a manifest's own
+  file, its fixture directory, or its workflow file. A change to the project
+  manifest itself or to a shared `functions/`/`plugins/` directory conservatively
+  selects every manifest, since those are cross-cutting. No git repository, or a
+  base ref git cannot resolve, also conservatively selects everything rather than
+  guessing. `sclpl test run` with no path now discovers and runs every manifest
+  (previously a single manifest was required). Verified with a real git repository
+  per test (subprocess, not mocked) covering renames-tracked changes, untracked
+  fixture files, shared-dependency changes, project-manifest changes, and unrelated
+  changes selecting nothing.
 - [ ] E4 and E6-E9 remain in the dependency order defined by the plan.
