@@ -189,6 +189,34 @@ See [the decision log](DECISION-LOG.md) for implementation tradeoffs and evidenc
   requirement (the bundled sqlite plugin writes its file directly; this
   mechanism's atomic-rename does cover the *file* as a whole once that write
   finishes, but does not add a SQL-level transaction boundary inside it).
-- Every Batch E checklist item now has at least foundation or full coverage (E3-E8
-  done; E5 foundation-scoped as noted above; E9 remains).
+- [x] E9 verify format fidelity: a round-trip probe of every supported format
+  against the plan's own named cases (leading-zero codes, large ids, decimals,
+  timezone-aware timestamps, nulls, empty tables) found two real, previously
+  silent bugs, both fixed. CSV/NDJSON's `read_csv` had no protection against
+  `00123` being read back as the integer `123` -- pandas' default type
+  inference does not know a zero-padded code is not a number; the raw text is
+  now sniffed for that exact shape (`0` followed by more digits, the shape a
+  real numeric column never has) before pandas ever assigns it a dtype, and
+  that column is forced to `str`. Excel writes silently gained: an integer
+  above 2**53 (`123456789012345678`) came back as a *different* number
+  (`...696`) with no error, because Excel stores every number as a 64-bit
+  float; writing one now refuses with a diagnostic naming the exact value and
+  column, matching this batch's "fail with a loss diagnostic" acceptance path
+  rather than a wrong answer. A timezone-aware timestamp already raised on
+  writing to Excel (pandas itself refuses), but as a raw `ValueError` --
+  rewrapped as an `sclpl` diagnostic with a remedy. An empty table written as
+  CSV already failed to read back (no header row to infer columns from, which
+  is CSV's own real limit, not a bug); the confusing pandas
+  `EmptyDataError: No columns to parse from file` is now a clear diagnostic
+  naming the actual constraint. JSON, NDJSON, and Parquet already carried every
+  named case correctly (Parquet keeps `Decimal` and timezone-aware `Timestamp`
+  values as real typed values; JSON/NDJSON keep large integers exact and
+  represent a `Decimal` as its exact decimal text, which is the closest either
+  format can get to a native decimal type). SQLite is out of scope here -- it
+  writes through a separate bundled plugin, not through `tables/io.py`.
+- Every Batch E checklist item now has at least foundation or full coverage (E3-E9
+  done; E5 foundation-scoped, E9's SQLite path out of scope, both as noted above).
+- **Checkpoint E reached**: E3-E9 all have real coverage (E3/E5 foundation-scoped,
+  E9's SQLite fidelity path explicitly out of scope). All five business workflows'
+  existing replay tests, contracts, and negative cases continue to pass throughout.
 - [ ] E4 and E6-E9 remain in the dependency order defined by the plan.

@@ -7,10 +7,23 @@ second of import time for it, nor fail to start without it.
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 from typing import Any
 
 from sclpl.tables.base import MissingExtra
+
+#: A value like `00123`: unsigned digits with a leading zero, one more than a bare
+#: `0`. Read as CSV/NDJSON's default integer inference, this becomes `123` -- a
+#: different, shorter value, silently. Nothing else in a CSV cell has this shape by
+#: accident: an ordinary ID or count never starts with `0` followed by more digits.
+_LEADING_ZERO = re.compile(r"^0\d+$")
+
+#: The largest integer a IEEE-754 double -- what Excel stores every number as, having
+#: no separate integer type -- can represent exactly. Above this, two different
+#: integers can round to the same float, which is not a rounding *error* so much as
+#: writing down the wrong number.
+_EXCEL_SAFE_INTEGER = 2**53
 
 
 def _pandas() -> Any:
@@ -19,6 +32,49 @@ def _pandas() -> Any:
     except ImportError as error:
         raise MissingExtra("tables", "pandas") from error
     return pandas
+
+
+def _leading_zero_columns(path: Path) -> list[str]:
+    """CSV columns holding a value like `00123`, sniffed from the raw text.
+
+    Read before pandas ever sees the file: by the time `read_csv` has inferred a
+    dtype, the leading zero is already gone, and there is nothing left to notice.
+    """
+    import csv
+
+    found: set[str] = set()
+    with path.open(newline="", encoding="utf-8") as handle:
+        for row in csv.DictReader(handle):
+            for column, value in row.items():
+                if value and _LEADING_ZERO.match(value):
+                    found.add(column)
+    return sorted(found)
+
+
+def _excel_unsafe_integers(frame: Any) -> list[tuple[str, int]]:
+    """Columns holding an integer Excel's float64 storage cannot represent exactly.
+
+    One offending value per column is enough to name in the diagnostic; the point is
+    to say which column to avoid, not to enumerate every large id in it.
+    """
+    import math
+
+    offenders: list[tuple[str, int]] = []
+    for column in frame.columns:
+        for value in frame[column]:
+            if isinstance(value, int) and not isinstance(value, bool):
+                if abs(value) > _EXCEL_SAFE_INTEGER:
+                    offenders.append((str(column), value))
+                    break
+            elif (
+                isinstance(value, float)
+                and math.isfinite(value)
+                and value.is_integer()
+                and abs(value) > _EXCEL_SAFE_INTEGER
+            ):
+                offenders.append((str(column), int(value)))
+                break
+    return offenders
 
 
 class PandasBackend:
@@ -108,7 +164,7 @@ class PandasBackend:
         pandas = _pandas()
         match fmt:
             case "csv":
-                return pandas.read_csv(path, **options)
+                return self._read_csv(path, **options)
             case "json":
                 return self._read_json(path, **options)
             case "ndjson":
@@ -124,6 +180,35 @@ class PandasBackend:
                 from sclpl.errors import ValidationError
 
                 raise ValidationError(f"cannot read {fmt!r} as a table")
+
+    def _read_csv(self, path: Path, **options: Any) -> Any:
+        """`pandas.read_csv`, with leading-zero columns protected from int inference.
+
+        Left to its own defaults, `read_csv` would turn `00123` into `123`: a
+        different, shorter value, and a different type, with nothing to say it
+        happened. Every such column is forced to `str` before pandas ever infers a
+        type for it, so the exact text survives.
+        """
+        pandas = _pandas()
+        protect = _leading_zero_columns(path)
+        if protect:
+            overrides = dict(options.get("dtype") or {})
+            for column in protect:
+                overrides.setdefault(column, str)
+            options = {**options, "dtype": overrides}
+        try:
+            return pandas.read_csv(path, **options)
+        except pandas.errors.EmptyDataError as error:
+            from sclpl.errors import ValidationError
+
+            raise ValidationError(
+                f"{path} has no header row to read as a table",
+                remedies=[
+                    "an empty table written as CSV has no columns to write a header "
+                    "from, so this is expected for a zero-row export",
+                    "read it as JSON or Parquet instead if the column names matter",
+                ],
+            ) from error
 
     def _read_json(self, path: Path, **options: Any) -> Any:
         """Read JSON that may be a list of objects, or an object wrapping one.
@@ -164,14 +249,49 @@ class PandasBackend:
                 except ImportError as error:
                     raise MissingExtra("writing Parquet", "pyarrow") from error
             case "xlsx":
-                try:
-                    frame.to_excel(path, index=False, **options)
-                except ImportError as error:
-                    raise MissingExtra("writing Excel", "openpyxl") from error
+                self._write_excel(frame, path, **options)
             case _:
                 from sclpl.errors import ValidationError
 
                 raise ValidationError(f"cannot write {fmt!r}")
+
+    def _write_excel(self, frame: Any, path: Path, **options: Any) -> None:
+        """`to_excel`, refusing rather than silently corrupting what it cannot hold.
+
+        Excel has no integer type of its own -- every number is an IEEE-754 double,
+        which cannot distinguish some large integers from their neighbors. Writing
+        one anyway does not raise; it just answers a different question later than
+        the one that was asked. Refusing here is this format's "fail with a loss
+        diagnostic" (SPEC E9), the same way an unsupported timezone already refuses
+        rather than silently dropping the offset.
+        """
+        from sclpl.errors import ValidationError
+
+        unsafe = _excel_unsafe_integers(frame)
+        if unsafe:
+            column, value = unsafe[0]
+            raise ValidationError(
+                f"column {column!r} has {value}, too large for Excel to store exactly",
+                remedies=[
+                    "Excel stores every number as a 64-bit float, which cannot tell "
+                    f"{value} apart from every other integer near it",
+                    "write it as text instead, or use CSV/JSON/Parquet, which keep it exact",
+                ],
+            )
+        try:
+            frame.to_excel(path, index=False, **options)
+        except ImportError as error:
+            raise MissingExtra("writing Excel", "openpyxl") from error
+        except ValueError as error:
+            if "timezone" not in str(error).lower():
+                raise
+            raise ValidationError(
+                f"{error}",
+                remedies=[
+                    "convert the column to UTC and drop its tzinfo before writing xlsx",
+                    "or use CSV/JSON/Parquet/SQLite, which all keep the timezone",
+                ],
+            ) from error
 
 
 def _find_records(payload: Any) -> list[dict[str, Any]]:

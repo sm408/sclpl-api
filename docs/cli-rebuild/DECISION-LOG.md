@@ -739,3 +739,61 @@ the decision, its tradeoff, and the evidence available when it was made.
   that matters -- a writer step with *no data dependency at all* on a failing
   `assert` step in the same workflow still does not get its file published,
   because the run as a whole failed.
+
+## 2026-09-07 — E9 verify format fidelity
+
+- **Decision:** Two round-trip bugs found by testing every named case (leading
+  zeros, large ids, decimals, timezone-aware timestamps, nulls, empty tables)
+  against every format were fixed in `tables/pandas_backend.py`. CSV: before
+  `pandas.read_csv` sees the file, its raw text is scanned for any column
+  holding a value matching `^0\d+$` (a leading zero followed by more digits --
+  the one shape no ordinary number has) and that column is forced to
+  `dtype=str`, so `00123` survives as `"00123"` instead of becoming the
+  integer `123`. Excel: before `to_excel` is called, every column is scanned
+  for an integer whose magnitude exceeds `2**53` (the largest integer an
+  IEEE-754 double -- all a number is, in Excel -- can represent exactly); if
+  one exists, the write is refused with a diagnostic naming the column and the
+  exact value, rather than writing a silently different number. A pre-existing
+  `to_excel` refusal on a timezone-aware column is now caught and re-raised as
+  an `sclpl` `ValidationError` with a remedy, instead of a raw pandas
+  `ValueError`. Reading an empty-table CSV's pandas `EmptyDataError` is now a
+  named `ValidationError` explaining that a zero-row CSV has no header row to
+  infer columns from -- CSV's own real limit, not something this batch can fix,
+  only explain clearly.
+- **Why:** SPEC E9's accept criteria name these exact cases and give two
+  acceptable outcomes: "retain declared meaning or fail with a loss
+  diagnostic." A probe script (not committed; its findings are what the new
+  tests pin) round-tripped every named case through every format before any
+  fix existed. JSON, NDJSON, and Parquet already retained everything correctly
+  -- Parquet even keeps `Decimal` and timezone-aware `Timestamp` as real typed
+  values, and JSON/NDJSON represent a `Decimal` as its exact decimal text,
+  which is the closest either format can get to a type neither one has
+  natively. CSV's leading-zero loss and Excel's large-integer corruption were
+  the two cases actually failing the accept criterion: both were *silent* --
+  a different, shorter value with no error at all, which is the one outcome
+  SPEC E9 does not allow.
+- **Tradeoff:** SQLite is explicitly out of scope for this batch: it writes
+  through a separate bundled plugin (`plugins_bundled/sqlite`) that never goes
+  through `tables/io.py`, so nothing here touches it. The leading-zero
+  protection is a heuristic on the *shape* of the raw text, not a declared
+  schema -- a column of real integers that happen to all start with a
+  coincidental `0` (vanishingly rare, since a real leading zero on a
+  non-padded number is not how integers are written) would also be protected,
+  which costs nothing since the exact same text still reads back correctly as
+  a string. The Excel large-integer check inspects the DataFrame's actual
+  values before writing, not a static schema, so it costs a full column scan
+  per write -- accepted for Excel exports, which are not the hot path large
+  extractions choose.
+- **Evidence:** `tests/unit/test_format_fidelity.py` covers every named case
+  against every format it applies to: a leading-zero string surviving CSV
+  (both self-produced and a hand-written CSV this project never wrote), a bare
+  `0` and a leading-zero decimal (`0.5`) confirmed *not* protected since
+  neither is ambiguous, a large integer exact through JSON/NDJSON/Parquet/CSV,
+  a too-large integer refused for Excel with the pre-fix corrupted value named
+  in the test's own docstring as what used to happen silently, a
+  timezone-aware timestamp refused for Excel with a remedy and kept exact
+  through NDJSON/Parquet, a decimal's exact text preserved everywhere it
+  cannot keep the type, nulls surviving as `None` rather than a string or NaN,
+  and an empty table round-tripping as zero rows everywhere except CSV, where
+  it now fails with a named, clear diagnostic instead of a confusing internal
+  pandas one.
