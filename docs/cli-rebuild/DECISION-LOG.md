@@ -627,3 +627,56 @@ the decision, its tradeoff, and the evidence available when it was made.
   as before, `sclpl project check` surfaces the resolved policy and fails
   clearly on a malformed one, and a project's `deny_capabilities` reaches
   `sclpl plugin list --refused` the same way `--deny-capability` already did.
+
+## 2026-09-07 — E7 publication eligibility
+
+- **Decision:** A new, analysis-only module (`run/eligibility.py`) derives, for
+  every declared output with a writer step surviving mode pruning, its full
+  upstream dependency closure in the kept plan (`derive()`), attached to
+  `preflight.Report.eligibility` for a later staged-publication mechanism (E8)
+  to consume. Separately, and this batch's one actual preflight failure,
+  `check_stubbed_validation()` walks the *full declared* graph (not the pruned
+  plan -- a pruned step has no node there at all) from every output writer and
+  fails preflight when the writer's dependency chain passes through a step that
+  declares `assert` and the current mode has replaced that step with a `stub`
+  rather than running it.
+- **Why:** SPEC batch E7's own accept criteria: "missing validation dependencies
+  fail preflight." Mode resolution's existing closure check
+  (`modes._check_closure`) treats a stub exactly like a kept producer or a bound
+  input for the purpose of satisfying a reference -- correctly, for ordinary
+  data, since that is what a stub is *for*. But a stub is a value, not a step: it
+  never runs the `assert` the real step would have. A mode that stubs past an
+  assertion feeding a declared output therefore ships that output's data without
+  ever running the check its presence in the graph implied, and nothing before
+  this batch could tell the difference between "this data was validated" and
+  "this data was faked for a smaller mode" from the output's own declaration.
+- **Tradeoff:** This batch's other named accept criterion -- "an assertion
+  branch cannot be bypassed by a faster independent export" -- describes a
+  genuinely concurrent race (an independent branch with no data dependency on
+  the assertion finishing and writing before the assertion is even evaluated),
+  which no static preflight check can close: closing it requires not writing
+  the file until everything is known to have passed, which is a runtime,
+  side-effecting change to *when* a write happens, not an analysis. That is
+  deliberately left to E8, whose own accept criterion is literally "no
+  destination changes before E7 passes" -- E7's job, per the plan's own batch
+  boundary, is to derive what E8 needs to gate on, plus the one piece of that
+  which *is* statically checkable (mode-selection bypassing validation via a
+  stub), not to implement the gate itself.
+- **Evidence:** `tests/unit/test_eligibility.py` covers `derive()`'s dependency
+  closure and validation-scope computation directly, plus
+  `check_stubbed_validation()`: a stubbed assert-bearing dependency is flagged
+  naming both the stubbed step and the affected output, an unrelated stub is
+  not flagged, and a workflow with no asserts at all short-circuits.
+  `tests/integration/test_eligibility_e2e.py` proves it through the real
+  `sclpl validate` CLI across three modes of one workflow. Building these tests
+  surfaced a real, previously-untested pre-existing bug, fixed in the same
+  commit: `preflight()`'s step 3 (`compile_plan`) never included a mode's
+  `stub` names in the `available` set it passes to the graph builder, even
+  though `resolve()`'s own closure check one step earlier does -- so *any* real
+  workflow using `stub` on a value a still-kept step reads would fail preflight
+  with "nothing produces it", directly contradicting the closure check that had
+  just accepted the exact same reference. `stub` had only ever been exercised
+  at the `modes.resolve()` unit level before this, never through the full
+  `compile_plan`/`preflight()` path a real `sclpl run --mode ...` actually
+  takes -- one of the new integration tests pins the fix as a named regression
+  case.

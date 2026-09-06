@@ -145,6 +145,25 @@ See [the decision log](DECISION-LOG.md) for implementation tradeoffs and evidenc
   capability before importing the plugin module), merged with `--deny-capability`
   at CLI startup. `sclpl project check` surfaces the fully resolved policy and fails
   clearly on a malformed `[policy]` table rather than silently ignoring it.
-- Every Batch E checklist item now has at least foundation or full coverage (E3-E6
-  done; E5 foundation-scoped as noted above; E7-E9 remain).
+- [x] E7 publication eligibility: `run/eligibility.py` derives, for every declared
+  output with a writer step, its full dependency closure in the kept plan and the
+  subset of that closure which declares its own `assert` (`derive()`) -- analysis
+  only, exposed on `preflight.Report.eligibility` for `E8` to consume. Preflight
+  also now hard-fails ("missing validation dependencies fail preflight") when a
+  mode stubs an assert-bearing step that a declared output's writer still
+  transitively depends on (`check_stubbed_validation()`): mode resolution's own
+  closure check already accepts a stub as satisfying the *data*, correctly, but a
+  stub never runs the `assert` it stands in for, so an output could otherwise ship
+  data whose declared validation silently never happened. Found and fixed a real,
+  previously-untested pre-existing bug while building this: `preflight()` built
+  the execution graph (`compile_plan`) without including a mode's `stub` names in
+  `available`, even though the closure check just before it does -- so any real
+  workflow using `stub` on a value a kept step still reads would fail preflight
+  with "nothing produces it", contradicting the closure check that had just passed
+  it. The other half of this batch's accept criteria -- an assertion outrun by a
+  genuinely concurrent independent branch, rather than bypassed by mode selection
+  -- is not something a static check can close; that needs the write itself
+  deferred, which is E8's job ("no destination changes before E7 passes").
+- Every Batch E checklist item now has at least foundation or full coverage (E3-E7
+  done; E5 foundation-scoped as noted above; E8-E9 remain).
 - [ ] E4 and E6-E9 remain in the dependency order defined by the plan.

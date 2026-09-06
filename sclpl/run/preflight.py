@@ -16,7 +16,7 @@ from pathlib import Path
 
 from sclpl.errors import ValidationError, did_you_mean
 from sclpl.project.policy import Policy
-from sclpl.run import paginate
+from sclpl.run import eligibility, paginate
 from sclpl.run.compile_plan import compile_plan, function_names, hosts
 from sclpl.run.ir import WorkflowDoc
 from sclpl.run.modes import Resolved, resolve
@@ -37,6 +37,10 @@ class Report:
     notes: list[str] = field(default_factory=list)
     #: Outputs that already exist. The caller decides whether to confirm.
     will_overwrite: list[Path] = field(default_factory=list)
+    #: E7: what each declared output's writer actually depends on, and which of
+    #: that is validated -- keyed by port name. Analysis only; nothing here defers
+    #: or gates a write.
+    eligibility: dict[str, eligibility.Eligibility] = field(default_factory=dict)
 
     @property
     def ok(self) -> bool:
@@ -120,8 +124,15 @@ def preflight(
         return report
 
     # 3. The graph: references resolve, no cycles.
+    #
+    # A stub satisfies the closure check above (step 2) the same way a bound port
+    # does, so it has to satisfy the graph the same way too -- otherwise a stubbed
+    # step's kept readers fail here with "nothing produces it" even though `resolve`
+    # just finished proving the opposite.
     try:
-        report.plan = compile_plan(doc, keep=report.resolved.keep, available=available)
+        report.plan = compile_plan(
+            doc, keep=report.resolved.keep, available=available | set(report.resolved.stubs)
+        )
     except ValidationError as error:
         report.problems.append(error)
         return report
@@ -134,6 +145,12 @@ def preflight(
     report.problems.extend(_check_functions(doc, report.resolved))
     report.problems.extend(_check_writes(doc, report.resolved))
     report.problems.extend(_check_pagination(doc, report.resolved))
+
+    # 5b. E7: a mode cannot stub past an assertion a declared output still depends
+    # on -- the closure check above accepts that stub as satisfying the *data*, which
+    # is correct, but a stub never runs the `assert` it stands in for.
+    report.problems.extend(eligibility.check_stubbed_validation(doc, report.resolved))
+    report.eligibility = eligibility.derive(doc, report.plan)
 
     # 6. Files: inputs readable, output directories present. Never writes.
     if check_files and report.bindings is not None:
