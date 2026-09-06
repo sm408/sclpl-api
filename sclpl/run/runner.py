@@ -22,6 +22,7 @@ from sclpl.errors import (
 )
 from sclpl.project import auth as auth_mod
 from sclpl.project import context as project_context
+from sclpl.project import outputs as outputs_mod
 from sclpl.project import policy as policy_mod
 from sclpl.render.events import RunFinished, RunStarted
 from sclpl.render.reporter import Reporter
@@ -32,6 +33,7 @@ from sclpl.run.fixtures import Store as FixtureStore
 from sclpl.run.ir import HttpConfig, WorkflowDoc
 from sclpl.run.plan import Node
 from sclpl.run.preflight import Report, preflight
+from sclpl.run.publication import Ledger, discard, publish
 from sclpl.run.schedule import JOIN_SUFFIX, ExpandSpec, Limits, Outcome, Scheduler
 from sclpl.run.transport import Pool, TransportLimits
 from sclpl.state import db, locking, safe_args
@@ -198,6 +200,8 @@ async def run_workflow(doc: WorkflowDoc, options: Options, reporter: Reporter) -
     store_cache = cache.Cache(cache.default_root(), policy=policy) if policy.enabled else None
     fixtures = FixtureStore(options.fixture_root) if options.fixture_root else None
     outputs = _output_paths(report)
+    output_settings = _output_settings(options)
+    ledger = Ledger() if output_settings.publish == "validated" else None
     # C5: exclusive ownership of every managed destination for the run's whole
     # duration, acquired before any step -- including the first one -- can write.
     # Two runs targeting different files never wait on each other; two racing the
@@ -223,6 +227,7 @@ async def run_workflow(doc: WorkflowDoc, options: Options, reporter: Reporter) -
                 pools=pools,
                 cache=store_cache,
                 auth_profiles=_auth_profiles(doc, options),
+                publication=ledger,
             )
             for name, value in report.resolved.stubs.items():
                 # A stub stands in for a producer the mode pruned. It is pinned, because
@@ -259,6 +264,8 @@ async def run_workflow(doc: WorkflowDoc, options: Options, reporter: Reporter) -
                 # Pools outlive the event loop unless closed, and a lingering process
                 # pool keeps the interpreter alive after the CLI has printed its summary.
                 pools.close()
+            if ledger is not None:
+                _finish_publication(ledger, doc, options, outcome, started, reporter)
             if store_cache is not None:
                 if store_cache.stats.hits or store_cache.stats.writes:
                     reporter.log("info", store_cache.stats.summary())
@@ -408,6 +415,56 @@ def _policy(options: Options) -> policy_mod.Policy:
     if context is None:
         return policy_mod.DEFAULT
     return policy_mod.parse(context)
+
+
+def _output_settings(options: Options) -> outputs_mod.OutputSettings:
+    """The project's `[outputs]` publication mode, or `DEFAULT` ("immediate").
+
+    Same reasoning as `_policy`: a project that opted into validated publication
+    and typo'd the table should not silently fall back to immediate writes --
+    that is the one setting this batch touches where "fail open" would be wrong.
+    """
+    try:
+        context = project_context.load(env=options.env)
+    except ValidationError:
+        return outputs_mod.DEFAULT
+    if context is None:
+        return outputs_mod.DEFAULT
+    return outputs_mod.parse(context)
+
+
+def _finish_publication(
+    ledger: Ledger,
+    doc: WorkflowDoc,
+    options: Options,
+    outcome: Outcome,
+    started: float,
+    reporter: Reporter,
+) -> None:
+    """Publish every staged output together, or discard all of them together.
+
+    The one rule that actually closes "an assertion branch outrun by a faster,
+    independent export" (SPEC 3.5): reference dependencies say nothing about two
+    branches with no data relationship, so the only safe default is the whole
+    run, not just this output's own ancestors -- nothing publishes unless every
+    step in the run succeeded.
+    """
+    if outcome.status == "ok" and not outcome.failed:
+        run_id = options.run_id or db.run_id(doc.name, started)
+        result = publish(ledger, workflow=doc.name, run_id=run_id)
+        if result.published:
+            reporter.log("info", f"published: {', '.join(result.published)}")
+        if result.interrupted:
+            reporter.log(
+                "error",
+                f"publication interrupted, left staged: {', '.join(result.interrupted)}",
+            )
+        return
+    discarded = discard(ledger)
+    if discarded:
+        reporter.log(
+            "info", f"run did not succeed; discarded staged output(s): {', '.join(discarded)}"
+        )
 
 
 def _output_paths(report: Report) -> dict[str, str]:

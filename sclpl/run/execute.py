@@ -34,9 +34,11 @@ from sclpl.run.ir import (
     WorkflowDoc,
 )
 from sclpl.run.plan import Node
+from sclpl.run.publication import Ledger
 from sclpl.run.retry import RETRY_STATUSES, Retry
 from sclpl.run.schedule import ExpandSpec
 from sclpl.run.transport import Pool, decode
+from sclpl.tables.io import STDIO
 from sclpl.values import cache as cache_mod
 from sclpl.values.digest import digest as digest_of
 from sclpl.values.store import Frame, ValueStore
@@ -89,6 +91,10 @@ class Runtime:
     #: Node -> the ETag/Last-Modified pair its response carried, for `run_step` to
     #: store alongside the value once the step returns.
     cache_validators: dict[str, tuple[str | None, str | None]] = field(default_factory=dict)
+    #: E8: set only under `[outputs] publish = "validated"`. A writer stages into
+    #: this instead of its real destination; `None` is the pre-existing, unchanged
+    #: immediate-write path.
+    publication: Ledger | None = None
 
     def context(self, frame: Frame | None = None) -> Context:
         return Context(
@@ -654,6 +660,12 @@ def _bind_output(
         )
     if "path" in kwargs or len(args) >= 2:
         return args, kwargs
+    if runtime.publication is not None and path != STDIO:
+        # Validated stdout publication needs spooling under a size limit, not a
+        # scratch file next to a destination that does not exist -- out of scope
+        # for this slice (SPEC 3.5's "stdout spooling limits"); stdout stays
+        # immediate even when the project's other outputs are staged.
+        path = str(runtime.publication.stage(step.writes, Path(path)))
     return [*args, path], kwargs
 
 

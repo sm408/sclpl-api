@@ -164,6 +164,31 @@ See [the decision log](DECISION-LOG.md) for implementation tradeoffs and evidenc
   genuinely concurrent independent branch, rather than bypassed by mode selection
   -- is not something a static check can close; that needs the write itself
   deferred, which is E8's job ("no destination changes before E7 passes").
-- Every Batch E checklist item now has at least foundation or full coverage (E3-E7
-  done; E5 foundation-scoped as noted above; E8-E9 remain).
+- [x] E8 stage and publish managed outputs: opt-in via a project's `[outputs]
+  publish = "validated"` (`project/outputs.py`) -- absent entirely, or a standalone
+  workflow, keeps the pre-existing immediate-write behavior exactly as it was.
+  Under validated publication, `-> port` writers write to a same-directory scratch
+  file (`run/publication.py`'s `Ledger`) instead of their real destination, and
+  nothing replaces a real destination until the *whole run* finishes with zero
+  failures -- deliberately not scoped to just that output's own dependency
+  closure, because SPEC 3.5 names the actual failure mode directly: an assertion
+  branch and an export branch can be entirely independent, with no data
+  relationship a graph-based check could ever see, so only whole-run success is
+  an honest default gate. On success, every staged file is replaced atomically
+  (`os.replace`, always a same-filesystem rename) and a generation manifest is
+  written (`~/.sclpl/publications/<workflow>.json`) only once every file in that
+  generation actually moved -- a reader following it never sees a generation the
+  run did not really finish. On failure, staged files are discarded and whatever
+  a previous successful run left at the real destination is untouched. A later
+  file's replace failing partway through is reported as "interrupted" rather than
+  silently dropped, and the files that already moved stay moved (SPEC 3.5's own
+  "not a single transaction across files"). Explicitly out of scope for this
+  slice, and documented as such rather than silently unhandled: validated stdout
+  publication (needs spooling under a size limit; stdout stays immediate even
+  under `publish = "validated"`), and SQLite's own short-transaction/rollback
+  requirement (the bundled sqlite plugin writes its file directly; this
+  mechanism's atomic-rename does cover the *file* as a whole once that write
+  finishes, but does not add a SQL-level transaction boundary inside it).
+- Every Batch E checklist item now has at least foundation or full coverage (E3-E8
+  done; E5 foundation-scoped as noted above; E9 remains).
 - [ ] E4 and E6-E9 remain in the dependency order defined by the plan.

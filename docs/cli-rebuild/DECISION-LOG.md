@@ -680,3 +680,62 @@ the decision, its tradeoff, and the evidence available when it was made.
   `compile_plan`/`preflight()` path a real `sclpl run --mode ...` actually
   takes -- one of the new integration tests pins the fix as a named regression
   case.
+
+## 2026-09-07 — E8 stage and publish managed outputs
+
+- **Decision:** A project opts in with `[outputs] publish = "validated"`
+  (`project/outputs.py`; absent, or no project, keeps immediate writes
+  unchanged). Under it, `execute._bind_output` hands a writer step a
+  same-directory scratch path (`run/publication.Ledger.stage`) instead of its
+  real destination -- the step still runs on its normal schedule and produces
+  its value exactly as before, only *where that value lands* changes. After the
+  scheduler finishes, `runner._finish_publication` checks the run's outcome:
+  `outcome.status == "ok" and not outcome.failed` publishes every staged file
+  (`os.replace`, always same-filesystem) and writes a generation manifest under
+  `~/.sclpl/publications/<workflow>.json`; anything else discards every staged
+  file, touching no real destination at all.
+- **Why:** SPEC 3.5 names the actual failure mode this has to close: "an
+  assertion branch and an export branch may run independently" -- reference
+  dependencies (E7's per-output `required`/`validation_scope`) cannot catch
+  that, because by definition an independent branch has no reference for a
+  graph walk to find. The only default SPEC 3.5 itself calls safe is "all
+  selected required assertions/contracts... pass before publication" -- *all*,
+  not just the ones this output happens to depend on -- which is exactly
+  whole-run success. E7's per-output eligibility stays real and useful (it is
+  what a later, narrower, explicitly-declared per-output scope would need to
+  check for dependency closure, per SPEC 3.5's second sentence), but the
+  default gate implemented here is the coarser, provably-safe one the spec
+  actually asks for. Same-directory scratch paths, not a shared temp root,
+  because `os.replace` is only atomic within one filesystem, and a path's own
+  directory is the one place guaranteed to share it with its destination --
+  this also means "cross-filesystem rejection" never has to be handled as a
+  special case, because the scratch file is never anywhere it could apply.
+- **Tradeoff:** Explicitly out of scope for this slice, called out rather than
+  silently missing: validated stdout publication (SPEC 3.5's "stdout spooling
+  limits" needs a bounded spool file and a hold-until-validated print, which is
+  its own mechanism; stdout stays immediate even under `publish = "validated"`)
+  and SQLite's short-transaction-with-rollback requirement (the bundled sqlite
+  plugin writes its `.db` file directly, so this batch's atomic rename does
+  cover that file once the plugin's own write call returns, but does not add a
+  SQL-level transaction boundary inside that call, and no attempt was made to
+  reach into a separate plugin's connector to add one). A manifest lives at a
+  fixed per-workflow path (last generation only, not a history); "publish an
+  immutable output generation" in SPEC 3.5's stronger sense (multiple retained
+  generations, an all-or-nothing manifest *pointer* swap across them) is a
+  larger feature this establishes the primitive for rather than delivers whole.
+- **Evidence:** `tests/unit/test_publication.py` covers staging (same-directory,
+  idempotent per port across retries), atomic publish, the generation manifest
+  (written only when something was actually published, naming every published
+  port), discard leaving a prior destination untouched, and a failed
+  `os.replace` reported as `interrupted` rather than silently dropped.
+  `tests/unit/test_outputs.py` covers `[outputs]` parsing. `tests/integration/
+  test_publication_e2e.py` proves the actual accept criterion through the real
+  `sclpl run` CLI: immediate mode is unaffected by no `[outputs]` table at all;
+  validated publication produces the real file with no scratch file left behind
+  on success; a failing run leaves neither a scratch file nor a destination
+  file; a second, failing run does not touch what a first, successful run
+  already published ("preserve the last valid output when validation fails");
+  a generation manifest is written naming the published file; and -- the test
+  that matters -- a writer step with *no data dependency at all* on a failing
+  `assert` step in the same workflow still does not get its file published,
+  because the run as a whole failed.
