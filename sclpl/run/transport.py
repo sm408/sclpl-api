@@ -14,7 +14,10 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import hashlib
+import os
 from dataclasses import dataclass, field
+from pathlib import Path
 from types import TracebackType
 from typing import Any
 
@@ -111,6 +114,29 @@ class Attempt:
     attempts: int
     duration_ms: int
     retried: bool = False
+
+
+@dataclass(slots=True)
+class Streamed:
+    """What a body written straight to disk cost, and what it turned out to be.
+
+    No `httpx.Response` here: its body was never held in memory to hand back, only
+    written to ``path`` in bounded chunks as it arrived.
+    """
+
+    status: int
+    headers: dict[str, str]
+    url: str
+    path: Path
+    bytes_written: int
+    sha256: str
+    attempts: int
+    duration_ms: int
+
+
+#: Streamed one chunk at a time, so a multi-gigabyte body never sits fully in memory
+#: -- only this much of it does, at any one point.
+STREAM_CHUNK_BYTES = 64 * 1024
 
 
 class Pool:
@@ -323,6 +349,113 @@ class Pool:
                 duration_ms=int((self._clock.now() - started) * 1000),
                 retried=attempt > 0,
             )
+
+        raise self._exhausted(method, url, policy.max, last_error, None)
+
+    async def stream_to_file(
+        self,
+        method: str,
+        url: str,
+        destination: Path,
+        *,
+        reporter: Reporter | None = None,
+        step: str = "request",
+        retry: Retry | None = None,
+        auth: str = "",
+        proxy: str | None = None,
+        verify: bool | None = None,
+        **kwargs: Any,
+    ) -> Streamed:
+        """Write a response body straight to ``destination``, one chunk at a time.
+
+        The body never accumulates in memory: each chunk is written and hashed as it
+        arrives, so this holds roughly `STREAM_CHUNK_BYTES` regardless of whether the
+        body is a kilobyte or a hundred gigabytes. Written beside the destination and
+        renamed atomically only on complete success, so a crash, a cancellation, or a
+        checksum caller later rejects can never leave a partial file at a name the
+        rest of the workflow trusts as done.
+        """
+        policy = retry if retry is not None else self._retry
+        effective_verify = verify if verify is not None else self._limits.verify
+        profile = Profile.of(url, auth=auth, proxy=proxy, verify=effective_verify)
+        breaker = self.breaker(profile.host)
+        client = await self.client(profile)
+        started = self._clock.now()
+
+        if not breaker.allows():
+            raise StepFailed(
+                f"circuit open for {profile.host}: {breaker.threshold} consecutive failures",
+                remedies=[
+                    f"it will try again in about {breaker.reset_after:.0f}s",
+                    "check the host is up, or raise --retries",
+                ],
+            )
+
+        last_error: BaseException | None = None
+        for attempt in range(policy.max + 1):
+            scratch = destination.with_name(f"{destination.name}.partial-{os.getpid()}")
+            done = False
+            try:
+                async with client.stream(method, url, **kwargs) as response:
+                    if policy.should_retry_status(response.status_code) and attempt < policy.max:
+                        # `async with` closes the streamed response on the way out,
+                        # whether that is this `continue` or the exception below.
+                        breaker.record_failure()
+                        await self._wait(
+                            reporter,
+                            step,
+                            attempt,
+                            policy,
+                            response.status_code,
+                            None,
+                            response_retry_after(response),
+                        )
+                        continue
+
+                    hasher = hashlib.sha256()
+                    total = 0
+                    destination.parent.mkdir(parents=True, exist_ok=True)
+                    with open(scratch, "wb") as handle:
+                        async for chunk in response.aiter_bytes(STREAM_CHUNK_BYTES):
+                            handle.write(chunk)
+                            hasher.update(chunk)
+                            total += len(chunk)
+                    os.replace(scratch, destination)
+                    done = True
+
+                    if response.status_code >= 500:
+                        breaker.record_failure()
+                    else:
+                        breaker.record_success()
+                    return Streamed(
+                        status=response.status_code,
+                        headers=dict(response.headers),
+                        url=str(response.url),
+                        path=destination,
+                        bytes_written=total,
+                        sha256=hasher.hexdigest(),
+                        attempts=attempt + 1,
+                        duration_ms=int((self._clock.now() - started) * 1000),
+                    )
+            except Exception as error:  # noqa: BLE001 - classified just below
+                last_error = error
+                breaker.record_failure()
+                if (
+                    attempt >= policy.max
+                    or not is_retryable_error(error, policy)
+                    or not policy.allows_transport_retry(method)
+                ):
+                    raise self._exhausted(method, url, attempt, error, None) from error
+                await self._wait(reporter, step, attempt, policy, None, error, None)
+                continue
+            finally:
+                # Reached on the happy path (nothing left to clean up: `scratch` was
+                # already renamed away), on a caught `Exception` above, and -- the
+                # part `except Exception` alone would miss -- on cancellation, which
+                # is a `BaseException` in this Python and propagates straight through
+                # both `except` clauses here without either one seeing it.
+                if not done:
+                    scratch.unlink(missing_ok=True)
 
         raise self._exhausted(method, url, policy.max, last_error, None)
 

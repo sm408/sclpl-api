@@ -37,8 +37,11 @@ METHODS = ("get", "post", "put", "patch", "delete", "head", "options")
 
 #: Body verbs the parser handles itself. Anything else is resolved as a function.
 REQUEST_VERBS = frozenset(
-    {"header", "query", "body", "auth", "paginate", "timeout", "extract", "proxy", "verify"}
-)
+    {
+        "header", "query", "body", "auth", "paginate", "timeout", "extract",
+        "proxy", "verify", "stream",
+    }
+)  # fmt: skip
 CONTROL_VERBS = frozenset(
     {"when", "assert", "retry", "lane", "tag", "cache", "keep", "skip_if", "retry_if"}
 )
@@ -406,6 +409,8 @@ class _Parser:
                     config["proxy"] = unquote(line.rest)
                 case "verify":
                     config["verify"] = _literal(line.rest.strip())
+                case "stream":
+                    config["stream_to"] = unquote(line.rest)
 
     def _paginate(self, line: Token) -> dict[str, Any]:
         args = split_args(line.rest)

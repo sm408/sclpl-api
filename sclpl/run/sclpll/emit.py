@@ -132,6 +132,8 @@ def _step(step: Step, depth: int) -> list[str]:
                 lines.append(f"{body}proxy {config.proxy}")
             if not config.verify:
                 lines.append(f"{body}verify false")
+            if config.stream_to:
+                lines.append(f"{body}stream {config.stream_to}")
             if config.timeout is not None:
                 lines.append(f"{body}timeout {_number(config.timeout)}")
             if config.extract:

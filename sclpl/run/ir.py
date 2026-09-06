@@ -117,6 +117,19 @@ class HttpConfig(Base):
     extract: str | None = Field(default=None, description="Expression over the response.")
     proxy: str | None = Field(default=None, description="Proxy URL for this request's host.")
     verify: bool = Field(default=True, description="Verify the server's TLS certificate.")
+    stream_to: str | None = Field(
+        default=None,
+        description="Write the response body directly to this path instead of "
+        "decoding it, in bounded memory. Mutually exclusive with paginate/extract.",
+    )
+
+    @model_validator(mode="after")
+    def _stream_is_exclusive(self) -> HttpConfig:
+        if self.stream_to is not None and self.paginate is not None:
+            raise ValueError("stream_to cannot be combined with paginate")
+        if self.stream_to is not None and self.extract is not None:
+            raise ValueError("stream_to cannot be combined with extract")
+        return self
 
 
 class FnConfig(Base):

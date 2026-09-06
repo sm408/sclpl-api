@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass, field, replace
+from pathlib import Path
 from typing import Any
 
 from sclpl.errors import AssertionFailed, SclplError, StepFailed, ValidationError
@@ -154,6 +155,11 @@ async def _cache_key(step: Step, runtime: Runtime) -> str | None:
 
     match step.config:
         case HttpConfig() as config:
+            if config.stream_to is not None:
+                # A writer, like `save`/`read`: a hit would report a file this run
+                # never actually wrote, and disk state is not assumed to persist the
+                # way a remote response body is.
+                return None
             url = await _interpolate(config.url, runtime)
             query = {
                 name: await _interpolate(value, runtime) for name, value in config.query.items()
@@ -301,12 +307,13 @@ async def _http(step: Step, config: HttpConfig, node: Node, runtime: Runtime, no
 
     auth_profile = await _apply_auth(step, config, url, headers, query, body, runtime)
 
-    # D3: revalidation is scoped to a single, non-paginated, non-extracted request.
-    # A paginated step's cached value is already a merge across pages with no
-    # per-page validators tracked; an `extract`ing step's cached value is whatever
-    # expression it computed, not the response shape a 304 needs to reconstruct.
-    # Both are refetched outright, as they were before this batch.
-    revalidatable = config.paginate is None and config.extract is None
+    # D3: revalidation is scoped to a single, non-paginated, non-extracted,
+    # non-streamed request. A paginated step's cached value is already a merge
+    # across pages with no per-page validators tracked; an `extract`ing step's
+    # cached value is whatever expression it computed; a streamed step never holds
+    # a body to reconstruct at all. All three are refetched outright, as they were
+    # before D3.
+    revalidatable = config.paginate is None and config.extract is None and config.stream_to is None
     stale = runtime.pending_revalidation.pop(node_id, None) if revalidatable else None
     if stale is not None:
         if stale.etag:
@@ -331,6 +338,34 @@ async def _http(step: Step, config: HttpConfig, node: Node, runtime: Runtime, no
         statuses=RETRY_STATUSES | frozenset(step.retry.on),
         idempotent=step.retry.idempotent,
     )
+
+    if config.stream_to is not None:
+        # D4: a step's value is normally the decoded body; a streamed one is the
+        # metadata a caller needs to trust what landed on disk, since the body
+        # itself was never held anywhere the workflow could inspect it.
+        destination = Path(str(await _interpolate(config.stream_to, runtime)))
+        streamed = await runtime.pool.stream_to_file(
+            config.method,
+            url,
+            destination,
+            reporter=runtime.reporter,
+            step=step.id,
+            retry=retry,
+            auth=config.auth or "",
+            proxy=proxy,
+            verify=config.verify,
+            **kwargs,
+        )
+        return {
+            "status": streamed.status,
+            "ok": 200 <= streamed.status < 300,
+            "headers": streamed.headers,
+            "path": str(streamed.path),
+            "bytes": streamed.bytes_written,
+            "sha256": streamed.sha256,
+            "url": streamed.url,
+            "elapsed_ms": streamed.duration_ms,
+        }
 
     async def fetch(
         extra_query: dict[str, Any],

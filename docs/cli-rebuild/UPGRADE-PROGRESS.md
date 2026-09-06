@@ -79,7 +79,17 @@ See [the decision log](DECISION-LOG.md) for implementation tradeoffs and evidenc
   response shape a 304 needs to rebuild -- both keep refetching outright as before.
   Credential/environment partitioning was already in the cache key (`_salt`); this
   batch only adds the request-level conditional exchange on top of it.
-- [ ] D4 and D7 remain in the dependency order defined by the plan.
+- [x] D4 multipart and streaming: `stream <path>` writes a response body directly to
+  disk in bounded ~64KB chunks (`Pool.stream_to_file`) with an incremental SHA256, an
+  atomic rename on success, and cleanup of the scratch file on any failure --
+  including cancellation, which is a `BaseException` a plain `except Exception` does
+  not see, so cleanup lives in a `finally`. Mutually exclusive with `paginate`/
+  `extract` (rejected at IR validation) and never cached (a hit would report a file
+  this run never wrote, and disk state is not assumed to persist like a response
+  body). Non-rewindable streamed *uploads* are out of scope for this slice --
+  request bodies remain fully-buffered typed values, which are safely retryable, so
+  no new non-rewindable-retry hazard was introduced.
+- [ ] D7 remains in the dependency order defined by the plan.
 - [x] E3 foundation: schema-versioned, project-contained test manifests execute through
   the regular runner with fixture replay offline, isolated scratch state, expected-exit,
   local contract assertions, and JSON expected-output checks.

@@ -3,7 +3,10 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import io
+import json
+from pathlib import Path
 
 import pytest
 
@@ -308,3 +311,59 @@ async def test_a_timeout_is_reported_with_a_remedy(server_url: str) -> None:
         with pytest.raises(StepFailed) as caught:
             await pool.request("GET", f"{server_url}/slow")
     assert "--timeout" in str(caught.value)
+
+
+# -- streaming (D4) -----------------------------------------------------------------
+
+
+async def test_stream_to_file_writes_the_body_and_its_checksum(
+    server_url: str, tmp_path: Path
+) -> None:
+    from tests.integration.conftest import PAYLOAD
+
+    destination = tmp_path / "out.json"
+    async with Pool() as pool:
+        streamed = await pool.stream_to_file("GET", f"{server_url}/json", destination)
+    assert destination.read_bytes() == json.dumps(PAYLOAD).encode()
+    assert streamed.status == 200
+    assert streamed.bytes_written == len(destination.read_bytes())
+    assert streamed.sha256 == hashlib.sha256(destination.read_bytes()).hexdigest()
+    assert streamed.path == destination
+
+
+async def test_stream_to_file_leaves_no_partial_file_behind_on_success(
+    server_url: str, tmp_path: Path
+) -> None:
+    destination = tmp_path / "out.json"
+    async with Pool() as pool:
+        await pool.stream_to_file("GET", f"{server_url}/json", destination)
+    assert list(tmp_path.iterdir()) == [destination]
+
+
+async def test_stream_to_file_cleans_up_after_a_transport_failure(tmp_path: Path) -> None:
+    destination = tmp_path / "out.bin"
+    async with Pool(retry=Retry(max=0)) as pool:
+        with pytest.raises(StepFailed):
+            await pool.stream_to_file("GET", "http://127.0.0.1:9/nothing", destination)
+    assert list(tmp_path.iterdir()) == []  # no `.partial-*` scratch file survives
+    assert not destination.exists()
+
+
+async def test_stream_to_file_cleans_up_on_cancellation(server_url: str, tmp_path: Path) -> None:
+    destination = tmp_path / "out.bin"
+    async with Pool() as pool:
+        with pytest.raises((asyncio.TimeoutError, TimeoutError)):
+            await asyncio.wait_for(
+                pool.stream_to_file("GET", f"{server_url}/slow", destination), timeout=0.05
+            )
+    assert list(tmp_path.iterdir()) == []
+    assert not destination.exists()
+
+
+async def test_stream_to_file_retries_a_flaky_endpoint(server_url: str, tmp_path: Path) -> None:
+    destination = tmp_path / "out.json"
+    async with Pool(retry=Retry(max=3, base_delay=0.001)) as pool:
+        streamed = await pool.stream_to_file("GET", f"{server_url}/flaky/2", destination)
+    assert streamed.status == 200
+    assert streamed.attempts == 3
+    assert list(tmp_path.iterdir()) == [destination]

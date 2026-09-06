@@ -454,3 +454,33 @@ the decision, its tradeoff, and the evidence available when it was made.
   real request per run, not zero); a changed resource replaces the cached value; a
   still-fresh entry never touches the network at all; `--http-cache` off keeps the
   pre-D3 behavior of an outright refetch on any stale entry.
+
+## 2026-09-07 — D4 bounded-memory streaming downloads
+
+- **Decision:** A new `stream <path>` request verb (`HttpConfig.stream_to`) routes
+  through a new `Pool.stream_to_file`, which uses `httpx`'s streaming API to write a
+  response in `STREAM_CHUNK_BYTES` (64KB) pieces to a scratch file beside the
+  destination, hashing incrementally as it goes, then `os.replace`s it into place
+  only once the whole body has arrived. `stream_to` is rejected at IR validation
+  when combined with `paginate` or `extract`, and `_cache_key` returns `None` for it
+  outright (never cached, like the existing writer-function exclusion).
+- **Why:** Every existing request path reads the full body into memory via
+  `client.request(...)`; nothing bounded memory use for a large download at all.
+  Caching a streamed step's result would mean trusting a stored checksum against
+  disk state this run never re-verified, and a paginated or `extract`ing step's
+  cached value is not the raw response shape a streamed result even produces.
+- **Tradeoff:** Deliberately downloads only. A non-rewindable streaming *upload*
+  (a large local file as the request body) is a separate, real feature this slice
+  does not add -- request bodies remain fully-buffered typed values today, which
+  are trivially safe to retry, so no new "cannot be silently retried" hazard exists
+  to guard against yet. `finally`-based cleanup, not `except Exception`, because
+  `asyncio.CancelledError` is a `BaseException` in this Python and a plain except
+  clause would let a cancelled download's scratch file survive.
+- **Evidence:** `tests/integration/test_transport.py` proves `stream_to_file`'s
+  checksum and byte count against real bytes, atomicity (no scratch file survives
+  success), cleanup after both a transport failure and a real `asyncio` cancellation
+  (via `wait_for`'s timeout), and retry against a real flaky endpoint.
+  `tests/integration/test_streaming.py` proves the SCLPLL surface end to end: a
+  workflow step writes the body and reports matching metadata, a streamed step is
+  never served from cache, and `paginate`/`extract` combined with `stream` are
+  rejected before any request is made.
