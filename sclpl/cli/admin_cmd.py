@@ -172,6 +172,25 @@ def replay(run: RunArg) -> None:
         typer.echo(f"  sclpl {row['argv']}")
 
 
+@runs_app.command("which")
+def runs_which(path: Annotated[Path, typer.Argument(help="An output file to trace.")]) -> None:
+    """F3: which run(s) produced this file, and whether it has changed since."""
+    with db.History() as history:
+        matches = history.producers_of(path)
+        if not matches:
+            typer.echo(f"no recorded run produced {path}", err=True)
+            raise typer.Exit(EXIT_USAGE)
+        if len(matches) > 1:
+            typer.echo(f"ambiguous: {len(matches)} runs recorded producing this path", err=True)
+        current = db.file_digest(path)
+        for row in matches:
+            typer.echo(f"{row['run_name']}  [{row['run_id']}]  {row['started_at']}")
+            if not current:
+                typer.echo("  file no longer exists", err=True)
+            elif row["digest"] and row["digest"] != current:
+                typer.echo("  modified since this run: current content does not match", err=True)
+
+
 @runs_app.command("export")
 def runs_export(
     run: RunArg,

@@ -895,3 +895,50 @@ the decision, its tradeoff, and the evidence available when it was made.
   title and no script or external reference, diffing two different workflows
   prints the incompatibility note, and diffing two runs of the same workflow
   does not.
+
+## 2026-09-08 — F3 output lineage
+
+- **Decision:** `run_ports.digest` -- a column that already existed in the
+  schema, always written `""` -- now holds a real SHA256 of each bound
+  file's actual bytes (`state/db.file_digest`, chunked so a large output is
+  never held whole in memory), computed for every input and output port with
+  a real single path once `_remember` runs. `History.producers_of(path)`
+  (new) finds every run recorded as having produced a given output path,
+  most recent first, compared through the same `canonical_path` (resolved,
+  case-folded on Windows) that C5's output locking already established --
+  reused rather than reimplemented, so the two features agree about what
+  "the same file" means. `sclpl runs which <path>` (new; `cli/`'s budget
+  raised 1,800 to 2,000 in [ADR 0007](../adr/0007-budget-cli-for-batch-f-reporting.md)
+  to fit it) reports every producing run, flags more than one as ambiguity
+  rather than silently choosing the most recent, and compares the recorded
+  digest against the file's current bytes to report a later modification.
+- **Why:** SPEC F3's accept criterion, almost verbatim: "output-path lookup
+  resolves the producing run/digest and reports ambiguity or later
+  modification." The digest has to be of the file's actual on-disk bytes,
+  not the in-memory value that produced it, because "has this changed since"
+  is a question about the file, and only re-hashing the file can answer it
+  independently of what the run itself remembers. For a validated-publication
+  run (E8), the digest is computed after `_finish_publication` has already
+  moved the staged file to its real destination, so it fingerprints what a
+  reader of that path actually sees, not a scratch file that may not even
+  exist by the time anyone looks.
+- **Tradeoff:** Digesting is scoped to a binding's *first* bound path
+  (`Binding.path`), matching the existing `describe()` behavior for a
+  multi-file glob binding ("N files" is not a real path either) -- lineage
+  for the rest of a glob's files is not tracked in this slice. Path matching
+  is done by fetching every recorded output port and filtering in Python
+  with `canonical_path`, not a SQL-side comparison; correct and simple for a
+  local, small-scale history database, and consistent with how `History`
+  already does everything else (`find`'s prefix search, `search`'s text
+  match) -- not built to scale past what a personal run history actually is.
+- **Evidence:** `tests/unit/test_lineage.py` covers `file_digest` (a real
+  SHA256, empty for a missing file, changes when the bytes change) and
+  `producers_of` directly against a real `db.History` (finds the recorded
+  producer, matches a relative and an absolute spelling of the same path,
+  returns nothing for an unrelated path, lists every match most-recent-first
+  when more than one run claims the same path, and ignores input-direction
+  ports entirely). `tests/integration/test_lineage_e2e.py` proves it through
+  the real CLI: `sclpl runs which` resolves the producing run with no false
+  warning, flags a hand-edited file as modified since, reports "ambiguous: 2
+  runs" when the same workflow writes the same path twice naming both runs,
+  and fails clearly on a path no run ever produced.

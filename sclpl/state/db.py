@@ -15,6 +15,7 @@ nothing left to block. An async driver would buy nothing and cost a dependency.
 
 from __future__ import annotations
 
+import hashlib
 import os
 import sqlite3
 import time
@@ -122,10 +123,24 @@ def default_root() -> Path:
 
 def run_id(workflow: str, started: float) -> str:
     """A short hash. Short enough to type, long enough not to collide in a lifetime."""
-    import hashlib
-
     seed = f"{workflow}:{started}:{os.getpid()}".encode()
     return hashlib.blake2b(seed, digest_size=4).hexdigest()
+
+
+def file_digest(path: Path) -> str:
+    """F3: SHA256 of a file's current bytes, or `""` when there is nothing to hash.
+
+    Chunked, so fingerprinting a large managed output does not require holding it
+    in memory. Used both to record what a run actually produced (`_remember` in
+    `run/runner.py`) and, later, to notice a file has changed since (`runs which`).
+    """
+    if not path.is_file():
+        return ""
+    hasher = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(65536), b""):
+            hasher.update(chunk)
+    return hasher.hexdigest()
 
 
 def default_name(workflow: str, mode: str | None, when: datetime | None = None) -> str:
@@ -270,6 +285,25 @@ class History:
             "SELECT * FROM run_ports WHERE run_id = ? ORDER BY direction, name",
             (run_identifier,),
         ).fetchall()
+
+    def producers_of(self, path: Path) -> list[sqlite3.Row]:
+        """F3: every run recorded as having written ``path``, most recent first.
+
+        Compared canonically (resolved, case-folded on Windows) rather than as
+        stored text, so a relative and an absolute spelling of the same file agree.
+        More than one match is real ambiguity, not a bug: the same fixed path can
+        legitimately be produced by more than one run over time.
+        """
+        from sclpl.state.locking import canonical_path
+
+        target = canonical_path(path)
+        rows = self._db.execute(
+            "SELECT run_ports.*, runs.name AS run_name, runs.started_at FROM run_ports "
+            "JOIN runs ON runs.id = run_ports.run_id "
+            "WHERE run_ports.direction = 'out' AND run_ports.path != '' "
+            "ORDER BY runs.started_at DESC"
+        ).fetchall()
+        return [row for row in rows if canonical_path(Path(row["path"])) == target]
 
     def tags_of(self, run_identifier: str) -> list[str]:
         return [

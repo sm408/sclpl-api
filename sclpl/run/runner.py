@@ -335,7 +335,12 @@ def _remember(
             argv=safe_args.render(sys.argv[1:]),
             steps=_step_records(outcome, runtime, reporter),
             ports=[
-                (binding.direction, binding.name, binding.describe(), "")
+                (
+                    binding.direction,
+                    binding.name,
+                    binding.describe(),
+                    db.file_digest(binding.path) if binding.path else "",
+                )
                 for binding in (report.bindings.all() if report.bindings else [])
             ],
         )

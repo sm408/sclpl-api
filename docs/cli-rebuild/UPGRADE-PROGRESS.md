@@ -259,3 +259,18 @@ See [the decision log](DECISION-LOG.md) for implementation tradeoffs and evidenc
   silently diffing two unrelated things. `runs list`/`find`'s existing
   ambiguous-prefix handling (list the candidates rather than guessing)
   already covered this batch's "selector ties" case with no changes needed.
+- [x] F3 output lineage: `run_ports.digest` (already in the schema, always written
+  empty before this) now holds a real SHA256 of each bound file's actual bytes
+  (`state/db.file_digest`, chunked so a large output need not fit in memory),
+  computed for both input and output ports once a run finishes -- for a
+  validated-publication run (E8) this runs after the real destination has been
+  published, so it fingerprints what actually landed there, not a scratch file.
+  A new `sclpl runs which <path>` resolves every run recorded as having
+  produced a path (`History.producers_of`, compared canonically -- resolved,
+  case-folded on Windows, via the same primitive C5's output locking already
+  established -- so a relative and an absolute spelling of the same file
+  agree), most recent first; more than one match is reported as ambiguity
+  rather than silently picking one, and a digest mismatch against the file's
+  current bytes is reported as "modified since this run." `cli/`'s budget rose
+  1,800 to 2,000 (ADR 0007) to fit the new command; F2 had already spent it
+  down to 8 lines.
