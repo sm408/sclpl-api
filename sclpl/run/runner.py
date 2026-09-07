@@ -416,6 +416,7 @@ def _step_records(outcome: Outcome, runtime: Runtime, reporter: Reporter) -> lis
             attempts=max(1, metric.attempts) if metric else 1,
             error=error,
             cached=metric.cache_hit if metric else False,
+            identity_key=runtime.identity_keys.get(name, ""),
         )
 
     return (

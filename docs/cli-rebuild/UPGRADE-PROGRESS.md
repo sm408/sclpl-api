@@ -345,3 +345,48 @@ See [the decision log](DECISION-LOG.md) for implementation tradeoffs and evidenc
   `read()` yet. Wiring it into the actual run/resume flow is G2 (resume
   eligibility planning) and G3 (resume execution), kept as separate slices so
   each piece is independently testable before the next depends on it.
+- [x] G2 resume eligibility planning: `run/resume.py`'s `plan_resume()` walks a
+  workflow's static plan against a specific prior run and gives every step one of
+  three verdicts -- `"reuse"`, `"rerun"`, or `"refuse"` -- with a plain-language
+  reason, entirely without executing anything. The comparison rests on one
+  propagation rule rather than a family of special cases: a step's identity is
+  only trustworthy once everything it was built from is itself trustworthy. A step
+  with no step-level dependency is compared directly, by recomputing the exact
+  cache key `execute._cache_key` would compute today (the same function a live run
+  uses, called with the run's real current `vars`/`--var` values) and checking it
+  against the digest G1's own `identity_key` persists per step (new `run_steps`
+  column, added the same incremental-migration way F5's `completeness`/
+  `publication` columns were -- `state/migrations.py`'s `SCHEMA_VERSION` is now 3).
+  A step that reads another step's output is compared the same way, but only once
+  that ancestor's own verdict is `"reuse"`, at which point its checkpointed value
+  is rehydrated into a throwaway `ValueStore` so the real interpolation logic
+  resolves the reference, rather than this module re-deriving an approximation of
+  it. An ancestor that will rerun poisons everything downstream of it by
+  construction -- nothing here recomputes what a fresh rerun would produce, so
+  nothing built from it can be trusted unchanged either -- which is what satisfies
+  "drift and missing artifacts invalidate affected steps and descendants" without
+  a bespoke case for it. A non-idempotent HTTP write (POST/PATCH without an
+  explicit `retry.idempotent`) whose prior outcome cannot be trusted -- it failed,
+  its identity drifted, or its checkpoint is gone -- verdicts `"refuse"` rather
+  than silently rerunning a request that may already have reached the server; the
+  same write that already succeeded, with a matching identity and a valid
+  checkpoint, verdicts `"reuse"` instead, which is the whole point: a confirmed
+  POST must never fire twice. Dynamic control flow (`foreach`/`while`/`if`/
+  `parallel`/`gate`/`use`/`let`) is a single opaque node in the static plan --
+  its body is not a node until the loop itself runs -- so it (and everything
+  statically downstream of it) always plans as `"rerun"`; there is no static way
+  to know a loop's per-iteration identity without evaluating it, and G3, which
+  actually re-expands the loop, can check each iteration's own checkpoint
+  directly at that point, the same way this module checks a static step's.
+  `checkpoints.Store` gained `exists(run_id, step_id) -> bool`, a cheap
+  existence/integrity check that never deserializes the blob -- needed because
+  `read()` returning `None` is genuinely ambiguous between "nothing was
+  checkpointed" and "the checkpointed value was itself JSON `null`".
+  New CLI: `sclpl runs resume-plan <run> <workflow> [--mode] [--var]` prints every
+  step's verdict and reason; exits nonstandard (`EXIT_USAGE`) if anything refused.
+- **Scope note:** G2 only plans; nothing here writes a checkpoint, rehydrates a
+  real run, or refuses to execute anything. Wiring an actual resume (rehydrating
+  eligible values into a live run and executing only what this plan says must
+  rerun, including per-iteration checkpoint checks inside a re-expanded dynamic
+  loop) is G3. G4 (recovering publication without duplicating it) is also not
+  started.

@@ -5,6 +5,7 @@ The commands that are about the *tool* rather than about a workflow.
 
 from __future__ import annotations
 
+import asyncio
 import json
 import sys
 from pathlib import Path
@@ -189,6 +190,78 @@ def runs_which(path: Annotated[Path, typer.Argument(help="An output file to trac
                 typer.echo("  file no longer exists", err=True)
             elif row["digest"] and row["digest"] != current:
                 typer.echo("  modified since this run: current content does not match", err=True)
+
+
+@runs_app.command("resume-plan")
+def runs_resume_plan(
+    run: RunArg,
+    workflow: Annotated[str, typer.Argument(help="Workflow name or path to resume.")],
+    mode: Annotated[str | None, typer.Option("--mode", "-m", help="Named subset to run.")] = None,
+    var: Annotated[
+        list[str] | None, typer.Option("--var", help="Override a variable: key=value.")
+    ] = None,
+) -> None:
+    """G2: explain reuse/rerun/refusal for every step, without running anything.
+
+    Compares ``workflow`` as it stands today against what ``run`` actually recorded:
+    each step's declared config, its resolved inputs, and whether its checkpointed
+    value is still there and unchanged. Nothing here executes a step or writes
+    anything -- a resume-plan is always safe to run before a real resume.
+    """
+    from sclpl.catalog import resolve as catalog
+    from sclpl.project import context as project_context
+    from sclpl.run import checkpoints, resume
+    from sclpl.run.preflight import preflight
+    from sclpl.run.sclpll.parse import _literal
+    from sclpl.values import cache as cache_mod
+
+    try:
+        resolved_project = project_context.load()
+        doc = catalog.resolve(
+            workflow,
+            extra_dirs=resolved_project.workflow_dirs if resolved_project is not None else None,
+        ).doc
+    except ValidationError as error:
+        typer.echo(str(error), err=True)
+        raise typer.Exit(error.exit_code) from error
+
+    report = preflight(doc, mode=mode, check_files=False, require_ports=False)
+    if not report.ok:
+        for problem in report.problems:
+            typer.echo(str(problem), err=True)
+        raise typer.Exit(report.problems[0].exit_code)
+    assert report.plan is not None and report.resolved is not None
+
+    overrides = {}
+    for item in var or []:
+        name, separator, value = item.partition("=")
+        if not separator or not name:
+            typer.echo(f"--var expects name=value, got {item!r}", err=True)
+            raise typer.Exit(EXIT_USAGE)
+        overrides[name] = _literal(value)
+    variables = {**doc.vars, **report.resolved.vars, **overrides}
+
+    with (
+        db.History() as history,
+        checkpoints.Store() as store,
+        cache_mod.Cache(cache_mod.default_root()) as cache,
+    ):
+        plan = asyncio.run(
+            resume.plan_resume(
+                doc, report, variables, run, history=history, store=store, cache=cache
+            )
+        )
+
+    counts = plan.counts()
+    typer.echo(
+        f"{doc.name} resumed from {run}: {counts[resume.REUSE]} reuse, "
+        f"{counts[resume.RERUN]} rerun, {counts[resume.REFUSE]} refuse"
+    )
+    for entry in plan.verdicts:
+        mark = {"reuse": "=", "rerun": ">", "refuse": "!"}.get(entry.verdict, "?")
+        typer.echo(f"  {mark} {entry.node_id:<28} {entry.verdict:<7} {entry.reason}")
+    if plan.by_verdict(resume.REFUSE):
+        raise typer.Exit(EXIT_USAGE)
 
 
 @runs_app.command("export")

@@ -79,6 +79,12 @@ _UPGRADES: dict[int, str] = {
         ALTER TABLE runs ADD COLUMN completeness TEXT NOT NULL DEFAULT 'unknown';
         ALTER TABLE runs ADD COLUMN publication TEXT NOT NULL DEFAULT 'n/a';
     """,
+    #: G2: the cache key each step's config/inputs actually resolved to when it ran,
+    #: so a later resume can recompute the same key against a *candidate* run and
+    #: tell drift from a genuine repeat without re-executing anything.
+    3: """
+        ALTER TABLE run_steps ADD COLUMN identity_key TEXT NOT NULL DEFAULT '';
+    """,
 }
 
 
@@ -93,6 +99,9 @@ class StepRecord:
     attempts: int = 1
     error: str = ""
     cached: bool = False
+    #: G2: this step's resolved cache key, or `""` for a step kind resume never
+    #: considers reusable (control flow, a writer, or `cache off`).
+    identity_key: str = ""
 
 
 @dataclass(slots=True)
@@ -222,8 +231,8 @@ class History:
         self._db.execute("DELETE FROM run_steps WHERE run_id = ?", (run.id,))
         self._db.executemany(
             "INSERT INTO run_steps"
-            " (run_id, step_id, status, lane, duration_ms, attempts, error, cached)"
-            " VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            " (run_id, step_id, status, lane, duration_ms, attempts, error, cached, identity_key)"
+            " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
             [
                 (
                     run.id,
@@ -234,6 +243,7 @@ class History:
                     step.attempts,
                     step.error,
                     int(step.cached),
+                    step.identity_key,
                 )
                 for step in run.steps
             ],

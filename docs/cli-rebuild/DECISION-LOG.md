@@ -1095,3 +1095,79 @@ the decision, its tradeoff, and the evidence available when it was made.
   removes both the rows and the blob files for a run without touching
   another run's checkpoints. Full project suite: 1037 passed, 2 skipped
   (unchanged, pre-existing) -- zero regressions.
+
+## 2026-09-08 — G2 resume eligibility planning
+
+- **Decision:** New `run/resume.py::plan_resume()` decides, for every step of a
+  workflow's static plan, whether a prior run's checkpoint is `"reuse"`-able,
+  must `"rerun"`, or is `"refuse"`d pending an explicit recovery decision --
+  without executing a single step. Two comparisons do all the work. First,
+  identity: `run_steps` gained a persisted `identity_key` column (the exact
+  digest `execute._cache_key` computed when the step actually ran, saved via a
+  new `runtime.identity_keys` dict populated in `run_step()`); a candidate run
+  recomputes the same function, for real, against its own current `vars`/inputs
+  and (for a step reading another step's output) the ancestor's rehydrated
+  checkpoint value, and compares. Second, propagation: a step's verdict can never
+  be `"reuse"` unless every step it structurally depends on is *also* `"reuse"`,
+  checked once per node in topological order rather than re-derived per case.
+  Non-idempotent HTTP writes get a third outcome: `"refuse"`, when the prior
+  attempt's own outcome is not confirmed-successful (failed, drifted, or its
+  checkpoint is gone) -- silently rerunning would risk repeating a side effect
+  that may have already reached the server. `checkpoints.Store` gained
+  `exists()`, a cheap integrity check that never deserializes a checkpoint's
+  blob, because `read()` alone cannot tell "nothing was ever checkpointed" apart
+  from "the checkpointed value actually was JSON `null`".
+- **Why:** SPEC's G2 accept criteria almost verbatim: "dry-run explains reuse/
+  rerun/refusal for every step; drift and missing artifacts invalidate affected
+  steps and descendants." Reusing `execute._cache_key` directly, rather than
+  reimplementing an approximation of interpolation/hashing inside `resume.py`,
+  was a deliberate choice after noticing the alternative (compare declared IR
+  shape, then separately guess whether resolved values match) would either miss
+  real drift (an unchanged step definition fed a changed `--var`) or duplicate
+  logic that already exists and is already tested -- the session's standing
+  instruction to verify before writing rather than build two versions of the
+  same idea. The one real design gap this surfaced: `_cache_key` returns `None`
+  whenever `Runtime.cache` is `None`, since a real run only ever computes an
+  identity key to decide whether *its own* response cache has a hit -- so
+  `plan_resume` opens a real (default-policy) `values.cache.Cache` purely to
+  satisfy that gate, never reading or writing an entry through it. This is
+  intentional, not incidental: a run executed with `--no-cache` would never have
+  populated `identity_keys` for any step either, so nothing from it is
+  checkpoint-eligible in the first place -- checkpoint reuse is an extension of
+  the same "this step's result is safely reusable" concept the cache already
+  embodies, not a separate one.
+- **Tradeoff:** Dynamic control flow (`foreach`/`while`/`if`/`parallel`/`gate`/
+  `use`) is a single opaque node in the *static* plan -- its per-iteration copies
+  don't exist until the loop actually runs (`compile_plan.py`'s own docstring:
+  "a nested body step is not a node... it becomes one when its parent runs") --
+  so such a node, and everything statically downstream of it, always plans as
+  `"rerun"` here. Per-iteration reuse inside a loop is left entirely to G3, which
+  can check each real iteration's own checkpoint once it actually re-expands the
+  loop and knows its concrete iteration keys; guessing them here, before any
+  execution, would be exactly the kind of speculative correctness this module
+  exists to avoid. `let` and other pure local steps are treated the same as
+  control flow (never checkpointed, since `_cache_key` only ever returns a key
+  for `http`/`fn` kinds) -- correct rather than merely simple, since G1 itself
+  never checkpoints anything else, but it does mean a step chained after a `let`
+  can never satisfy "every ancestor reuses," even though recomputing a `let` is
+  free. Accepted rather than special-cased, since the cost is one cheap local
+  recomputation, never a real request.
+- **Evidence:** `tests/unit/test_resume.py`, 13 tests built on a workflow
+  constructed directly from the IR (no parser needed) plus a real, tmp-scoped
+  `db.History`/`checkpoints.Store`/`values.cache.Cache` standing in for "what a
+  prior run actually left behind": an unchanged leaf step and an unchanged
+  dependent step (once its ancestor's checkpoint is rehydrated) both reuse; a
+  step with no prior record, and a step whose identity matches but has no valid
+  checkpoint, both rerun; a changed resolved input (a `--var` value, not the
+  step's own declared config) is caught as drift; that drift propagates to force
+  an idempotent dependent to rerun and a non-idempotent dependent write to
+  refuse; a non-idempotent write with no successful prior attempt is refused,
+  the identical write that already succeeded is reused (never repeated), and a
+  step explicitly marked `retry.idempotent` is never refused regardless of its
+  prior outcome; control flow always reruns; a different workflow name refuses
+  every step's reuse outright. Full project suite: 1050 passed, 2 skipped
+  (unchanged) -- zero regressions. A real end-to-end smoke test (`sclpl run`
+  against an unreachable host, then `sclpl runs resume-plan` against the
+  resulting failed run) confirmed the actual CLI wiring, not just the unit
+  tests: `smoke resumed from <id>: 0 reuse, 1 rerun, 0 refuse` /
+  `a  rerun  prior attempt did not succeed (failed)`.

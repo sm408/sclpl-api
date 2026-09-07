@@ -121,6 +121,11 @@ class Runtime:
     #: "unknown"), one entry per step that actually paginated. Aggregated into the
     #: run's overall completeness once the run finishes (`runner._completeness_of`).
     completeness: list[str] = field(default_factory=list)
+    #: G2: graph node id -> the cache key it resolved to, for every step that had
+    #: one. Persisted alongside the step's history row so a later resume can
+    #: recompute the same key for a candidate run and compare, instead of guessing
+    #: from the step's declared config alone.
+    identity_keys: dict[str, str] = field(default_factory=dict)
 
     def metric(self, step_id: str) -> StepMetrics:
         return self.metrics.setdefault(step_id, StepMetrics())
@@ -146,6 +151,7 @@ async def run_step(step: Step, node: Node, runtime: Runtime, *, node_id: str = "
     effective_id = node_id or node.id
     key = await _cache_key(step, runtime)
     if key is not None:
+        runtime.identity_keys[effective_id] = key
         hit = runtime.cache.get(key) if runtime.cache else None
         if hit is not None and hit.fresh:
             runtime.reporter.emit(StepProgress(id=step.id, detail="cached", current=1))

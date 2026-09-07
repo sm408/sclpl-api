@@ -119,6 +119,24 @@ class Store:
         )
         return Checkpoint(run_id, step_id, fmt, destination, digest, committed_at)
 
+    def exists(self, run_id: str, step_id: str) -> bool:
+        """Whether a durably committed, still-valid checkpoint is there -- without
+        paying to deserialize it.
+
+        The only way to tell "nothing was ever checkpointed" apart from "the
+        checkpointed value was itself JSON `null`", which `read()` alone cannot
+        distinguish -- both come back as `None`. G2's resume planning needs the
+        former without loading a potentially large table just to answer it.
+        """
+        row = self._db.execute(
+            "SELECT path, digest FROM checkpoints WHERE run_id = ? AND step_id = ?",
+            (run_id, step_id),
+        ).fetchone()
+        if row is None:
+            return False
+        path = Path(row["path"])
+        return path.is_file() and file_digest(path) == row["digest"]
+
     def read(self, run_id: str, step_id: str) -> Any:
         """The checkpointed value, or a sentinel-free ``None`` if there is none.
 

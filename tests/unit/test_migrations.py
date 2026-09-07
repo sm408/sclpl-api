@@ -48,7 +48,10 @@ def test_a_version_1_database_gains_the_new_columns_without_losing_its_row(
     tmp_path: Path,
 ) -> None:
     """An existing database, from before `completeness`/`publication` existed, must
-    reach version 2 with the new columns present and its own data untouched.
+    reach the current schema version with the new columns present and its own data
+    untouched -- even though only version 2's own upgrade is supplied here, since a
+    later batch's own upgrades (unrelated to this test) are free to bring the module
+    to a higher `SCHEMA_VERSION` without invalidating what this test actually checks.
     """
     path = tmp_path / "history.db"
     v1_schema = """
@@ -68,7 +71,7 @@ def test_a_version_1_database_gains_the_new_columns_without_losing_its_row(
     )
 
     with sqlite3.connect(path) as connection:
-        assert connection.execute("PRAGMA user_version").fetchone()[0] == 2
+        assert connection.execute("PRAGMA user_version").fetchone()[0] == migrations.SCHEMA_VERSION
         row = connection.execute("SELECT name, completeness FROM runs WHERE id = 'r1'").fetchone()
         assert row == ("kept", "unknown")
 
