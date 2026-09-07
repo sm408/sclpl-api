@@ -848,3 +848,50 @@ the decision, its tradeoff, and the evidence available when it was made.
   with one retry sums to `retries == 1` and a nonzero `bytes_in` on the
   `RunRecord`. `tests/unit/test_runner.py`'s two existing `_remember` tests
   were updated for the new required `runtime` parameter, unchanged otherwise.
+
+## 2026-09-08 — F2 reports and comparisons
+
+- **Decision:** A new `render/report.py` renders one recorded run three ways
+  from the same data (`render_text`, `render_json`, `render_html`), wired to
+  a new `sclpl runs report <run> [--format text|json|html] [--into path]`
+  command. HTML is self-contained: inline `<style>` only, no `<script>` tag,
+  no external stylesheet or CDN reference, and every value that could carry
+  arbitrary text from a response body -- a step's error message above all --
+  is passed through `html.escape` before it reaches the page. `db.compatible
+  (left, right)` checks two runs share a workflow and environment; `runs
+  diff` prints a note when they do not, rather than silently producing a
+  diff between two unrelated things.
+- **Why:** SPEC F2's accept criteria, taken directly: reports "need no
+  external scripts/assets" (an HTML report is meant to be opened as a local
+  file or attached to a bug report, and a page that phones out or executes
+  is not that), and "malicious response strings" must not become live markup
+  in a rendered report -- a step's error text routinely echoes a server's
+  own response body, which is attacker-controlled the moment the server is.
+  "Compare compatible runs by workflow/environment/identity" is the second
+  half `runs diff` was missing entirely: it already diffed any two rows
+  found by id or name with no opinion on whether comparing them meant
+  anything.
+- **Tradeoff:** "Old runs show unknown measurements rather than fabricated
+  zeros" is honored only where it can actually be told apart from real data:
+  `duration_ms` left at the schema's default (`0`) renders as unknown,
+  because no real request takes exactly zero milliseconds. `attempts` does
+  not get the same treatment -- its own unmeasured default is `1`, which is
+  also the ordinary value for a real step that succeeded on the first try,
+  so a stored `1` cannot be told apart from a genuine one. Reporting it as
+  "unknown" every time would be just as dishonest as reporting a fabricated
+  measurement; the module docstring and a code comment say so, rather than
+  silently claiming full coverage of the accept criterion. "Selector ties"
+  needed no new code: `History.find` already lists candidates rather than
+  guessing on an ambiguous id/name prefix.
+- **Evidence:** `tests/unit/test_report.py` covers all three renderers
+  directly against an in-memory SQLite table shaped like the real schema: a
+  real measurement and a zero-duration "old row" render differently, JSON
+  output round-trips through `json.dumps`, and HTML escapes both a
+  script-injection attempt in a step's error and in the run's own name, with
+  no `<script>` tag or external URL anywhere in the page.
+  `tests/integration/test_report_e2e.py` proves the same through the real
+  `sclpl runs report`/`sclpl runs diff` CLI: text and JSON formats carry the
+  real workflow/status/step data, an HTML report written with `--into` has a
+  title and no script or external reference, diffing two different workflows
+  prints the incompatibility note, and diffing two runs of the same workflow
+  does not.

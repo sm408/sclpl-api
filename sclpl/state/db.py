@@ -342,6 +342,15 @@ class History:
         self.close()
 
 
+def compatible(left: sqlite3.Row, right: sqlite3.Row) -> bool:
+    """F2: whether two runs are the same workflow in the same environment.
+
+    A diff between an `orders` run and a `refunds` run, or `prod` against `staging`,
+    is not "what changed" -- it is two unrelated things that happen to share columns.
+    """
+    return bool(left["workflow"] == right["workflow"] and left["env"] == right["env"])
+
+
 def diff(left: sqlite3.Row, right: sqlite3.Row, *, steps: Iterable[Any] = ()) -> list[str]:
     """What changed between two runs, in the order it matters.
 

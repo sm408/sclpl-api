@@ -110,12 +110,42 @@ def search(
             typer.echo(f"{row['id']:<10} {row['name']:<28} {row['status']}")
 
 
+@runs_app.command("report")
+def runs_report(
+    run: RunArg,
+    fmt: Annotated[str, typer.Option("--format", help="text, json, or html.")] = "text",
+    into: Annotated[Path | None, typer.Option("--into", help="Write here instead.")] = None,
+) -> None:
+    """A summary of one run. Unmeasured fields show as unknown, never a fake zero."""
+    from typing import cast
+
+    from sclpl.render.report import Format, render
+
+    if fmt not in ("text", "json", "html"):
+        raise ValidationError(f"unknown --format {fmt!r}", remedies=["one of: text, json, html"])
+    with db.History() as history:
+        row = history.find(run)
+        payload = render(
+            cast(Format, fmt), row, history.steps_of(row["id"]), history.tags_of(row["id"])
+        )
+    if into is None:
+        sys.stdout.write(payload if payload.endswith("\n") else payload + "\n")
+    else:
+        into.write_text(payload, encoding="utf-8")
+        typer.echo(f"wrote {into}", err=True)
+
+
 @runs_app.command("diff")
 def runs_diff(left: RunArg, right: RunArg) -> None:
     """What changed between two runs."""
     with db.History() as history:
         first, second = history.find(left), history.find(right)
         typer.echo(f"{first['name']}  ->  {second['name']}")
+        if not db.compatible(first, second):
+            typer.echo(
+                "  note: different workflow or environment -- this comparison may not mean much",
+                err=True,
+            )
         lines = db.diff(first, second)
         if not lines:
             typer.echo("  no differences in what was recorded")

@@ -241,3 +241,21 @@ See [the decision log](DECISION-LOG.md) for implementation tradeoffs and evidenc
   by the time a non-streaming request returns.
 - Every field this touches already existed in the schema; F1 is entirely about
   actually writing to it. F2-F5 remain.
+- [x] F2 reports and comparisons: `render/report.py` (new) renders one recorded
+  run as human text, JSON, or self-contained HTML (`sclpl runs report <run>
+  --format text|json|html [--into path]`) -- inline `<style>` only, no
+  `<script>`, no external stylesheet or CDN link, and every value a response
+  body could have influenced (a step's error text, the run's own name) is
+  HTML-escaped before it reaches the page, so a malicious response string
+  cannot inject markup into a report built from it. A step's `duration_ms`
+  left at the schema's own default (`0`, from a run recorded before F1 wrote
+  real numbers) renders as "unknown" rather than a fabricated zero-length
+  measurement; `attempts` does not attempt the same trick, since its own
+  default (`1`) is also the ordinary value for a real step that succeeded on
+  its first try and the two cannot be told apart from the stored value alone
+  -- documented as a known limitation rather than a false claim of full
+  coverage. `db.compatible()` checks two runs share a workflow and
+  environment; `runs diff` now prints a note when they do not, rather than
+  silently diffing two unrelated things. `runs list`/`find`'s existing
+  ambiguous-prefix handling (list the candidates rather than guessing)
+  already covered this batch's "selector ties" case with no changes needed.
