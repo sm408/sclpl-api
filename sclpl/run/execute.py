@@ -117,6 +117,10 @@ class Runtime:
     #: F1: step id -> what it cost. Keyed by the step's own id, not the graph node
     #: id, since a loop's iterations are one step for this purpose.
     metrics: dict[str, StepMetrics] = field(default_factory=dict)
+    #: F5: every paginated step's own `completeness.status` ("complete"/"partial"/
+    #: "unknown"), one entry per step that actually paginated. Aggregated into the
+    #: run's overall completeness once the run finishes (`runner._completeness_of`).
+    completeness: list[str] = field(default_factory=list)
 
     def metric(self, step_id: str) -> StepMetrics:
         return self.metrics.setdefault(step_id, StepMetrics())
@@ -558,6 +562,7 @@ async def _paginated(
     )
 
     status = followed.completeness
+    runtime.completeness.append(status)
     if status == "partial":
         runtime.reporter.log(
             "warning",

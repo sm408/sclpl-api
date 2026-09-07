@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import Any
 
 from sclpl.errors import (
+    EXIT_INCOMPLETE,
     EXIT_INTERRUPTED,
     EXIT_STEP_FAILED,
     PolicyDenied,
@@ -78,6 +79,9 @@ class Options:
     refresh: bool = False
     offline: bool = False
     http_cache: bool = False
+    #: F5: a run that otherwise succeeds but whose data completeness is
+    #: `"partial"`/`"unknown"` fails with `EXIT_INCOMPLETE` instead of exit 0.
+    require_complete: bool = False
     #: Persisted before scheduling so a killed run remains identifiable.
     started_at: str = ""
     fixture_root: Path | None = None
@@ -264,8 +268,11 @@ async def run_workflow(doc: WorkflowDoc, options: Options, reporter: Reporter) -
                 # Pools outlive the event loop unless closed, and a lingering process
                 # pool keeps the interpreter alive after the CLI has printed its summary.
                 pools.close()
+            publication_state = "n/a"
             if ledger is not None:
-                _finish_publication(ledger, doc, options, outcome, started, reporter)
+                publication_state = _finish_publication(
+                    ledger, doc, options, outcome, started, reporter
+                )
             if store_cache is not None:
                 if store_cache.stats.hits or store_cache.stats.writes:
                     reporter.log("info", store_cache.stats.summary())
@@ -273,6 +280,15 @@ async def run_workflow(doc: WorkflowDoc, options: Options, reporter: Reporter) -
                 store_cache.close()
 
     exit_code = _exit_code(outcome)
+    # Only when nothing else already failed the run: EXIT_INCOMPLETE names a reason
+    # of its own and must never paper over -- or be papered over by -- a real
+    # failure that already has its own, more specific exit code.
+    if (
+        options.require_complete
+        and exit_code == 0
+        and _completeness_of(runtime, outcome) != "complete"
+    ):
+        exit_code = EXIT_INCOMPLETE
     if options.strict_replay and fixtures is not None and fixtures.unused():
         raise ValidationError("strict replay left unused fixtures")
     reporter.emit(
@@ -284,7 +300,18 @@ async def run_workflow(doc: WorkflowDoc, options: Options, reporter: Reporter) -
         )
     )
     if options.record:
-        _remember(doc, options, report, outcome, exit_code, started, store_cache, reporter, runtime)
+        _remember(
+            doc,
+            options,
+            report,
+            outcome,
+            exit_code,
+            started,
+            store_cache,
+            reporter,
+            runtime,
+            publication_state,
+        )
     return Result(outcome=outcome, report=report, store=store, exit_code=exit_code)
 
 
@@ -298,6 +325,7 @@ def _remember(
     store_cache: cache.Cache | None,
     reporter: Reporter,
     runtime: Runtime,
+    publication_state: str,
 ) -> None:
     """Write the run to history, and prune.
 
@@ -330,6 +358,8 @@ def _remember(
             peak_rss_bytes=governor.rss(),
             bytes_in=bytes_in,
             bytes_out=bytes_out,
+            completeness=_completeness_of(runtime, outcome),
+            publication=publication_state,
             env=options.env,
             tags=list(options.tags),
             argv=safe_args.render(sys.argv[1:]),
@@ -351,6 +381,26 @@ def _remember(
             history.prune(options.keep)
     except Exception:  # noqa: BLE001 - history is a convenience, never the run's verdict
         return
+
+
+def _completeness_of(runtime: Runtime, outcome: Outcome) -> str:
+    """F5: the run's overall data completeness, distinct from `status`/`exit_code`.
+
+    `"unknown"` beats `"partial"` beats `"complete"`: any step whose own extraction
+    could not tell what it left out makes the whole run's data completeness
+    unknowable too, and a run cancelled mid-extraction is the same kind of unknown
+    even with no paginated step involved at all. A run with no paginated steps, or
+    where every one of them reached a bound something actually declared, is
+    `"complete"` -- not a claim that a remote source has no more data, only that
+    this run's own declared scope was fully covered.
+    """
+    if outcome.status == "cancelled":
+        return "unknown"
+    if "unknown" in runtime.completeness:
+        return "unknown"
+    if "partial" in runtime.completeness:
+        return "partial"
+    return "complete"
 
 
 def _step_records(outcome: Outcome, runtime: Runtime, reporter: Reporter) -> list[db.StepRecord]:
@@ -472,7 +522,7 @@ def _finish_publication(
     outcome: Outcome,
     started: float,
     reporter: Reporter,
-) -> None:
+) -> str:
     """Publish every staged output together, or discard all of them together.
 
     The one rule that actually closes "an assertion branch outrun by a faster,
@@ -480,6 +530,11 @@ def _finish_publication(
     branches with no data relationship, so the only safe default is the whole
     run, not just this output's own ancestors -- nothing publishes unless every
     step in the run succeeded.
+
+    Returns F5's publication state for `state/db.py`'s `RunRecord.publication`:
+    `"published"`, `"interrupted"` (a later file's replace itself failed, so some
+    of this generation is staged and some is not), or `"withheld"` (nothing was
+    ever eligible, or the run did not succeed).
     """
     if outcome.status == "ok" and not outcome.failed:
         run_id = options.run_id or db.run_id(doc.name, started)
@@ -491,12 +546,14 @@ def _finish_publication(
                 "error",
                 f"publication interrupted, left staged: {', '.join(result.interrupted)}",
             )
-        return
+            return "interrupted"
+        return "published" if result.published else "withheld"
     discarded = discard(ledger)
     if discarded:
         reporter.log(
             "info", f"run did not succeed; discarded staged output(s): {', '.join(discarded)}"
         )
+    return "withheld"
 
 
 def _output_paths(report: Report) -> dict[str, str]:

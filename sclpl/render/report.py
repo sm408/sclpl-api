@@ -49,6 +49,9 @@ def render_text(run: sqlite3.Row, steps: list[sqlite3.Row], tags: list[str]) -> 
     if run["env"]:
         lines.append(f"  env        {run['env']}")
     lines.append(f"  status     {run['status']} (exit {run['exit_code']})")
+    lines.append(f"  complete   {run['completeness']}")
+    if run["publication"] != "n/a":
+        lines.append(f"  publication {run['publication']}")
     duration = _value(run, "duration_ms")
     lines.append(f"  duration   {f'{duration}ms' if duration is not None else _mark()}")
     if tags:
@@ -74,6 +77,13 @@ def render_json(run: sqlite3.Row, steps: list[sqlite3.Row], tags: list[str]) -> 
         "env": run["env"],
         "status": run["status"],
         "exit_code": run["exit_code"],
+        # F5: data completeness and publication state, tracked independently of
+        # `status`/`exit_code` -- a run can exit 0 and still be "partial". Never
+        # `_value`-masked to unknown-on-default: the schema's own default for an
+        # unmigrated old row already *is* "unknown"/"n/a", which is the honest
+        # answer for a run this project never actually measured either state on.
+        "completeness": run["completeness"],
+        "publication": run["publication"],
         "duration_ms": _value(run, "duration_ms"),
         # Real run-level aggregates, unlike the per-step fields above: a workflow
         # with no HTTP steps genuinely has `bytes_in == 0`, and most runs genuinely
@@ -115,6 +125,9 @@ def render_html(run: sqlite3.Row, steps: list[sqlite3.Row], tags: list[str]) -> 
         f"<td>{e(step['error'] or '')}</td></tr>"
         for step in steps
     )
+    completeness = run["completeness"]
+    publication = run["publication"]
+    publication_line = f" &middot; publication: {e(publication)}" if publication != "n/a" else ""
     return f"""<!doctype html>
 <html><head><meta charset="utf-8"><title>{e(run["name"])}</title>
 <style>
@@ -122,12 +135,14 @@ body {{ font: 14px system-ui, sans-serif; margin: 2rem; color: #1a1a1a; backgrou
 table {{ border-collapse: collapse; margin-top: 1rem; }}
 td, th {{ border: 1px solid #ccc; padding: 0.3rem 0.6rem; text-align: left; }}
 .status-failed {{ color: #b00020; }}
+.completeness-partial, .completeness-unknown {{ color: #9a6700; font-weight: bold; }}
 </style></head>
 <body>
 <h1>{e(run["name"])}</h1>
 <p>id: {e(run["id"])} &middot; workflow: {e(run["workflow"])}</p>
 <p class="status-{e(run["status"])}">status: {e(run["status"])} (exit {run["exit_code"]})
 &middot; duration: {duration if duration is not None else e(_mark())}ms</p>
+<p class="completeness-{e(completeness)}">data completeness: {e(completeness)}{publication_line}</p>
 <table>
 <tr><th>step</th><th>status</th><th>attempts</th><th>duration (ms)</th><th>error</th></tr>
 {rows}

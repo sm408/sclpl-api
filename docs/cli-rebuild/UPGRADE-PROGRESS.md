@@ -288,3 +288,39 @@ See [the decision log](DECISION-LOG.md) for implementation tradeoffs and evidenc
   quotas (no such mechanism exists anywhere yet), checkpoint roots (G1, not
   built), and notification references (I-batch, not built) -- there is
   nothing for retention to respect there until those systems exist.
+- [x] F5 partial-result reporting and automation: `runs.completeness`
+  (`"complete"`/`"partial"`/`"unknown"`) and `runs.publication`
+  (`"n/a"`/`"published"`/`"withheld"`/`"interrupted"`) are new persisted
+  columns, added through a real incremental migration (`state/migrations.py`
+  gained an `upgrades: dict[int, str]` parameter -- `ALTER TABLE`, not the
+  base schema's `CREATE TABLE IF NOT EXISTS`, is the only thing that can add a
+  column to a database that already has the table) rather than assuming every
+  `~/.sclpl/history.db` is freshly created. Completeness is the worst of every
+  paginated step's own D7 signal across the whole run (`"unknown"` beats
+  `"partial"` beats `"complete"`; a cancelled run is `"unknown"` even with no
+  paginated step at all) -- deliberately whole-run, not scoped to one output's
+  dependency closure, since an unrelated step's own extraction being cut short
+  is real missing data regardless of what else in the run happened to succeed.
+  Publication reuses E8's ledger outcome directly. `run --require-complete`
+  fails a run that would otherwise exit 0 with the new `EXIT_INCOMPLETE` (7)
+  when completeness is not `"complete"`, and never overrides a run that
+  already failed for a real reason. `render/report.py`'s text/JSON/HTML all
+  surface both fields plainly rather than only alongside `status`, so a
+  `status: ok` run with `completeness: partial` cannot read as fully
+  successful in any of the three formats -- the literal "cannot label partial
+  data as complete" accept criterion. An old, unmigrated row reports
+  `"unknown"`/`"n/a"` by the column's own default, which is the honest answer
+  for a run this project never actually measured either state on.
+  Explicitly out of scope, and documented rather than silently missing: JUnit
+  report output (no such format exists anywhere in the codebase yet -- adding
+  one is a new renderer, not a wiring task like the rest of this batch), and
+  carrying these states through checkpoints/notifications (G1/I-batch, not
+  built yet) or into cache entries (a real, separate piece of work: partial
+  cache data must never satisfy a complete-data requirement without
+  revalidation, which touches `values/cache.py`'s read path, not this batch's
+  history/report surface).
+- **Checkpoint F reached**: a single run's terminal summary, `runs report`
+  (text/JSON/HTML), and persisted history all draw from the same sanitized
+  source data (`state/db.py`'s `RunRecord`/`StepRecord`, populated by the
+  live run itself in `runner.py`/`execute.py`) -- there is no second,
+  independently-computed path any of them could disagree with.

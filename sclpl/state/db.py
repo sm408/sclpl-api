@@ -70,6 +70,17 @@ CREATE INDEX IF NOT EXISTS run_steps_run ON run_steps(run_id);
 CREATE INDEX IF NOT EXISTS run_tags_run ON run_tags(run_id);
 """
 
+#: F5: additive changes beyond `_SCHEMA`, for `migrations.migrate`'s ``upgrades``.
+#: `runs`'s `CREATE TABLE IF NOT EXISTS` above is a no-op for a database that
+#: already has the table, so a new column can only reach an existing database
+#: through an explicit `ALTER TABLE` here -- never added to `_SCHEMA` itself.
+_UPGRADES: dict[int, str] = {
+    2: """
+        ALTER TABLE runs ADD COLUMN completeness TEXT NOT NULL DEFAULT 'unknown';
+        ALTER TABLE runs ADD COLUMN publication TEXT NOT NULL DEFAULT 'n/a';
+    """,
+}
+
 
 @dataclass(slots=True)
 class StepRecord:
@@ -107,6 +118,15 @@ class RunRecord:
     peak_rss_bytes: int = 0
     bytes_in: int = 0
     bytes_out: int = 0
+    #: F5: `"complete"`, `"partial"`, or `"unknown"` -- data completeness, distinct
+    #: from `status`/`exit_code`. A run can exit 0 and still be `"partial"`: reaching
+    #: a paginated step's `max_pages` safety net is a successful *step* that did not
+    #: reach the end of its source.
+    completeness: str = "unknown"
+    #: `"n/a"` (immediate writes, the pre-E8 default), `"published"`, `"withheld"`
+    #: (validated publication discarded everything because the run did not fully
+    #: succeed), `"staged"`, or `"interrupted"` (E8's per-file replace failure).
+    publication: str = "n/a"
     env: str | None = None
     pinned: bool = False
     log_path: str | None = None
@@ -163,7 +183,7 @@ class History:
         self._logs = self._root / "logs"
         self._logs.mkdir(parents=True, exist_ok=True)
         path = self._root / "history.db"
-        migrations.migrate(path, _SCHEMA)
+        migrations.migrate(path, _SCHEMA, _UPGRADES)
         self._db = sqlite3.connect(path, isolation_level=None)
         self._db.row_factory = sqlite3.Row
         # F4: WAL keeps a reader (`runs list` while another process prunes, say)
@@ -179,8 +199,8 @@ class History:
             "id", "name", "workflow", "workflow_version", "mode", "started_at",
             "finished_at", "duration_ms", "status", "exit_code", "steps_run",
             "steps_skipped", "steps_failed", "retries", "cache_hits", "cache_misses",
-            "peak_rss_bytes", "bytes_in", "bytes_out", "env", "pinned", "log_path",
-            "argv",
+            "peak_rss_bytes", "bytes_in", "bytes_out", "completeness", "publication",
+            "env", "pinned", "log_path", "argv",
         ]  # fmt: skip
         values = [getattr(run, name) for name in columns]
         values[columns.index("pinned")] = int(run.pinned)

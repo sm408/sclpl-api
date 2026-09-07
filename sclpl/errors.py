@@ -27,6 +27,11 @@ EXIT_VALIDATION = 3
 EXIT_ASSERTION = 4
 EXIT_CACHE_MISS = 5
 EXIT_UNKNOWN_TARGET = 6
+#: F5: `run --require-complete` on a run that otherwise succeeded (exit 0) but whose
+#: data completeness is `"partial"` or `"unknown"` -- a paginated step's own safety
+#: net cut it short with no bound anyone actually declared, say. Never overrides a
+#: run that already failed for another reason; that code always wins.
+EXIT_INCOMPLETE = 7
 EXIT_INTERRUPTED = 130
 
 

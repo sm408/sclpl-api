@@ -63,6 +63,7 @@ def test_a_step_error_containing_a_resolved_secret_is_scrubbed(private_home: Pat
         None,
         reporter,
         _runtime(doc, reporter),
+        "n/a",
     )
 
     with db.History() as history:
@@ -86,6 +87,7 @@ def test_a_step_error_with_no_resolved_secrets_is_left_readable(private_home: Pa
         None,
         reporter,
         _runtime(doc, reporter),
+        "n/a",
     )
 
     with db.History() as history:

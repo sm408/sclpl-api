@@ -980,3 +980,73 @@ the decision, its tradeoff, and the evidence available when it was made.
   by_a_writer_in_wal_mode`. The full existing `test_state.py` suite (34
   tests, including the pre-existing pin/prune coverage) and the full project
   suite both still pass unchanged.
+
+## 2026-09-08 — F5 partial-result reporting and automation
+
+- **Decision:** Two new persisted columns, `runs.completeness` and
+  `runs.publication`, added through a genuinely incremental schema migration:
+  `state/migrations.py`'s `migrate()` gained an `upgrades: dict[int, str]`
+  parameter, applied after the base schema and only for versions the database
+  has not already reached, because `CREATE TABLE IF NOT EXISTS` (the base
+  schema's own idempotency mechanism) is a no-op for a table that already
+  exists -- it can never add a column an earlier version of this project
+  never wrote. `db._UPGRADES = {2: "ALTER TABLE runs ADD COLUMN ..."}` is the
+  actual SQL, kept in `db.py` rather than the generic `migrations.py` module,
+  which stays schema-agnostic (its own test suite already exercised it with
+  an arbitrary, unrelated schema, which is what caught the first version of
+  this change hardcoding `runs`-specific SQL into the wrong layer).
+  `execute.Runtime.completeness` collects every paginated step's own D7
+  `completeness.status` as it runs; `runner._completeness_of` reduces the
+  list plus cancellation to the run's overall verdict ("unknown" > "partial"
+  > "complete"). `runner._finish_publication` (E8) now returns
+  `"published"`/`"interrupted"`/`"withheld"` instead of only logging.
+  `Options.require_complete` (`--require-complete`) turns a would-be exit 0
+  into the new `EXIT_INCOMPLETE` (7) when completeness is not `"complete"`.
+  `render/report.py`'s three formats all surface both fields plainly.
+- **Why:** SPEC F5's accept criteria, essentially verbatim: human/JSON/HTML
+  output must not label partial data as complete, and `--require-complete`
+  follows section 3.7's exit rules ("fails validation when completeness is
+  partial/unknown without another failure code"). Completeness is aggregated
+  over the *whole run*, not scoped to one output's own dependency closure
+  (unlike E7's per-output `validation_scope`), because SPEC 3.7 states the
+  rule at the run level -- "record execution status separately from data
+  completeness" -- and a step whose own extraction was cut short is real
+  missing data regardless of which output, if any, downstream of it actually
+  reads its value.
+- **Tradeoff:** JUnit output is explicitly out of scope: no such renderer
+  exists anywhere in this codebase, and adding one is a new format to build,
+  not a wiring task like the rest of this batch was. Carrying completeness/
+  publication through checkpoints and notifications is not done either --
+  neither system exists yet (G1, I-batch) -- nor into cache entries, which
+  SPEC 3.7 also names ("partial cache data must never satisfy a complete-data
+  requirement without revalidation") but which is a real, separate change to
+  `values/cache.py`'s own read path, not a field this batch's history/report
+  surface could carry on its own. `require_complete`'s check runs once, after
+  the whole scheduler finishes and before `_remember`, using the exact same
+  `_completeness_of` call `_remember` itself uses -- computed twice rather
+  than threaded through as a parameter, a deliberate, low-risk simplicity
+  trade since the inputs cannot have changed between the two call sites.
+- **Evidence:** `tests/unit/test_migrations.py` gained three tests proving
+  the incremental-upgrade mechanism itself: a hand-built version-1 database
+  reaches version 2 with the new columns and its existing row intact, a
+  database already at the target version does not re-apply (which would
+  otherwise fail with "duplicate column"), and the project's own real
+  `db._UPGRADES` produce the expected defaults through an actual `History`
+  open. `tests/unit/test_completeness.py` covers `_completeness_of`'s
+  aggregation directly (no paginated steps, all complete, one partial, one
+  unknown, unknown outranking partial, and cancellation forcing unknown even
+  with no paginated step or even a step reporting complete).
+  `tests/unit/test_report.py` proves a `status: "ok"` run with
+  `completeness: "partial"`/`"unknown"` is never rendered as complete in any
+  of the three formats, and that publication state appears when declared and
+  stays quiet at its `"n/a"` default. `tests/integration/
+  test_require_complete_e2e.py` proves the real behavior end to end: a fully
+  complete run is unaffected by `--require-complete`; a partial run (the real
+  `/paged` server route, `paginate.HARD_CEILING` lowered the same way
+  `test_paginate.py`'s own unit tests already do, since the real 10,000-page
+  ceiling cannot be exercised in a real integration test) exits
+  `EXIT_INCOMPLETE` only when the flag is set, and exits 0 without it; a
+  step's real assertion failure keeps its own exit code even with the flag
+  on; and an ordinary run's `completeness`/`publication` reach the real
+  history database through the real CLI, not just the in-process `Result`
+  the other tests check.

@@ -92,6 +92,13 @@ def run(
         bool,
         typer.Option("--http-cache", help="Revalidate with ETag; a 304 counts as a hit."),
     ] = False,
+    require_complete: Annotated[
+        bool,
+        typer.Option(
+            "--require-complete",
+            help="Fail (exit 7) if data completeness is partial/unknown, even on success.",
+        ),
+    ] = False,
     replay: Annotated[
         Path | None,
         typer.Option("--replay", help="Serve HTTP requests from this fixture directory offline."),
@@ -169,6 +176,7 @@ def run(
         refresh=refresh,
         offline=offline,
         http_cache=http_cache,
+        require_complete=require_complete,
         fixture_root=replay,
         strict_replay=strict_replay,
         record_fixture_root=record_fixture,

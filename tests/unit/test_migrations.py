@@ -39,3 +39,64 @@ def test_newer_history_database_is_refused(tmp_path: Path) -> None:
 
     with pytest.raises(ValidationError, match="newer"):
         migrations.migrate(path, "")
+
+
+# -- F5: incremental upgrades (an ALTER TABLE a fresh CREATE cannot do) --------------
+
+
+def test_a_version_1_database_gains_the_new_columns_without_losing_its_row(
+    tmp_path: Path,
+) -> None:
+    """An existing database, from before `completeness`/`publication` existed, must
+    reach version 2 with the new columns present and its own data untouched.
+    """
+    path = tmp_path / "history.db"
+    v1_schema = """
+        CREATE TABLE IF NOT EXISTS runs (id TEXT PRIMARY KEY, name TEXT NOT NULL);
+    """
+    with sqlite3.connect(path) as connection:
+        for statement in v1_schema.split(";"):
+            if statement.strip():
+                connection.execute(statement)
+        connection.execute("INSERT INTO runs (id, name) VALUES ('r1', 'kept')")
+        connection.execute("PRAGMA user_version = 1")
+
+    migrations.migrate(
+        path,
+        v1_schema,
+        {2: "ALTER TABLE runs ADD COLUMN completeness TEXT NOT NULL DEFAULT 'unknown';"},
+    )
+
+    with sqlite3.connect(path) as connection:
+        assert connection.execute("PRAGMA user_version").fetchone()[0] == 2
+        row = connection.execute("SELECT name, completeness FROM runs WHERE id = 'r1'").fetchone()
+        assert row == ("kept", "unknown")
+
+
+def test_an_upgrade_for_a_version_the_database_already_has_does_not_reapply(
+    tmp_path: Path,
+) -> None:
+    """Idempotent by construction: a database already at `SCHEMA_VERSION` returns
+    before any upgrade statement runs, so `ALTER TABLE ADD COLUMN` never fires
+    twice and fails with "duplicate column".
+    """
+    path = tmp_path / "history.db"
+    with db.History(tmp_path):
+        pass
+    # A second open must not attempt to re-add the columns the first one just did.
+    with db.History(tmp_path):
+        pass
+    with sqlite3.connect(path) as connection:
+        assert connection.execute("PRAGMA user_version").fetchone()[0] == migrations.SCHEMA_VERSION
+
+
+def test_db_module_upgrades_are_exercised_by_a_real_history_open(tmp_path: Path) -> None:
+    """The actual `db._UPGRADES` this project ships, not a stand-in schema."""
+    with db.History(tmp_path) as history:
+        record = db.RunRecord(id="r1", name="run", workflow="orders", started_at=db.now())
+        history.record(record)
+    with sqlite3.connect(tmp_path / "history.db") as connection:
+        row = connection.execute(
+            "SELECT completeness, publication FROM runs WHERE id = 'r1'"
+        ).fetchone()
+        assert row == ("unknown", "n/a")

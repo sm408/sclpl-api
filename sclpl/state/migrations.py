@@ -8,11 +8,22 @@ from pathlib import Path
 
 from sclpl.errors import ValidationError
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 
 
-def migrate(path: Path, schema: str) -> None:
-    """Apply known migrations once, keeping a backup before the first upgrade."""
+def migrate(path: Path, schema: str, upgrades: dict[int, str] | None = None) -> None:
+    """Apply known migrations once, keeping a backup before the first upgrade.
+
+    ``schema`` is the full base schema -- idempotent `CREATE TABLE`/`CREATE INDEX
+    ... IF NOT EXISTS` statements -- always re-applied. ``upgrades`` names additive
+    changes beyond that base, keyed by the version they bring the database *to*:
+    for a table that already exists, `IF NOT EXISTS` cannot add a column the base
+    schema grew after the table was first created, so those go here instead, each
+    applied at most once, in version order. A brand-new database still runs every
+    entry in ``upgrades`` after the base schema creates its tables -- the base
+    schema is never grown a new column an upgrade is also responsible for; it is
+    one or the other, never both, so nothing can apply twice.
+    """
     existed = path.exists() and path.stat().st_size > 0
     connection = sqlite3.connect(path)
     try:
@@ -31,6 +42,11 @@ def migrate(path: Path, schema: str) -> None:
             for statement in (item.strip() for item in schema.split(";")):
                 if statement:
                     connection.execute(statement)
+            for version in range(max(current, 1) + 1, SCHEMA_VERSION + 1):
+                addition = (upgrades or {}).get(version, "")
+                for statement in (item.strip() for item in addition.split(";")):
+                    if statement:
+                        connection.execute(statement)
             connection.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
             connection.commit()
         except Exception:
