@@ -8,7 +8,7 @@ from pathlib import Path
 
 from sclpl.errors import ValidationError
 
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 
 
 def migrate(path: Path, schema: str, upgrades: dict[int, str] | None = None) -> None:

@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import sqlite3
 from dataclasses import dataclass
 from pathlib import Path
@@ -64,6 +65,21 @@ def _format_of(value: Any) -> str | None:
     except (TypeError, ValueError):
         return None
     return "json"
+
+
+#: Characters a step id can carry that a filename cannot -- `control.py`'s `MARK`
+#: (`"::"`, joining a loop's iteration key into its body copies' node ids) is a
+#: `:`, which Windows refuses in a filename outright (reserved for drive letters).
+_UNSAFE_IN_A_FILENAME = re.compile(r'[<>:"/\\|?*]')
+
+
+def _safe_name(step_id: str) -> str:
+    """``step_id``, with anything a filesystem would refuse replaced by ``_``.
+
+    The step id itself, as stored in SQLite and compared during planning, is
+    untouched -- this only affects the blob's own filename on disk.
+    """
+    return _UNSAFE_IN_A_FILENAME.sub("_", step_id)
 
 
 class Store:
@@ -168,7 +184,7 @@ class Store:
 
     def _blob_path(self, run_id: str, step_id: str, fmt: str) -> Path:
         extension = "parquet" if fmt == "parquet" else "json"
-        return self._root / run_id / f"{step_id}.{extension}"
+        return self._root / run_id / f"{_safe_name(step_id)}.{extension}"
 
     def close(self) -> None:
         self._db.close()

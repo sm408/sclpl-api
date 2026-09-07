@@ -27,12 +27,14 @@ from sclpl.project import outputs as outputs_mod
 from sclpl.project import policy as policy_mod
 from sclpl.render.events import RunFinished, RunStarted
 from sclpl.render.reporter import Reporter
+from sclpl.run import checkpoints as checkpoints_mod
 from sclpl.run import lanes
+from sclpl.run import resume as resume_mod
 from sclpl.run.compile_plan import hosts
 from sclpl.run.execute import SKIPPED, Runtime, collect, run_injected, run_step
 from sclpl.run.fixtures import Store as FixtureStore
 from sclpl.run.ir import HttpConfig, WorkflowDoc
-from sclpl.run.plan import Node
+from sclpl.run.plan import Node, Plan
 from sclpl.run.preflight import Report, preflight
 from sclpl.run.publication import Ledger, discard, publish
 from sclpl.run.schedule import JOIN_SUFFIX, ExpandSpec, Limits, Outcome, Scheduler
@@ -93,6 +95,14 @@ class Options:
     output_lock_timeout: float = 30.0
     #: Overrides a project policy's `overwrite = false` for this run only.
     overwrite: bool = False
+    #: G3: resume from this run's checkpoints instead of starting fresh. The id of
+    #: an existing history row, the same as `runs show`/`resume-plan` accept.
+    resume_from: str | None = None
+    #: G3: an explicit acknowledgment to rerun a step G2 would otherwise refuse --
+    #: a non-idempotent write whose prior outcome was not confirmed successful.
+    #: Rerunning it anyway is a deliberate operator decision; this only silences
+    #: the refusal, it does not make the rerun itself any safer.
+    force_resume: frozenset[str] = frozenset()
 
 
 @dataclass(slots=True)
@@ -162,6 +172,36 @@ async def run_workflow(doc: WorkflowDoc, options: Options, reporter: Reporter) -
         return Result(report=report, exit_code=problem.exit_code)
 
     assert report.plan is not None and report.resolved is not None
+    variables = {**doc.vars, **report.resolved.vars, **options.overrides}
+
+    # G3: decided before anything else -- provenance, the scheduler, a single lock
+    # or connection -- can begin, exactly like the overwrite check above. A refused
+    # step is refused before any side effect, not partway through one.
+    execution_plan = report.plan
+    stubs = dict(report.resolved.stubs)
+    resume_completeness: list[str] = []
+    if options.resume_from:
+        resumed = await _resume(doc, report, variables, options.resume_from, options.force_resume)
+        if resumed.problem is not None:
+            reporter.log("error", str(resumed.problem))
+            reporter.emit(
+                RunFinished(
+                    status="failed",
+                    duration_ms=_ms(started),
+                    counts={},
+                    exit_code=resumed.problem.exit_code,
+                )
+            )
+            return Result(report=report, exit_code=resumed.problem.exit_code)
+        execution_plan = resumed.plan
+        stubs = resumed.stubs
+        resume_completeness = resumed.completeness
+        reporter.log(
+            "info",
+            f"resuming from {options.resume_from}: "
+            f"{len(report.plan) - len(execution_plan)} reused, {len(execution_plan)} to run",
+        )
+
     # A dry run has no scheduler or durable run outcome to resume, so retain the
     # established behavior of not creating a history row for it.
     if options.record and not options.dry_run:
@@ -172,7 +212,7 @@ async def run_workflow(doc: WorkflowDoc, options: Options, reporter: Reporter) -
             workflow=doc.name,
             version=doc.version,
             mode=report.resolved.name,
-            steps_total=len(report.plan),
+            steps_total=len(execution_plan),
             steps_pruned=len(report.resolved.pruned),
             hosts=hosts(doc),
         )
@@ -181,13 +221,14 @@ async def run_workflow(doc: WorkflowDoc, options: Options, reporter: Reporter) -
     if options.dry_run:
         reporter.log("info", "dry run: nothing was executed")
         reporter.emit(
-            RunFinished(status="ok", duration_ms=_ms(started), counts={"planned": len(report.plan)})
+            RunFinished(
+                status="ok", duration_ms=_ms(started), counts={"planned": len(execution_plan)}
+            )
         )
         return Result(report=report, exit_code=0)
 
     limits = _limits(doc, options)
     store = ValueStore(keep_all=options.keep_all, scratch=Scratch(options.scratch_dir))
-    variables = {**doc.vars, **report.resolved.vars, **options.overrides}
 
     transport = TransportLimits(
         timeout=options.timeout or doc.limits.timeout,
@@ -202,6 +243,11 @@ async def run_workflow(doc: WorkflowDoc, options: Options, reporter: Reporter) -
         http_cache=options.http_cache,
     )
     store_cache = cache.Cache(cache.default_root(), policy=policy) if policy.enabled else None
+    # G3: this run's own eligible step values, durably filed for a later resume.
+    # Tied to `options.record`, not to `store_cache`/its policy -- a checkpoint
+    # with no history row naming this run is never reachable by a future resume
+    # regardless of whether *this* run's own HTTP response cache is enabled.
+    checkpoint_store = checkpoints_mod.Store() if options.record else None
     fixtures = FixtureStore(options.fixture_root) if options.fixture_root else None
     outputs = _output_paths(report)
     output_settings = _output_settings(options)
@@ -226,16 +272,21 @@ async def run_workflow(doc: WorkflowDoc, options: Options, reporter: Reporter) -
                 reporter=reporter,
                 pool=pool,
                 vars=variables,
-                stubs=dict(report.resolved.stubs),
+                stubs=stubs,
                 outputs=outputs,
                 pools=pools,
                 cache=store_cache,
                 auth_profiles=_auth_profiles(doc, options),
                 publication=ledger,
+                checkpoint_store=checkpoint_store,
+                run_id=options.run_id,
             )
-            for name, value in report.resolved.stubs.items():
-                # A stub stands in for a producer the mode pruned. It is pinned, because
-                # nothing produced it and its refcount would otherwise free it early.
+            runtime.completeness.extend(resume_completeness)
+            for name, value in stubs.items():
+                # A stub stands in for a producer the mode pruned, or (G3) a step this
+                # run reused from a checkpoint instead of redoing. Pinned either way,
+                # because nothing in *this* run produced it and its refcount would
+                # otherwise free it early.
                 store.put(name, value, readers=report.plan.readers_of(name), pinned=True)
 
             async def runner(node: Node) -> Any:
@@ -254,7 +305,7 @@ async def run_workflow(doc: WorkflowDoc, options: Options, reporter: Reporter) -
                 value = await run_step(step, node, runtime)
                 return None if value is SKIPPED else value
 
-            scheduler = Scheduler(report.plan, store, reporter, limits)
+            scheduler = Scheduler(execution_plan, store, reporter, limits)
 
             def expand(
                 parent: str, specs: list[ExpandSpec], tag_limit: tuple[str, int] | None
@@ -278,6 +329,8 @@ async def run_workflow(doc: WorkflowDoc, options: Options, reporter: Reporter) -
                     reporter.log("info", store_cache.stats.summary())
                 store_cache.prune()
                 store_cache.close()
+            if checkpoint_store is not None:
+                checkpoint_store.close()
 
     exit_code = _exit_code(outcome)
     # Only when nothing else already failed the run: EXIT_INCOMPLETE names a reason
@@ -313,6 +366,85 @@ async def run_workflow(doc: WorkflowDoc, options: Options, reporter: Reporter) -
             publication_state,
         )
     return Result(outcome=outcome, report=report, store=store, exit_code=exit_code)
+
+
+@dataclass(slots=True)
+class _Resumed:
+    """What `_resume` decided: either a refusal, or a plan to run instead of `report.plan`."""
+
+    plan: Plan
+    stubs: dict[str, Any]
+    completeness: list[str]
+    problem: SclplError | None = None
+
+
+async def _resume(
+    doc: WorkflowDoc,
+    report: Report,
+    variables: dict[str, Any],
+    parent_run_id: str,
+    force_resume: frozenset[str],
+) -> _Resumed:
+    """G3: turn G2's plan into what `run_workflow` needs to actually resume.
+
+    Its own short-lived history/checkpoint/cache handles -- separate from the ones
+    the real run opens afterward -- because nothing here is a side effect: a
+    refusal at this point has touched nothing that needs undoing, and the plan
+    itself does not outlive the decision of whether to proceed.
+    """
+    assert report.plan is not None and report.resolved is not None
+    with (
+        db.History() as history,
+        checkpoints_mod.Store() as parent_store,
+        cache.Cache(cache.default_root()) as planning_cache,
+    ):
+        plan = await resume_mod.plan_resume(
+            doc,
+            report,
+            variables,
+            parent_run_id,
+            history=history,
+            store=parent_store,
+            cache=planning_cache,
+        )
+        refused = [
+            entry
+            for entry in plan.by_verdict(resume_mod.REFUSE)
+            if entry.node_id not in force_resume
+        ]
+        if refused:
+            detail = "; ".join(f"{entry.node_id} ({entry.reason})" for entry in refused)
+            problem = PolicyDenied(
+                f"resume refused for {len(refused)} step(s): {detail}",
+                remedies=[
+                    "pass --force-resume <step> for each one, to explicitly accept the risk "
+                    "of repeating a side effect that may have already happened",
+                ],
+            )
+            return _Resumed(plan=report.plan, stubs={}, completeness=[], problem=problem)
+
+        reused = plan.by_verdict(resume_mod.REUSE)
+        stubs = dict(report.resolved.stubs)
+        for entry in reused:
+            node = report.plan.nodes[entry.node_id]
+            stubs[node.publishes] = parent_store.read(parent_run_id, entry.node_id)
+
+        execution_plan = report.plan
+        if reused:
+            reused_ids = {entry.node_id for entry in reused}
+            keep = {node_id for node_id in report.plan.nodes if node_id not in reused_ids}
+            execution_plan = report.plan.subgraph(keep)
+
+        completeness: list[str] = []
+        if reused:
+            # A reused value carries forward whatever the parent run itself knew
+            # about its own completeness -- data this run never re-extracted
+            # cannot become more complete just by being reused.
+            parent_row = history.find(parent_run_id)
+            if parent_row["completeness"] != "complete":
+                completeness.append(parent_row["completeness"])
+
+        return _Resumed(plan=execution_plan, stubs=stubs, completeness=completeness, problem=None)
 
 
 def _remember(
@@ -360,6 +492,7 @@ def _remember(
             bytes_out=bytes_out,
             completeness=_completeness_of(runtime, outcome),
             publication=publication_state,
+            parent_run_id=options.resume_from or "",
             env=options.env,
             tags=list(options.tags),
             argv=safe_args.render(sys.argv[1:]),
@@ -445,6 +578,7 @@ def _remember_start(doc: WorkflowDoc, options: Options, report: Report, started:
                     mode=report.resolved.name if report.resolved else options.mode,
                     started_at=options.started_at,
                     status="running",
+                    parent_run_id=options.resume_from or "",
                     env=options.env,
                     argv=safe_args.render(sys.argv[1:]),
                     tags=list(options.tags),

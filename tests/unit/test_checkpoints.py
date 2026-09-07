@@ -121,6 +121,23 @@ def test_a_deleted_blob_with_a_committed_row_is_not_reusable(store: Store, tmp_p
     assert store.read("run1", "fetch") is None
 
 
+# -- step ids that are not, by themselves, valid filenames --------------------------
+
+
+def test_a_dynamic_loop_iteration_id_round_trips(store: Store) -> None:
+    """A loop body's real node id is `parent::0::inner` (`control.MARK` is `::`),
+    which Windows refuses outright as a filename -- `:` is reserved for drive
+    letters there. The step id stored and compared is untouched; only the blob's
+    own filename on disk needs to be safe.
+    """
+    step_id = "details::0::one"
+    checkpoint = store.write("run1", step_id, {"v": 1})
+    assert checkpoint is not None
+    assert ":" not in checkpoint.path.name
+    assert store.read("run1", step_id) == {"v": 1}
+    assert store.exists("run1", step_id)
+
+
 # -- discard --------------------------------------------------------------------
 
 

@@ -1171,3 +1171,70 @@ the decision, its tradeoff, and the evidence available when it was made.
   resulting failed run) confirmed the actual CLI wiring, not just the unit
   tests: `smoke resumed from <id>: 0 reuse, 1 rerun, 0 refuse` /
   `a  rerun  prior attempt did not succeed (failed)`.
+
+## 2026-09-08 — G3 resume execution
+
+- **Decision:** `sclpl run --resume-from RUN [--force-resume STEP ...]` performs
+  a real resume. `run_workflow` calls the new `_resume()` helper (own
+  short-lived `db.History`/`checkpoints.Store`/`values.cache.Cache` handles,
+  separate from the run's real ones) right after preflight succeeds -- before
+  `_remember_start`, at the same phase as the pre-existing overwrite-denial
+  check -- so a refusal touches nothing that needs undoing: no history row, no
+  output lock, no connection. On success, every `"reuse"`-verdict step's
+  checkpointed value becomes a stub (the same mechanism `report.resolved.stubs`
+  already uses for a mode-pruned producer), and the plan actually handed to the
+  `Scheduler` is `report.plan.subgraph(kept)` with those nodes removed, so a
+  reused step is never scheduled -- not raced, not skipped at the last moment,
+  simply never a node in the graph the scheduler sees. The new run's own
+  `runs.parent_run_id` links it back. Two prerequisite gaps, both real and
+  neither visible until execution (not just planning) was wired up: `execute.py`
+  now actually calls `checkpoint_store.write()` for every cacheable step's
+  value (`Runtime.checkpoint_store`/`run_id`, new fields, gated on
+  `options.record` the same way history itself is) -- without this, G1/G2 had
+  no runtime that ever produced a checkpoint to resume from; and
+  `checkpoints.py`'s blob filename now sanitizes a step id before using it as a
+  path component, because a dynamic loop's real node id contains `control.MARK`
+  (`"::"`), which is not a valid filename on Windows.
+- **Why:** SPEC's G3 accept criteria: "a successful durable export is not
+  duplicated; an uncertain non-idempotent HTTP write is refused without an
+  explicit safe recovery policy." The refusal check running before any side
+  effect (matching the existing overwrite-check's own placement, not inventing
+  a new phase) is what makes "touched nothing that needs undoing" literally
+  true rather than a rollback promise. `--force-resume` is per-step rather than
+  a single blanket flag on purpose: SPEC says "explicit... policy," and a flag
+  that silences every refusal in one pass would let an operator wave through a
+  write they never actually looked at.
+- **Tradeoff:** a reused step's own `assert` is not re-verified against
+  today's workflow -- inherited from mode-pruning's stub mechanism (already
+  documented there, in `eligibility.check_stubbed_validation`'s own docstring),
+  not a new gap this batch introduces; closing it for stubs generally is
+  validation-layer work, not an execution-path concern. A resumed run's overall
+  `completeness` is capped at the parent's own recorded value whenever anything
+  was reused, rather than tracked per reused step (`run_steps` has no
+  per-step completeness column -- only the run-level aggregate F5 already
+  persists) -- a conservative, honest approximation: a step's data that was
+  never re-extracted this run cannot be *more* complete than it already was,
+  even though this occasionally overstates incompleteness when the reused step
+  itself was actually complete but a *different* step in the parent run was the
+  partial one. G4 (publication state recovery specifically -- generation
+  identifiers, completion receipts, destination-digest validation under C5
+  locks, ambiguous fixed-path multi-output commits) is not started.
+- **Evidence:** `tests/unit/test_resume_execution.py`, 5 tests against
+  `runner._resume()` directly: a partial parent caps the resumed run's own
+  completeness, a complete parent adds no penalty, the executed plan is
+  correctly pruned to exclude reused nodes (with the reused value present as a
+  stub), a refusal names the step and points at `--force-resume`, and
+  `--force-resume` lifts a refusal (the step then simply reruns as an ordinary
+  miss). `tests/unit/test_checkpoints.py` gained a regression test pinning the
+  Windows-filename fix directly (`"details::0::one"` round-trips, and its blob
+  filename contains no `:`). `tests/integration/test_resume_e2e.py`, 3 tests
+  through the real CLI end to end: a real failed run's succeeded step is never
+  re-fetched on `--resume-from` (`--no-cache` on the second attempt rules out
+  the ordinary response cache as the explanation), an unrelated workflow name
+  reruns everything with an honest "0 reused," and a non-idempotent write with
+  no confirmed-successful prior attempt blocks the resume entirely (no history
+  row for the blocked attempt at all) until `--force-resume` explicitly
+  acknowledges it. Full project suite: 1059 passed, 2 skipped (unchanged) --
+  zero regressions, including after the Windows-filename fix (which two
+  pre-existing, previously-passing integration tests caught immediately once
+  checkpoint writes went live on a real dynamic-loop workflow).

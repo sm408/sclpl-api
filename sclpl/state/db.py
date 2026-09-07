@@ -85,6 +85,11 @@ _UPGRADES: dict[int, str] = {
     3: """
         ALTER TABLE run_steps ADD COLUMN identity_key TEXT NOT NULL DEFAULT '';
     """,
+    #: G3: which run, if any, this one resumed from -- the link a later `runs show`
+    #: or lineage query follows back to see what was reused rather than redone.
+    4: """
+        ALTER TABLE runs ADD COLUMN parent_run_id TEXT NOT NULL DEFAULT '';
+    """,
 }
 
 
@@ -136,6 +141,8 @@ class RunRecord:
     #: (validated publication discarded everything because the run did not fully
     #: succeed), `"staged"`, or `"interrupted"` (E8's per-file replace failure).
     publication: str = "n/a"
+    #: G3: the run this one resumed from, or `""` for a run that started fresh.
+    parent_run_id: str = ""
     env: str | None = None
     pinned: bool = False
     log_path: str | None = None
@@ -209,7 +216,7 @@ class History:
             "finished_at", "duration_ms", "status", "exit_code", "steps_run",
             "steps_skipped", "steps_failed", "retries", "cache_hits", "cache_misses",
             "peak_rss_bytes", "bytes_in", "bytes_out", "completeness", "publication",
-            "env", "pinned", "log_path", "argv",
+            "parent_run_id", "env", "pinned", "log_path", "argv",
         ]  # fmt: skip
         values = [getattr(run, name) for name in columns]
         values[columns.index("pinned")] = int(run.pinned)

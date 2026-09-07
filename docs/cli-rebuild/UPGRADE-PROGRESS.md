@@ -390,3 +390,46 @@ See [the decision log](DECISION-LOG.md) for implementation tradeoffs and evidenc
   rerun, including per-iteration checkpoint checks inside a re-expanded dynamic
   loop) is G3. G4 (recovering publication without duplicating it) is also not
   started.
+- [x] G3 resume execution: `sclpl run --resume-from RUN` actually rehydrates a
+  prior run's reusable checkpoints and executes only what G2's plan says must
+  rerun, under a new run linked to its parent (new `runs.parent_run_id` column).
+  Two real gaps this closed, discovered only once execution -- not just
+  planning -- was wired up: (1) nothing had ever called `checkpoints.Store.write()`
+  from the actual run path, so G1/G2 had no data to ever find reusable in
+  practice; `execute.py`'s `run_step()` now checkpoints every cacheable step's
+  value (cache hit or a fresh fetch alike) under the run's own id, gated on
+  `--no-record` the same way history itself is, never on the run's own
+  `--no-cache`/`--refresh` flags. (2) a dynamic loop's real node id
+  (`control.MARK` is `"::"`) is not a valid filename on Windows -- `:` is
+  reserved for drive letters there -- so `checkpoints.py`'s blob path now
+  sanitizes the step id for the filesystem while leaving the id itself (stored
+  in SQLite, compared during planning) untouched; caught by a real integration
+  test failure, not by inspection, and now pinned with a dedicated unit test.
+  `runner._resume()` runs G2's `plan_resume` against short-lived history/
+  checkpoint/cache handles (nothing here is a side effect, so a refusal at this
+  point has touched nothing that needs undoing): a refused, unacknowledged step
+  fails the run before any history row, lock, or connection is opened, naming
+  every refused step and its reason with the remedy (`--force-resume STEP`,
+  repeatable, an explicit per-step acknowledgment, never a blanket bypass);
+  otherwise every reused step's checkpointed value becomes a stub (the exact
+  mechanism mode-pruning already uses for a value nothing in this run
+  produces) and the executed plan is `Plan.subgraph`-pruned to exclude them, so
+  a reused step is never scheduled at all, not merely fast. A resumed run's own
+  completeness can never read better than the parent's: a reused step's data
+  was never re-extracted by this run, so if the parent's own overall
+  completeness was `"partial"`/`"unknown"`, this run inherits that ceiling
+  (F5's own scope note anticipated exactly this, deferring it until checkpoints
+  existed to carry it through).
+- **Scope note:** a reused step's `assert` is not re-checked -- the same
+  pre-existing precedent as a mode stub (`eligibility.check_stubbed_validation`
+  already documents this for stubs generally; G3 does not introduce a new gap,
+  it inherits the one that already exists for mode-pruned values). Per-iteration
+  reuse inside a dynamic loop is not planned statically (G2's own documented
+  scope: a loop's body is not a node until it runs) -- G3 likewise does not
+  special-case it; the whole loop reruns as a unit if anything upstream of it
+  drifted, which is correct, if not maximally fine-grained. G4 (recovering
+  publication state itself without duplicating it -- generation identifiers,
+  completion receipts, destination-digest validation under C5 locks) is not
+  started; G3's own publication path is unaffected only in the sense that a
+  reused step was never scheduled, so it never appears as a failure either --
+  publication proceeds exactly as if every step, reused or rerun, succeeded.

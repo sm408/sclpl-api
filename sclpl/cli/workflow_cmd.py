@@ -135,6 +135,22 @@ def run(
             help="Spill intermediates past this, e.g. 4G. Default: half the machine.",
         ),
     ] = None,
+    resume_from: Annotated[
+        str | None,
+        typer.Option(
+            "--resume-from",
+            metavar="RUN",
+            help="Reuse eligible checkpointed steps from this prior run instead of redoing them.",
+        ),
+    ] = None,
+    force_resume: Annotated[
+        list[str] | None,
+        typer.Option(
+            "--force-resume",
+            metavar="STEP",
+            help="Acknowledge and rerun a step --resume-from would otherwise refuse. Repeatable.",
+        ),
+    ] = None,
 ) -> None:
     located = _locate(workflow)
     doc = located.doc
@@ -180,6 +196,8 @@ def run(
         fixture_root=replay,
         strict_replay=strict_replay,
         record_fixture_root=record_fixture,
+        resume_from=resume_from,
+        force_resume=frozenset(force_resume or ()),
     )
     globals_ = options_of(ctx)
     reporter = build_reporter(

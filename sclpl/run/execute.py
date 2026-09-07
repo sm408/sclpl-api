@@ -19,6 +19,7 @@ from sclpl.project import auth as auth_mod
 from sclpl.project.auth import Profile as AuthProfile
 from sclpl.render.events import StepProgress
 from sclpl.render.reporter import Reporter
+from sclpl.run import checkpoints as checkpoints_mod
 from sclpl.run import control, lanes, paginate
 from sclpl.run.ir import (
     FnConfig,
@@ -126,6 +127,14 @@ class Runtime:
     #: recompute the same key for a candidate run and compare, instead of guessing
     #: from the step's declared config alone.
     identity_keys: dict[str, str] = field(default_factory=dict)
+    #: G3: where this run's own eligible step values are durably checkpointed, so a
+    #: *later* run can resume from them. `None` disables it (`--no-record`, or a
+    #: caller with nothing to resume into) -- a checkpoint with no history row
+    #: naming its run is never reachable by a future `plan_resume` anyway.
+    checkpoint_store: checkpoints_mod.Store | None = None
+    #: G3: this run's own id, as it will appear in history -- what a checkpoint is
+    #: filed under. Set together with `checkpoint_store`; one implies the other.
+    run_id: str = ""
 
     def metric(self, step_id: str) -> StepMetrics:
         return self.metrics.setdefault(step_id, StepMetrics())
@@ -160,6 +169,7 @@ async def run_step(step: Step, node: Node, runtime: Runtime, *, node_id: str = "
                 # Still checked. A cached value that no longer satisfies an assertion is
                 # exactly the case the assertion exists for.
                 await _assert(step, hit.value, runtime)
+            _checkpoint(runtime, effective_id, hit.value)
             return hit.value
         if hit is not None and not hit.fresh:
             # Past its TTL, but `--http-cache` allows checking with the server before
@@ -179,7 +189,22 @@ async def run_step(step: Step, node: Node, runtime: Runtime, *, node_id: str = "
         runtime.cache.put(
             key, value, ttl=step.cache.ttl, step=step.id, etag=etag, modified=modified
         )
+    if key is not None and value is not SKIPPED:
+        _checkpoint(runtime, effective_id, value)
     return value
+
+
+def _checkpoint(runtime: Runtime, effective_id: str, value: Any) -> None:
+    """G3: durably file ``value`` under this run's own id, for a *later* resume.
+
+    A no-op without both a store and a run id -- `--no-record`, or a caller (a
+    test, `call`) with no history row for a future resume to ever find this
+    checkpoint by. `Store.write` itself is the other half of "eligible": an
+    unsupported shape (neither `Table` nor JSON) simply is not filed.
+    """
+    if runtime.checkpoint_store is None or not runtime.run_id:
+        return
+    runtime.checkpoint_store.write(runtime.run_id, effective_id, value)
 
 
 async def _cache_key(step: Step, runtime: Runtime) -> str | None:
