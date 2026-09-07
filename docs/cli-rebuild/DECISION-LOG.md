@@ -1050,3 +1050,48 @@ the decision, its tradeoff, and the evidence available when it was made.
   on; and an ordinary run's `completeness`/`publication` reach the real
   history database through the real CLI, not just the in-process `Result`
   the other tests check.
+
+## 2026-09-08 — G1 durable checkpoints
+
+- **Decision:** New `run/checkpoints.py` module, a `Store` with its own
+  SQLite database (`checkpoints.db`, separate from `history.db`) plus a
+  blob directory. `write(run_id, step_id, value)` is two-phase: write the
+  value to a scratch file beside its final name, `os.replace()` it into
+  place (cleanup of the scratch file happens in a `finally`, since
+  cancellation is a `BaseException` a plain `except Exception` would miss),
+  and only after that succeeds does an `INSERT OR REPLACE` commit the
+  metadata row. `read(run_id, step_id)` looks up the row, then re-hashes the
+  blob against the digest recorded at write time before trusting it --
+  file missing or changed since means `None`, the same as never having been
+  checkpointed. Only `Table` (Parquet) and strict-JSON-eligible values
+  (`json.dumps` with no `default=`) are checkpointed; everything else makes
+  `write()` return `None` rather than raise or invent a lossy encoding.
+- **Why:** the plan's own G1 accept criterion is that a checkpoint is
+  reusable "only after its blobs and metadata are durably committed" and
+  must survive "process termination before/after each persistence
+  boundary." Ordering the blob rename before the DB commit means the only
+  possible crash-window outcome is an orphaned blob with no row naming it --
+  which `read()` never sees, since it only ever consults the metadata table,
+  never the filesystem directly -- not a row pointing at a blob that was
+  never finished. Re-verifying the digest on every `read()` (not just
+  trusting a committed row) closes the remaining gap: a row can be durable
+  and correct at commit time and still stop being trustworthy later, if
+  something outside this module's control touches the file afterward.
+- **Tradeoff:** G1 ships as a standalone, currently-uncalled library.
+  Nothing in `runner.py` or `execute.py` invokes `Store.write()`/`read()`
+  yet -- that wiring, plus deciding which completed steps are even eligible
+  to resume from (a step whose completeness was itself `"partial"`, per
+  F5, should not silently be treated as reusable) is G2's job, kept as a
+  separate slice so this module's own durability contract can be tested in
+  isolation first, before anything depends on it.
+- **Evidence:** `tests/unit/test_checkpoints.py`, 14 tests: eligibility
+  (dict/Table eligible, set/arbitrary object not), exact round-trip for
+  both JSON and Parquet, an unsupported value never produces a blob or row,
+  reading a step that was never written is a clean `None`, writing twice
+  replaces the prior checkpoint, a blob written to disk with no committed
+  row is not reusable (the literal "died mid-write" case), no scratch file
+  survives a successful write, a blob tampered with or deleted after being
+  checkpointed is rejected on read (digest mismatch), and `discard()`
+  removes both the rows and the blob files for a run without touching
+  another run's checkpoints. Full project suite: 1037 passed, 2 skipped
+  (unchanged, pre-existing) -- zero regressions.

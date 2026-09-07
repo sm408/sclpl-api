@@ -324,3 +324,24 @@ See [the decision log](DECISION-LOG.md) for implementation tradeoffs and evidenc
   source data (`state/db.py`'s `RunRecord`/`StepRecord`, populated by the
   live run itself in `runner.py`/`execute.py`) -- there is no second,
   independently-computed path any of them could disagree with.
+- [x] G1 durable checkpoints: `run/checkpoints.py` is a new, self-contained
+  `Store` for a run's completed step values, kept separate from `history.db`
+  (its own `checkpoints.db`, same WAL pattern as F4). A checkpoint is only
+  ever "reusable" once two things are true on disk: the blob is written to a
+  scratch file and atomically renamed into its final place (never left
+  half-written where a crash could leave it -- cleanup on any failure,
+  cancellation included, runs in a `finally` since `CancelledError` is a
+  `BaseException`), and only after that succeeds does the SQLite metadata row
+  naming it get committed. `read()` never trusts the row alone: it re-hashes
+  the blob against the digest recorded at write time, so a file that changed
+  or vanished after being checkpointed is treated as if it were never
+  checkpointed at all, not silently reused. Only two value shapes are
+  eligible -- a `Table` (Parquet) and anything strict `json.dumps` accepts
+  with no `default=` fallback -- everything else is simply not checkpointed
+  (`write()` returns `None`, not an error); the step that produced it re-runs
+  on resume, which is always correct.
+- **Scope note:** G1 is deliberately a standalone library with zero callers
+  today -- nothing in `runner.py`/`execute.py` invokes `Store.write()` or
+  `read()` yet. Wiring it into the actual run/resume flow is G2 (resume
+  eligibility planning) and G3 (resume execution), kept as separate slices so
+  each piece is independently testable before the next depends on it.
