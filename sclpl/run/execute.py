@@ -49,6 +49,25 @@ SKIPPED = object()
 
 
 @dataclass(slots=True)
+class StepMetrics:
+    """F1: what a step actually cost, accumulated as it runs.
+
+    Not an event -- events are fired and forgotten. This is read back once, after
+    the whole run finishes, to fill in the history row (`state/db.py`'s
+    `StepRecord`), which is why it lives on `Runtime` rather than being emitted.
+    """
+
+    #: Every HTTP attempt this step made, summed across every request it issued --
+    #: more than one for a paginated step, and more than one attempt per request
+    #: for anything the transport retried.
+    attempts: int = 0
+    bytes_in: int = 0
+    bytes_out: int = 0
+    #: Whether this step's value came back from the cache without a request.
+    cache_hit: bool = False
+
+
+@dataclass(slots=True)
 class Runtime:
     """Everything a step needs in order to run."""
 
@@ -95,6 +114,12 @@ class Runtime:
     #: this instead of its real destination; `None` is the pre-existing, unchanged
     #: immediate-write path.
     publication: Ledger | None = None
+    #: F1: step id -> what it cost. Keyed by the step's own id, not the graph node
+    #: id, since a loop's iterations are one step for this purpose.
+    metrics: dict[str, StepMetrics] = field(default_factory=dict)
+
+    def metric(self, step_id: str) -> StepMetrics:
+        return self.metrics.setdefault(step_id, StepMetrics())
 
     def context(self, frame: Frame | None = None) -> Context:
         return Context(
@@ -120,6 +145,7 @@ async def run_step(step: Step, node: Node, runtime: Runtime, *, node_id: str = "
         hit = runtime.cache.get(key) if runtime.cache else None
         if hit is not None and hit.fresh:
             runtime.reporter.emit(StepProgress(id=step.id, detail="cached", current=1))
+            runtime.metric(effective_id).cache_hit = True
             if step.assert_:
                 # Still checked. A cached value that no longer satisfies an assertion is
                 # exactly the case the assertion exists for.
@@ -363,6 +389,9 @@ async def _http(step: Step, config: HttpConfig, node: Node, runtime: Runtime, no
             verify=config.verify,
             **kwargs,
         )
+        metric = runtime.metric(node_id)
+        metric.attempts += streamed.attempts
+        metric.bytes_in += streamed.bytes_written
         return {
             "status": streamed.status,
             "ok": 200 <= streamed.status < 300,
@@ -400,6 +429,14 @@ async def _http(step: Step, config: HttpConfig, node: Node, runtime: Runtime, no
             **call,
         )
         response = attempt.response
+        metric = runtime.metric(node_id)
+        metric.attempts += attempt.attempts
+        # `response.content` is always safely readable here (httpx has already read
+        # the body by the time a non-streaming request returns); `request.content`
+        # is not -- a GET's body stream is never marked read, and touching it raises
+        # `RequestNotRead`. Bytes sent is a smaller, riskier claim than bytes
+        # received, so this only counts the direction that is actually safe to ask.
+        metric.bytes_in += len(response.content)
         if (
             response.status_code == 401
             and not _retried_auth

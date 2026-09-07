@@ -21,11 +21,14 @@ import pytest
 from sclpl.render.plain import PlainSink
 from sclpl.render.redact import MASK
 from sclpl.render.reporter import Reporter
+from sclpl.run.execute import Runtime
 from sclpl.run.ir import WorkflowDoc
 from sclpl.run.preflight import Report
 from sclpl.run.runner import Options, _remember
 from sclpl.run.schedule import Outcome
+from sclpl.run.transport import Pool
 from sclpl.state import db
+from sclpl.values.store import ValueStore
 
 
 @pytest.fixture(autouse=True)
@@ -42,9 +45,14 @@ def make_reporter(secrets: list[str] = []) -> Reporter:  # noqa: B006 - never mu
     return reporter
 
 
+def _runtime(doc: WorkflowDoc, reporter: Reporter) -> Runtime:
+    return Runtime(doc=doc, store=ValueStore(), reporter=reporter, pool=Pool())
+
+
 def test_a_step_error_containing_a_resolved_secret_is_scrubbed(private_home: Path) -> None:
     doc = WorkflowDoc(name="orders")
     error = ValueError("auth failed with token hunter2-distinctive")
+    reporter = make_reporter(["hunter2-distinctive"])
     _remember(
         doc,
         Options(),
@@ -53,7 +61,8 @@ def test_a_step_error_containing_a_resolved_secret_is_scrubbed(private_home: Pat
         1,
         0.0,
         None,
-        make_reporter(["hunter2-distinctive"]),
+        reporter,
+        _runtime(doc, reporter),
     )
 
     with db.History() as history:
@@ -66,6 +75,7 @@ def test_a_step_error_containing_a_resolved_secret_is_scrubbed(private_home: Pat
 def test_a_step_error_with_no_resolved_secrets_is_left_readable(private_home: Path) -> None:
     doc = WorkflowDoc(name="orders")
     error = ValueError("connection refused")
+    reporter = make_reporter()
     _remember(
         doc,
         Options(),
@@ -74,7 +84,8 @@ def test_a_step_error_with_no_resolved_secrets_is_left_readable(private_home: Pa
         1,
         1.0,
         None,
-        make_reporter(),
+        reporter,
+        _runtime(doc, reporter),
     )
 
     with db.History() as history:

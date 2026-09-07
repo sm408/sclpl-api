@@ -86,6 +86,11 @@ class Outcome:
     failed: dict[str, BaseException] = field(default_factory=dict)
     skipped: list[str] = field(default_factory=list)
     duration_ms: int = 0
+    #: F1: node id -> how long it actually ran, and on which lane. Kept here rather
+    #: than only emitted as a `StepFinished` event, so history (`state/db.py`) can
+    #: persist the same numbers a live run showed instead of leaving them at zero.
+    step_durations: dict[str, int] = field(default_factory=dict)
+    step_lanes: dict[str, str] = field(default_factory=dict)
 
     @property
     def ok(self) -> bool:
@@ -288,18 +293,22 @@ class Scheduler:
 
     async def _execute(self, node: Node, runner: Runner) -> None:
         self._outcome.started.append(node.id)
-        self._reporter.emit(StepStarted(id=node.id, kind="step", lane=_lane_of(node)))
+        lane = _lane_of(node)
+        self._reporter.emit(StepStarted(id=node.id, kind="step", lane=lane))
         started = time.perf_counter()
+        self._outcome.step_lanes[node.id] = lane
         try:
             async with self._gate.hold(node):
                 value = await runner(node)
         except asyncio.CancelledError:
+            self._outcome.step_durations[node.id] = _ms(started)
             self._reporter.emit(
                 StepFinished(id=node.id, status="cancelled", duration_ms=_ms(started))
             )
             raise
         except (SclplError, Exception) as error:  # noqa: BLE001 - one step must not kill the run
             self._outcome.failed[node.id] = error
+            self._outcome.step_durations[node.id] = _ms(started)
             self._reporter.emit(
                 StepFinished(
                     id=node.id,
@@ -326,6 +335,7 @@ class Scheduler:
         )
         self._govern()
         self._outcome.succeeded.append(node.id)
+        self._outcome.step_durations[node.id] = _ms(started)
         self._reporter.emit(
             StepFinished(
                 id=node.id,

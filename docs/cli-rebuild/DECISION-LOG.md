@@ -797,3 +797,54 @@ the decision, its tradeoff, and the evidence available when it was made.
   and an empty table round-tripping as zero rows everywhere except CSV, where
   it now fails with a named, clear diagnostic instead of a confusing internal
   pandas one.
+
+## 2026-09-08 — F1 complete event measurements
+
+- **Decision:** `state/db.py`'s schema already carried columns for
+  `run_steps.attempts`/`duration_ms`/`cached`/`lane` and
+  `runs.bytes_in`/`bytes_out`/`retries`; `runner._remember` simply never wrote
+  to them. A new `execute.Runtime.metrics: dict[str, StepMetrics]`, keyed by
+  graph node id, accumulates HTTP attempts and response bytes as `_http`
+  issues each request (including every page of a paginated step) and marks a
+  cache hit in `run_step`. `schedule.Outcome` gained `step_durations` and
+  `step_lanes`, populated in `_execute` at the same three points it already
+  builds the live `StepFinished` event, so history gets the same numbers a
+  live run showed rather than re-deriving them. `_remember` now builds each
+  `StepRecord` from `outcome`/`runtime` instead of the schema's bare defaults,
+  and sums `bytes_in`/retries (attempts beyond the first, summed per step)
+  onto the `RunRecord`.
+- **Why:** SPEC F1's accept criterion is specific and checkable: "report
+  counts reconcile with observed local-server requests." Before this, every
+  persisted run showed `attempts=1` and `duration_ms=0` for every step
+  regardless of how many times it actually retried or how long it actually
+  took -- the columns were there, but nothing had ever been asked to look
+  correct against a real server, because nothing wrote real numbers into them.
+  Metrics are keyed by graph node id rather than the step's own id because a
+  loop's iterations share one step definition but are separate nodes with
+  separate HTTP activity; keying by step id would have merged an iteration's
+  attempts into its siblings'.
+- **Tradeoff:** `bytes_out` (request bytes sent) is not populated -- see the
+  regression below -- and stays at the schema's existing `0` default rather
+  than a guessed or partial number. Attempt counts are graph-node-scoped, so a
+  step that shares work across control-flow copies in ways not modeled as
+  separate nodes would not be reflected exactly right; this covers the actual
+  node structure the scheduler and `StepFinished` already use, not a
+  reinterpretation of it.
+- **Evidence:** A real, previously-passing test broke while building this:
+  `test_auth_does_not_survive_a_cross_origin_redirect` started failing with
+  httpx's `RequestNotRead` because the first version of this change read
+  `response.request.content` to count bytes sent, and a GET's body stream is
+  never marked read -- accessing it raises rather than returning an empty
+  byte string. Fixed by dropping bytes-sent accounting entirely rather than
+  guarding it defensively, since `response.content` (bytes received) is
+  always safely readable by the time a non-streaming request returns and
+  bytes-sent was the smaller, riskier claim of the two.
+  `tests/integration/test_run_metrics_e2e.py` proves the actual accept
+  criterion through the real `sclpl run` CLI and the local test server's own
+  `ATTEMPTS` counter (`tests/integration/conftest.py`): a step retried against
+  `/flaky/2` persists `attempts == 3`, matching the server's own count exactly,
+  with a real nonzero `duration_ms` and the correct lane; a second run against
+  an already-cached URL persists `cached=true` and `attempts == 1`; and a run
+  with one retry sums to `retries == 1` and a nonzero `bytes_in` on the
+  `RunRecord`. `tests/unit/test_runner.py`'s two existing `_remember` tests
+  were updated for the new required `runtime` parameter, unchanged otherwise.

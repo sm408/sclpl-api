@@ -284,7 +284,7 @@ async def run_workflow(doc: WorkflowDoc, options: Options, reporter: Reporter) -
         )
     )
     if options.record:
-        _remember(doc, options, report, outcome, exit_code, started, store_cache, reporter)
+        _remember(doc, options, report, outcome, exit_code, started, store_cache, reporter, runtime)
     return Result(outcome=outcome, report=report, store=store, exit_code=exit_code)
 
 
@@ -297,6 +297,7 @@ def _remember(
     started: float,
     store_cache: cache.Cache | None,
     reporter: Reporter,
+    runtime: Runtime,
 ) -> None:
     """Write the run to history, and prune.
 
@@ -306,6 +307,9 @@ def _remember(
     """
     try:
         identifier = options.run_id or db.run_id(doc.name, started)
+        bytes_in = sum(metric.bytes_in for metric in runtime.metrics.values())
+        bytes_out = sum(metric.bytes_out for metric in runtime.metrics.values())
+        retries = sum(max(0, metric.attempts - 1) for metric in runtime.metrics.values())
         record = db.RunRecord(
             id=identifier,
             name=options.name or db.default_name(doc.name, options.mode),
@@ -320,18 +324,16 @@ def _remember(
             steps_run=len(outcome.succeeded),
             steps_skipped=len(outcome.skipped),
             steps_failed=len(outcome.failed),
+            retries=retries,
             cache_hits=store_cache.stats.hits if store_cache else 0,
             cache_misses=store_cache.stats.misses if store_cache else 0,
             peak_rss_bytes=governor.rss(),
+            bytes_in=bytes_in,
+            bytes_out=bytes_out,
             env=options.env,
             tags=list(options.tags),
             argv=safe_args.render(sys.argv[1:]),
-            steps=[db.StepRecord(step_id=name, status="ok") for name in outcome.succeeded]
-            + [
-                db.StepRecord(step_id=name, status="failed", error=reporter.scrub(str(error)))
-                for name, error in outcome.failed.items()
-            ]
-            + [db.StepRecord(step_id=name, status="skipped") for name in outcome.skipped],
+            steps=_step_records(outcome, runtime, reporter),
             ports=[
                 (binding.direction, binding.name, binding.describe(), "")
                 for binding in (report.bindings.all() if report.bindings else [])
@@ -344,6 +346,31 @@ def _remember(
             history.prune(options.keep)
     except Exception:  # noqa: BLE001 - history is a convenience, never the run's verdict
         return
+
+
+def _step_records(outcome: Outcome, runtime: Runtime, reporter: Reporter) -> list[db.StepRecord]:
+    """F1: one persisted row per step, with the actual cost the live run measured."""
+
+    def record(name: str, status: str, error: str = "") -> db.StepRecord:
+        metric = runtime.metrics.get(name)
+        return db.StepRecord(
+            step_id=name,
+            status=status,
+            lane=outcome.step_lanes.get(name, "async"),
+            duration_ms=outcome.step_durations.get(name, 0),
+            attempts=max(1, metric.attempts) if metric else 1,
+            error=error,
+            cached=metric.cache_hit if metric else False,
+        )
+
+    return (
+        [record(name, "ok") for name in outcome.succeeded]
+        + [
+            record(name, "failed", reporter.scrub(str(error)))
+            for name, error in outcome.failed.items()
+        ]
+        + [record(name, "skipped") for name in outcome.skipped]
+    )
 
 
 def _remember_start(doc: WorkflowDoc, options: Options, report: Report, started: float) -> None:

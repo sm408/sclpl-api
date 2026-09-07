@@ -219,4 +219,25 @@ See [the decision log](DECISION-LOG.md) for implementation tradeoffs and evidenc
 - **Checkpoint E reached**: E3-E9 all have real coverage (E3/E5 foundation-scoped,
   E9's SQLite fidelity path explicitly out of scope). All five business workflows'
   existing replay tests, contracts, and negative cases continue to pass throughout.
-- [ ] E4 and E6-E9 remain in the dependency order defined by the plan.
+
+## Batch F
+
+- [x] F1 complete event measurements: `state/db.py`'s schema already had columns
+  for per-step `attempts`/`duration_ms`/`cached`/`lane` and per-run
+  `bytes_in`/`bytes_out`/`retries`, but `runner._remember` never populated them
+  -- every persisted run showed `attempts=1`, `duration_ms=0`, `cached=false`,
+  and zero bytes/retries regardless of what actually happened. A new
+  `execute.Runtime.metrics` (keyed by graph node id, not step id, so a loop's
+  separate iterations are tracked separately) accumulates HTTP attempts and
+  response bytes as `_http` makes each request, and a cache hit; `schedule.
+  Outcome` gained `step_durations`/`step_lanes`, populated at the same point
+  the live `StepFinished` event already computes them. `_remember` now builds
+  each `StepRecord` from these instead of leaving the schema's defaults, and
+  sums bytes/retries onto the `RunRecord`. Found and fixed a real regression
+  while testing this: reading `response.request.content` for a bytes-sent
+  count raised httpx's `RequestNotRead` on a GET whose body stream was never
+  marked read, breaking an unrelated existing auth-redirect test -- dropped
+  in favor of only counting bytes received, which is always safely readable
+  by the time a non-streaming request returns.
+- Every field this touches already existed in the schema; F1 is entirely about
+  actually writing to it. F2-F5 remain.
