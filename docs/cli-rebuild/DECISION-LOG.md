@@ -942,3 +942,41 @@ the decision, its tradeoff, and the evidence available when it was made.
   warning, flags a hand-edited file as modified since, reports "ambiguous: 2
   runs" when the same workflow writes the same path twice naming both runs,
   and fails clearly on a path no run ever produced.
+
+## 2026-09-08 — F4 retention consistency
+
+- **Decision:** `History`'s SQLite connection now sets `PRAGMA
+  journal_mode=WAL` once, at construction. Three new tests pin what was
+  already true rather than changing behavior: pruning down to `keep=1`
+  leaves a survivor's row, tags, ports (with their digest), steps (with
+  their attempts), and NDJSON log completely untouched; a crashed run left
+  at `status="running"` (what `_remember_start` writes before a single step
+  executes, if the process never reaches the matching `_remember`) prunes
+  like any other row instead of getting stuck; and a second `History`
+  connection can read while a first still holds the database open.
+- **Why:** SPEC F4's accept criterion is "pruning one run cannot break
+  another retained run," and its own verify list names concurrent readers
+  and crash leftovers directly. Auditing what the codebase actually shares
+  across runs today turned up nothing: no shared blob store, no
+  reference-counted artifact, nothing `_forget` could delete out from under
+  a survivor even by accident -- each run's NDJSON log is uniquely named by
+  its own id, and every `_forget(identifier)` call only ever touches rows
+  and a file scoped to that one id. The genuine gap was narrower than the
+  batch name suggests: without WAL, SQLite's default rollback-journal mode
+  can make a reader wait on (or fail against) a writer's lock, which is
+  exactly the "concurrent readers" case named in the verify list.
+- **Tradeoff:** Storage quotas, checkpoint-root protection, and
+  notification-reference protection are explicitly out of scope, not
+  silently missing: no quota mechanism exists anywhere in the codebase to
+  enforce, and checkpoints (G1) and notifications (I-batch) have not been
+  built yet, so there is nothing yet for retention to respect there. This is
+  the same "foundation now, extend when the dependency lands" scoping this
+  plan has already used for E5, E9's SQLite path, and E8's stdout spooling.
+- **Evidence:** `tests/unit/test_state.py` gained three tests:
+  `test_pruning_leaves_every_row_of_a_surviving_run_untouched` (a survivor's
+  data checked across `runs`, `run_tags`, `run_ports`, `run_steps`, and its
+  log file, not just the top-level row), `test_a_crashed_run_left_at_status_
+  running_is_pruned_like_any_other_row`, and `test_a_reader_is_not_blocked_
+  by_a_writer_in_wal_mode`. The full existing `test_state.py` suite (34
+  tests, including the pre-existing pin/prune coverage) and the full project
+  suite both still pass unchanged.

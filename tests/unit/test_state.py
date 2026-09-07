@@ -277,6 +277,73 @@ def test_pruning_removes_the_log_too(private_home: Path) -> None:
         assert not history.log_path("aaaa1111").exists()
 
 
+# -- F4: pruning leaves a retained run completely intact ----------------------------
+
+
+def test_pruning_leaves_every_row_of_a_surviving_run_untouched(private_home: Path) -> None:
+    """"Pruning one run cannot break another retained run" -- checked across every
+    table a run's data actually lives in, not just the `runs` row itself.
+    """
+    with db.History(private_home) as history:
+        survivor = db.RunRecord(
+            id="keep0001",
+            name="keep-me",
+            workflow="orders",
+            status="ok",
+            started_at="2026-01-05T00:00:00Z",
+            tags=["nightly"],
+            ports=[("out", "report", "report.csv", "abc123")],
+            steps=[db.StepRecord(step_id="fetch", status="ok", attempts=2)],
+        )
+        history.record(survivor)
+        history.log_path("keep0001").write_text("{}\n", encoding="utf-8")
+        for index in range(5):
+            record(history, f"doomed{index:04d}", started_at=f"2026-01-0{index + 1}T00:00:00Z")
+
+        dropped = history.prune(keep=1)
+
+        assert "keep0001" not in dropped
+        assert history.find("keep0001")["name"] == "keep-me"
+        assert history.tags_of("keep0001") == ["nightly"]
+        ports = history.ports_of("keep0001")
+        assert len(ports) == 1 and ports[0]["digest"] == "abc123"
+        steps = history.steps_of("keep0001")
+        assert len(steps) == 1 and steps[0]["attempts"] == 2
+        assert history.log_path("keep0001").exists()
+
+
+def test_a_crashed_run_left_at_status_running_is_pruned_like_any_other_row(
+    private_home: Path,
+) -> None:
+    """`_remember_start` (`run/runner.py`) writes a `status="running"` row before a
+    single step executes; a process that dies before `_remember` ever runs leaves
+    exactly this behind. It must not be special-cased or get stuck forever.
+    """
+    with db.History(private_home) as history:
+        record(history, "crashed1", status="running", started_at="2026-01-01T00:00:00Z")
+        for index in range(5):
+            record(history, f"newer{index:04d}", started_at=f"2026-01-0{index + 2}T00:00:00Z")
+
+        dropped = history.prune(keep=5)
+
+        assert "crashed1" in dropped
+        with pytest.raises(ValidationError):
+            history.find("crashed1")
+
+
+def test_a_reader_is_not_blocked_by_a_writer_in_wal_mode(private_home: Path) -> None:
+    """F4's "concurrent readers": a second connection to the same history must be
+    able to read while the first still holds it open, not fail with a locked error.
+    """
+    with db.History(private_home) as writer:
+        record(writer, "aaaa1111")
+        with db.History(private_home) as reader:
+            assert reader.find("aaaa1111")["id"] == "aaaa1111"
+        record(writer, "bbbb2222")
+        with db.History(private_home) as reader:
+            assert len(reader.recent(10)) == 2
+
+
 # -- diff and export ---------------------------------------------------------------------
 
 

@@ -166,6 +166,10 @@ class History:
         migrations.migrate(path, _SCHEMA)
         self._db = sqlite3.connect(path, isolation_level=None)
         self._db.row_factory = sqlite3.Row
+        # F4: WAL keeps a reader (`runs list` while another process prunes, say)
+        # from ever seeing "database is locked" -- a reader in WAL mode is served
+        # from the last committed snapshot instead of waiting on the writer's lock.
+        self._db.execute("PRAGMA journal_mode=WAL")
 
     # -- writing -----------------------------------------------------------------
 

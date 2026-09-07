@@ -274,3 +274,17 @@ See [the decision log](DECISION-LOG.md) for implementation tradeoffs and evidenc
   current bytes is reported as "modified since this run." `cli/`'s budget rose
   1,800 to 2,000 (ADR 0007) to fit the new command; F2 had already spent it
   down to 8 lines.
+- [x] F4 retention consistency: `History`'s SQLite connection now runs in WAL
+  journal mode, so a reader (`runs list`, `runs which`) is served from the
+  last committed snapshot instead of ever hitting "database is locked" while
+  another process prunes or records a run. Nothing in the current codebase
+  actually shares a blob or file across two runs' rows (each run's NDJSON log
+  is uniquely named, and `_forget` only ever touches the one run id it was
+  given), so "pruning one run cannot break another retained run" was already
+  true by construction; this batch adds direct, comprehensive proof of it
+  (every table a run's data lives in, not just the `runs` row) and confirms a
+  crashed run left at `status="running"` prunes like any other row rather
+  than getting stuck. Explicitly out of scope, and not yet applicable: storage
+  quotas (no such mechanism exists anywhere yet), checkpoint roots (G1, not
+  built), and notification references (I-batch, not built) -- there is
+  nothing for retention to respect there until those systems exist.
