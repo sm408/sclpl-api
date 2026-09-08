@@ -17,7 +17,7 @@ from sclpl.errors import AssertionFailed
 from sclpl.render.events import Event, LogRecord
 from sclpl.render.reporter import Reporter
 from sclpl.run.execute import Runtime, _assert, _preview
-from sclpl.run.ir import LetConfig, Step, WorkflowDoc
+from sclpl.run.ir import Step, WorkflowDoc
 from sclpl.run.transport import Pool
 from sclpl.values.store import ValueStore
 
@@ -36,7 +36,12 @@ class Recorder:
 
 
 def _step(assert_: str) -> Step:
-    return Step(id="fetch", kind="let", config=LetConfig(value=1), assert_=assert_)
+    # `assert` is a reserved word, so a step declaring one is always parsed from a
+    # dict (JSON/SCLPLL) through the model's alias -- never built with the Python
+    # keyword `assert_=`, which is also what trips up mypy's synthesized __init__ here.
+    return Step.model_validate(
+        {"id": "fetch", "kind": "let", "config": {"value": 1}, "assert": assert_}
+    )
 
 
 def _runtime(doc: WorkflowDoc, reporter: Reporter) -> Runtime:
