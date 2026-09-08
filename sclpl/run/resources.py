@@ -2,12 +2,11 @@
 
 from __future__ import annotations
 
-import hashlib
 import shutil
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from sclpl.ext.resources import ResourceConflict, ResourceNotFound, ResourceRef, resource_provider
+from sclpl.ext.resources import ResourceNotFound, ResourceRef, resource_provider
 from sclpl.run.ports import Bindings
 from sclpl.state.db import default_root
 

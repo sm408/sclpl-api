@@ -29,6 +29,7 @@ from sclpl.render.events import RunFinished, RunStarted
 from sclpl.render.reporter import Reporter
 from sclpl.run import checkpoints as checkpoints_mod
 from sclpl.run import lanes
+from sclpl.run import resources as resources_mod
 from sclpl.run import resume as resume_mod
 from sclpl.run.compile_plan import hosts
 from sclpl.run.execute import SKIPPED, Runtime, collect, run_injected, run_step
@@ -37,7 +38,6 @@ from sclpl.run.ir import HttpConfig, WorkflowDoc
 from sclpl.run.plan import Node, Plan
 from sclpl.run.preflight import Report, preflight
 from sclpl.run.publication import Ledger, discard, publish
-from sclpl.run import resources as resources_mod
 from sclpl.run.schedule import JOIN_SUFFIX, ExpandSpec, Limits, Outcome, Scheduler
 from sclpl.run.transport import Pool, TransportLimits
 from sclpl.state import db, locking, safe_args
@@ -337,7 +337,11 @@ async def run_workflow(doc: WorkflowDoc, options: Options, reporter: Reporter) -
                 publication_state = _finish_publication(
                     ledger, doc, options, outcome, started, reporter
                 )
-            if outcome.status == "ok" and prepared_resources is not None and prepared_resources.outputs:
+            if (
+                outcome.status == "ok"
+                and prepared_resources is not None
+                and prepared_resources.outputs
+            ):
                 resources_mod.publish(prepared_resources, overwrite=options.overwrite)
             if store_cache is not None:
                 if store_cache.stats.hits or store_cache.stats.writes:

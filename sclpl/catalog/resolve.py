@@ -14,9 +14,9 @@ confusion that costs an afternoon.
 
 from __future__ import annotations
 
+import hashlib
 from dataclasses import dataclass
 from pathlib import Path
-import hashlib
 
 from sclpl.errors import UnknownTarget, did_you_mean
 from sclpl.ext.resources import ResourceNotFound, resource_provider, resource_scheme
@@ -86,12 +86,19 @@ def _resolve_resource(target: str) -> Located:
         found = [candidate for candidate in candidates if provider.exists(candidate)]
         if len(found) != 1:
             if len(found) == 2:
-                raise UnknownTarget(f"remote workflow bundle {provider.display_uri(uri)} is ambiguous")
-            raise UnknownTarget(f"remote workflow bundle {provider.display_uri(uri)} has no workflow.sclpll or workflow.json")
+                raise UnknownTarget(
+                    f"remote workflow bundle {provider.display_uri(uri)} is ambiguous"
+                )
+            display = provider.display_uri(uri)
+            raise UnknownTarget(
+                f"remote workflow bundle {display} has no workflow.sclpll or workflow.json"
+            )
         uri = found[0]
     suffix = Path(uri).suffix.lower()
     if suffix not in SUFFIXES:
-        raise UnknownTarget(f"remote workflow {provider.display_uri(uri)} needs a .sclpll or .json suffix")
+        raise UnknownTarget(
+            f"remote workflow {provider.display_uri(uri)} needs a .sclpll or .json suffix"
+        )
     root = Path.home() / ".sclpl" / "tmp" / "workflows"
     root.mkdir(parents=True, exist_ok=True)
     staged = root / f"{hashlib.sha256(uri.encode()).hexdigest()[:16]}{suffix}"
@@ -100,7 +107,9 @@ def _resolve_resource(target: str) -> Located:
             provider.download(uri, handle)
     except ResourceNotFound as error:
         staged.unlink(missing_ok=True)
-        raise UnknownTarget(f"remote workflow {provider.display_uri(uri)} does not exist") from error
+        raise UnknownTarget(
+            f"remote workflow {provider.display_uri(uri)} does not exist"
+        ) from error
     return Located(doc=load(staged), path=staged, source="resource", origin_uri=uri)
 
 
