@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 from io import BytesIO
+import io
 
 import pytest
 
 from sclpl.catalog.resolve import resolve
+from sclpl import bootstrap
 from sclpl.ext.resources import (
     ResourceCapabilities,
     ResourceConflict,
@@ -18,6 +20,10 @@ from sclpl.ext.resources import (
 from sclpl.run.ir import Port, WorkflowDoc
 from sclpl.run.ports import bind
 from sclpl.run.resources import prepare, publish
+from sclpl.render.plain import PlainSink
+from sclpl.render.reporter import Reporter
+from sclpl.run.runner import Options, run_workflow
+from sclpl.run.sclpll import parse
 
 
 class Memory:
@@ -106,3 +112,27 @@ def test_remote_inputs_materialize_and_outputs_publish_through_provider(tmp_path
     bindings.outputs["report"].path.write_bytes(b"id\n2\n")
     publish(prepared, overwrite=False)
     assert provider.objects["memory://jobs/orders/outputs/report.csv"] == b"id\n2\n"
+
+
+@pytest.mark.asyncio
+async def test_a_remote_output_runs_through_the_existing_writer_then_publishes(tmp_path) -> None:
+    bootstrap.load(plugins=False)
+    provider = Memory()
+    register_resource_provider("memory", provider)
+    doc = parse(
+        "@workflow orders\n\n@output report:csv\n\n@step rows\n  let [{\"n\": 1}]\n"
+        "@step write -> report\n  save_csv @rows\n"
+    )
+    async with Reporter([PlainSink(io.StringIO(), verbosity=-2)]) as reporter:
+        result = await run_workflow(
+            doc,
+            Options(
+                resource_base="memory://jobs/orders/",
+                record=False,
+                no_cache=True,
+                scratch_dir=tmp_path / "run",
+            ),
+            reporter,
+        )
+    assert result.ok
+    assert provider.objects["memory://jobs/orders/outputs/report.csv"].replace(b"\r\n", b"\n") == b"n\n1\n"
