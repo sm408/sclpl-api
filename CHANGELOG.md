@@ -5,6 +5,8 @@ once the public package API is declared stable.
 
 ## Unreleased
 
+- Fixed: raised the `pyarrow` dependency floor to `>=22,<26` so installation succeeds
+  on Python 3.14, where no wheel exists below `pyarrow` 22.
 - Continued documentation and repository maintenance.
 
 ## 0.1.0
