@@ -362,3 +362,48 @@ async def test_explode_gives_each_element_its_own_row(ctx: Context) -> None:
 async def test_saving_by_extension_alone(ctx: Context, tmp_path: Path) -> None:
     await run(f"save(@orders, '{(tmp_path / 'out.ndjson').as_posix()}')", ctx)
     assert len((tmp_path / "out.ndjson").read_text(encoding="utf-8").strip().splitlines()) == 3
+
+
+# -- control ----------------------------------------------------------------------
+
+
+async def test_sleep_waits_roughly_the_requested_milliseconds(ctx: Context) -> None:
+    """A loose bound, not an exact one: coarse OS timer resolution (Windows in
+    particular defaults to ~15ms ticks) can return an `asyncio.sleep` a few
+    milliseconds early, so this only checks the wait is in the right ballpark.
+    """
+    import time
+
+    started = time.monotonic()
+    assert await run("sleep(50)", ctx) == 50
+    assert time.monotonic() - started >= 0.03
+
+
+async def test_sleep_of_zero_returns_immediately(ctx: Context) -> None:
+    assert await run("sleep(0)", ctx) == 0
+
+
+async def test_sleep_coerces_a_string_from_a_workflow_file(ctx: Context) -> None:
+    assert await run("sleep('5')", ctx) == 5
+
+
+async def test_sleep_rejects_a_negative_duration(ctx: Context) -> None:
+    with pytest.raises(ValidationError, match="-1"):
+        await run("sleep(-1)", ctx)
+
+
+async def test_sleep_does_not_block_another_step_on_the_same_loop(ctx: Context) -> None:
+    """The event-loop lane is the point: other work keeps running while this waits."""
+    import asyncio
+
+    order: list[str] = []
+
+    async def slower() -> None:
+        await run("sleep(20)", ctx)
+        order.append("sleep")
+
+    async def faster() -> None:
+        order.append("other")
+
+    await asyncio.gather(slower(), faster())
+    assert order == ["other", "sleep"]

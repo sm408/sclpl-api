@@ -51,6 +51,7 @@
 | `save_parquet(data, path)` | Write records to Parquet: columnar, compressed, and typed. |
 | `secret(name, env='default')` | The named credential. Fails loudly rather than sending an empty header. |
 | `select(data, *columns)` | Keep only the named columns. |
+| `sleep(ms)` | Pause the step for ms milliseconds, then return ms. |
 | `sort_by(data, by, descending=false)` | Sort records by one or more columns. |
 | `to_table(data)` | Convert records into a table. |
 
