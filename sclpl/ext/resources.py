@@ -132,6 +132,12 @@ def resource_ref(uri: str) -> ResourceRef:
     return ResourceRef(uri=normalized, scheme=provider.scheme.lower())
 
 
+def display_resource_uri(uri: str) -> str:
+    """Render a provider-owned URI without credentials or opaque query secrets."""
+    provider = resource_provider(uri)
+    return provider.display_uri(provider.normalize(uri))
+
+
 def clear_resource_providers() -> None:
     """Test-only reset; not re-exported by the public plugin API."""
     _PROVIDERS.clear()

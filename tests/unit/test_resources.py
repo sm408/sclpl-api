@@ -15,6 +15,9 @@ from sclpl.ext.resources import (
     resource_provider,
     resource_ref,
 )
+from sclpl.run.ir import Port, WorkflowDoc
+from sclpl.run.ports import bind
+from sclpl.run.resources import prepare, publish
 
 
 class Memory:
@@ -46,6 +49,9 @@ class Memory:
         return ResourceInfo(uri=uri)
 
     def upload(self, source: BytesIO, uri: str, *, overwrite: bool = False, expected_revision: str | None = None) -> ResourceInfo:
+        if uri in self.objects and not overwrite:
+            raise ResourceConflict("already exists")
+        self.objects[uri] = source.read()
         return ResourceInfo(uri=uri)
 
     def display_uri(self, uri: str) -> str:
@@ -84,3 +90,19 @@ def test_remote_bundle_loads_and_preserves_its_logical_origin(tmp_path, monkeypa
     located = resolve("memory://jobs/orders/")
     assert located.doc.name == "orders"
     assert located.origin_uri == "memory://jobs/orders/workflow.sclpll"
+
+
+def test_remote_inputs_materialize_and_outputs_publish_through_provider(tmp_path) -> None:
+    provider = Memory({"memory://jobs/orders/inputs/customers.csv": b"id\n1\n"})
+    register_resource_provider("memory", provider)
+    doc = WorkflowDoc(
+        name="orders",
+        inputs=[Port(name="customers", format="csv")],
+        outputs=[Port(name="report", format="csv")],
+    )
+    bindings = bind(doc, resource_base="memory://jobs/orders/")
+    prepared = prepare(bindings, run_id="resource-test", root=tmp_path / "stage")
+    assert bindings.inputs["customers"].path.read_bytes() == b"id\n1\n"
+    bindings.outputs["report"].path.write_bytes(b"id\n2\n")
+    publish(prepared, overwrite=False)
+    assert provider.objects["memory://jobs/orders/outputs/report.csv"] == b"id\n2\n"

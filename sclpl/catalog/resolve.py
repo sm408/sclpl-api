@@ -80,8 +80,9 @@ def _resolve_resource(target: str) -> Located:
     """Stage and parse a provider workflow without teaching core about its scheme."""
     provider = resource_provider(target)
     uri = provider.normalize(target)
-    if uri.endswith("/"):
-        candidates = [f"{uri}workflow.sclpll", f"{uri}workflow.json"]
+    if target.endswith("/"):
+        root = f"{uri.rstrip('/')}/"
+        candidates = [f"{root}workflow.sclpll", f"{root}workflow.json"]
         found = [candidate for candidate in candidates if provider.exists(candidate)]
         if len(found) != 1:
             if len(found) == 2:

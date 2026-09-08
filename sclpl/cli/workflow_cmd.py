@@ -198,6 +198,7 @@ def run(
         record_fixture_root=record_fixture,
         resume_from=resume_from,
         force_resume=frozenset(force_resume or ()),
+        resource_base=located.origin_uri,
     )
     globals_ = options_of(ctx)
     reporter = build_reporter(
