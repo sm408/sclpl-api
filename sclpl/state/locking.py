@@ -50,20 +50,6 @@ class Lock:
             self._handle.close()
             self._handle = None
             self._owner_path.unlink(missing_ok=True)
-            # Also remove the lock file itself -- left behind otherwise, it just
-            # accumulates beside real output files forever (a user running workflows
-            # against a real project noticed exactly this: stray `.sclpl-lock` files
-            # next to every export). This has to happen after `_unlock`/`close`, not
-            # before: Windows refuses to delete a file any open handle still holds,
-            # locked or not. Best-effort only: on Windows, a waiter that already
-            # opened this same path before we got here can still hold Windows'
-            # OS-level deny-delete on it even after our own close, so a losing
-            # PermissionError here just means the file stays -- exactly today's
-            # behavior, not a new failure -- rather than surfacing to the caller.
-            # Leaving it behind is always safe; only deleting it out from under an
-            # active waiter would not be, and this ordering never does that.
-            with contextlib.suppress(OSError):
-                self.path.unlink()
 
     @property
     def _owner_path(self) -> Path:
