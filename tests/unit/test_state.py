@@ -281,7 +281,7 @@ def test_pruning_removes_the_log_too(private_home: Path) -> None:
 
 
 def test_pruning_leaves_every_row_of_a_surviving_run_untouched(private_home: Path) -> None:
-    """"Pruning one run cannot break another retained run" -- checked across every
+    """ "Pruning one run cannot break another retained run" -- checked across every
     table a run's data actually lives in, not just the `runs` row itself.
     """
     with db.History(private_home) as history:
