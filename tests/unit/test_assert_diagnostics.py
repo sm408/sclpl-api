@@ -43,6 +43,14 @@ def _runtime(doc: WorkflowDoc, reporter: Reporter) -> Runtime:
     return Runtime(doc=doc, store=ValueStore(), reporter=reporter, pool=Pool())
 
 
+def _debug_records(recorder: Recorder) -> list[LogRecord]:
+    return [
+        event
+        for event in recorder.events
+        if isinstance(event, LogRecord) and event.level == "debug"
+    ]
+
+
 async def test_a_failed_assertion_logs_the_value_it_checked_at_debug_level() -> None:
     recorder = Recorder()
     doc = WorkflowDoc(name="orders")
@@ -50,9 +58,7 @@ async def test_a_failed_assertion_logs_the_value_it_checked_at_debug_level() -> 
         with pytest.raises(AssertionFailed):
             await _assert(_step("false"), {"status": 500}, _runtime(doc, reporter))
 
-    debug_records = [
-        event for event in recorder.events if isinstance(event, LogRecord) and event.level == "debug"
-    ]
+    debug_records = _debug_records(recorder)
     assert len(debug_records) == 1
     assert debug_records[0].step == "fetch"
     assert "500" in debug_records[0].message
@@ -76,9 +82,7 @@ async def test_a_resolved_secret_in_the_checked_value_is_still_redacted() -> Non
                 _step("false"), {"token": "hunter2-distinctive"}, _runtime(doc, reporter)
             )
 
-    debug_records = [
-        event for event in recorder.events if isinstance(event, LogRecord) and event.level == "debug"
-    ]
+    debug_records = _debug_records(recorder)
     assert len(debug_records) == 1
     assert "hunter2-distinctive" not in debug_records[0].message
 
