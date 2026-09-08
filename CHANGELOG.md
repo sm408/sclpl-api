@@ -21,6 +21,12 @@ once the public package API is declared stable.
   `check_output`'s resolved-path comparison against the declared roots already
   enforced the real security boundary; the root's own location no longer has to
   stay inside the project tree to be declared.
+- Fixed: two runs recorded in the same second (`started_at` has one-second
+  resolution) could come back from `runs`/history queries in either order,
+  since nothing broke the tie -- `history recent`, `find`, `search`,
+  `producers_of`, and `prune` now all break a timestamp tie by insertion order,
+  so "most recent" is deterministic instead of whatever a tied `ORDER BY`
+  scan happened to return.
 - Continued documentation and repository maintenance.
 
 ## 0.1.0

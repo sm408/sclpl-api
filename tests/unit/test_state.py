@@ -174,6 +174,20 @@ def test_a_run_is_found_by_name(private_home: Path) -> None:
         assert history.find("nightly")["id"] == "aaaa1111"
 
 
+def test_recent_breaks_a_started_at_tie_by_insertion_order(private_home: Path) -> None:
+    """`started_at` has one-second resolution -- two runs finishing in the same tick
+    (easy on a fast machine, not just in theory) must still order deterministically:
+    the one recorded second is the more recent one, not whatever a tied `ORDER BY`
+    happened to return.
+    """
+    with db.History(private_home) as history:
+        same_second = db.now()
+        record(history, "aaaa1111", name="first", started_at=same_second)
+        record(history, "bbbb2222", name="second", started_at=same_second)
+        assert history.recent(limit=1)[0]["name"] == "second"
+        assert history.recent(limit=1, workflow="orders")[0]["name"] == "second"
+
+
 def test_a_unique_prefix_is_enough(private_home: Path) -> None:
     """Nobody wants to type eight hex characters correctly."""
     with db.History(private_home) as history:
@@ -290,7 +304,10 @@ def test_pruning_leaves_every_row_of_a_surviving_run_untouched(private_home: Pat
             name="keep-me",
             workflow="orders",
             status="ok",
-            started_at="2026-01-05T00:00:00Z",
+            # Strictly after every "doomed" run below (which run through
+            # 2026-01-05) -- a tie here would depend on tie-breaking order rather
+            # than on what this test is actually about.
+            started_at="2026-01-06T00:00:00Z",
             tags=["nightly"],
             ports=[("out", "report", "report.csv", "abc123")],
             steps=[db.StepRecord(step_id="fetch", status="ok", attempts=2)],
