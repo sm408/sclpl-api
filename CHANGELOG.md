@@ -15,6 +15,12 @@ once the public package API is declared stable.
   in `state/locking.py`, an `importlib.metadata` typing change in `ext/plugins.py`,
   and missing annotations in `test_test_manifests.py` -- all pre-existing, surfaced
   once the also-pre-existing `ruff format` drift ahead of them was fixed.
+- Fixed: declaring a `policy.output_roots` entry that is a symlink to a location
+  outside the project (the ordinary shape of a mounted Docker/Kubernetes volume)
+  failed to parse at all, refusing every workflow run in that project outright.
+  `check_output`'s resolved-path comparison against the declared roots already
+  enforced the real security boundary; the root's own location no longer has to
+  stay inside the project tree to be declared.
 - Continued documentation and repository maintenance.
 
 ## 0.1.0

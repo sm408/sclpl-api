@@ -125,10 +125,33 @@ def parse(project: ProjectContext) -> Policy:
 
     return Policy(
         allowed_hosts=frozenset(allowed_hosts) if allowed_hosts is not None else None,
-        output_roots=tuple(project.resolve_path(item) for item in (output_root_values or ())),
+        output_roots=tuple(
+            _resolve_output_root(project, item) for item in (output_root_values or ())
+        ),
         overwrite=overwrite,
         deny_capabilities=frozenset(deny_values),
     )
+
+
+def _resolve_output_root(project: ProjectContext, value: str) -> Path:
+    """Resolve a declared output root, following symlinks to their real destination.
+
+    Unlike `ProjectContext.resolve_path` (used for workflow/test source directories,
+    where landing outside the project tree is itself the thing to prevent), an output
+    root is routinely a symlink to a mounted volume that lives outside the project
+    entirely -- a container mounting its data volume at `outputs` is the ordinary
+    case, not an attack. The security boundary that matters for outputs is
+    `check_output` comparing an actual write target's resolved path against this
+    resolved root, not where the declared root itself happens to live -- so, unlike
+    `resolve_path`, this does not also require the resolved root to stay under
+    `project.root`.
+    """
+    path = Path(value)
+    if path.is_absolute():
+        raise ValidationError(
+            "policy.output_roots must be relative", where=str(project.manifest_path)
+        )
+    return (project.root / path).resolve()
 
 
 def _optional_string_list(raw: dict[str, object], key: str, where: Path) -> list[str] | None:
