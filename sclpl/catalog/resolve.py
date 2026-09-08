@@ -81,8 +81,8 @@ def _resolve_resource(target: str) -> Located:
     provider = resource_provider(target)
     uri = provider.normalize(target)
     if target.endswith("/"):
-        root = f"{uri.rstrip('/')}/"
-        candidates = [f"{root}workflow.sclpll", f"{root}workflow.json"]
+        bundle_root = f"{uri.rstrip('/')}/"
+        candidates = [f"{bundle_root}workflow.sclpll", f"{bundle_root}workflow.json"]
         found = [candidate for candidate in candidates if provider.exists(candidate)]
         if len(found) != 1:
             if len(found) == 2:

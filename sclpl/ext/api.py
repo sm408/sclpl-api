@@ -48,10 +48,17 @@ from sclpl.tables.base import (
 from sclpl.tables.flatten import flatten_records, infer_schema, records_of
 from sclpl.values.ref import register_reader
 from sclpl.ext.resources import (
+    ResourceAuthenticationError,
+    ResourceConflict,
     ResourceCapabilities,
     ResourceInfo,
+    ResourceInvalidURI,
+    ResourceNotFound,
+    ResourcePermissionDenied,
     ResourceProvider,
     ResourceRef,
+    ResourceUnavailable,
+    ResourceUnsupportedOperation,
     register_resource_provider,
 )
 
@@ -83,9 +90,16 @@ def connector(name: str, *, lane: str | None = None, version: int = 1) -> Callab
 __all__ = [
     "API_VERSION",
     "ResourceCapabilities",
+    "ResourceAuthenticationError",
+    "ResourceConflict",
     "ResourceInfo",
+    "ResourceInvalidURI",
+    "ResourceNotFound",
+    "ResourcePermissionDenied",
     "ResourceProvider",
     "ResourceRef",
+    "ResourceUnavailable",
+    "ResourceUnsupportedOperation",
     "AssertionFailed",
     "MissingExtra",
     "SclplError",

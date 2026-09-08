@@ -8,14 +8,16 @@ from datetime import datetime
 from typing import Any, BinaryIO
 from urllib.parse import urlsplit, urlunsplit
 
-from sclpl.ext.api import ResourceCapabilities, ResourceInfo
-from sclpl.ext.resources import (
+from sclpl.ext.api import (
+    ResourceCapabilities,
     ResourceAuthenticationError,
     ResourceConflict,
+    ResourceInfo,
     ResourceInvalidURI,
     ResourceNotFound,
     ResourcePermissionDenied,
     ResourceUnavailable,
+    SclplError,
 )
 
 
@@ -103,7 +105,7 @@ class AzureBlobProvider:
             client = self._blob(uri)
             kwargs: dict[str, Any] = {"overwrite": overwrite}
             if expected_revision is not None:
-                from azure.core import MatchConditions  # type: ignore[import-not-found]
+                from azure.core import MatchConditions
 
                 kwargs.update(etag=expected_revision, match_condition=MatchConditions.IfNotModified)
             elif not overwrite:
@@ -119,8 +121,8 @@ class AzureBlobProvider:
 
     def _service(self, account: str) -> Any:
         try:
-            from azure.identity import DefaultAzureCredential  # type: ignore[import-not-found]
-            from azure.storage.blob import BlobServiceClient  # type: ignore[import-not-found]
+            from azure.identity import DefaultAzureCredential  # type: ignore[import-untyped]
+            from azure.storage.blob import BlobServiceClient
         except ImportError as error:
             raise ResourceUnavailable("azblob requires: pip install sclpl-azure-blob") from error
         return BlobServiceClient(f"https://{account}.blob.core.windows.net", credential=DefaultAzureCredential())
@@ -138,7 +140,7 @@ class AzureBlobProvider:
             content_type=getattr(getattr(props, "content_settings", None), "content_type", None),
         )
 
-    def _translate(self, error: Exception, uri: str):
+    def _translate(self, error: Exception, uri: str) -> SclplError:
         status = getattr(error, "status_code", None)
         message = f"Azure Blob {self.display_uri(uri)}: {error}"
         if status == 404:
