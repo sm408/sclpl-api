@@ -198,6 +198,7 @@ def run(
         record_fixture_root=record_fixture,
         resume_from=resume_from,
         force_resume=frozenset(force_resume or ()),
+        resource_base=located.origin_uri,
     )
     globals_ = options_of(ctx)
     reporter = build_reporter(
@@ -231,8 +232,11 @@ def validate(
     mode: ModeOpt = None,
 ) -> None:
     """Preflight only: parse, resolve, check the graph and the ports."""
-    doc = _load(workflow)
-    report = preflight(doc, mode=mode, check_files=False, require_ports=False)
+    located = _locate(workflow)
+    doc = located.doc
+    report = preflight(
+        doc, mode=mode, check_files=False, require_ports=False, resource_base=located.origin_uri
+    )
     del ctx
 
     if report.ok:
@@ -256,8 +260,11 @@ def explain(
     ] = False,
 ) -> None:
     """Print the plan: order, dependencies, and the critical path."""
-    doc = _load(workflow)
-    report = preflight(doc, mode=mode, check_files=False, require_ports=False)
+    located = _locate(workflow)
+    doc = located.doc
+    report = preflight(
+        doc, mode=mode, check_files=False, require_ports=False, resource_base=located.origin_uri
+    )
     del ctx
     if not report.ok:
         for problem in report.problems:

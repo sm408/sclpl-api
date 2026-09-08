@@ -37,6 +37,7 @@ from sclpl.run.ir import HttpConfig, WorkflowDoc
 from sclpl.run.plan import Node, Plan
 from sclpl.run.preflight import Report, preflight
 from sclpl.run.publication import Ledger, discard, publish
+from sclpl.run import resources as resources_mod
 from sclpl.run.schedule import JOIN_SUFFIX, ExpandSpec, Limits, Outcome, Scheduler
 from sclpl.run.transport import Pool, TransportLimits
 from sclpl.state import db, locking, safe_args
@@ -103,6 +104,8 @@ class Options:
     #: Rerunning it anyway is a deliberate operator decision; this only silences
     #: the refusal, it does not make the rerun itself any safer.
     force_resume: frozenset[str] = frozenset()
+    #: Logical base URI of a remotely loaded workflow, if any.
+    resource_base: str | None = None
 
 
 @dataclass(slots=True)
@@ -132,6 +135,7 @@ async def run_workflow(doc: WorkflowDoc, options: Options, reporter: Reporter) -
         positional=options.positional,
         check_files=options.validate,
         policy=project_policy,
+        resource_base=options.resource_base,
     )
     for note in report.notes:
         reporter.log("info", note)
@@ -226,6 +230,15 @@ async def run_workflow(doc: WorkflowDoc, options: Options, reporter: Reporter) -
             )
         )
         return Result(report=report, exit_code=0)
+
+    assert report.bindings is not None
+    prepared_resources = None
+    if any(binding.resources for binding in report.bindings.all()):
+        prepared_resources = resources_mod.prepare(
+            report.bindings,
+            run_id=options.run_id or db.run_id(doc.name, started),
+            root=options.scratch_dir,
+        )
 
     limits = _limits(doc, options)
     store = ValueStore(keep_all=options.keep_all, scratch=Scratch(options.scratch_dir))
@@ -324,6 +337,8 @@ async def run_workflow(doc: WorkflowDoc, options: Options, reporter: Reporter) -
                 publication_state = _finish_publication(
                     ledger, doc, options, outcome, started, reporter
                 )
+            if outcome.status == "ok" and prepared_resources is not None and prepared_resources.outputs:
+                resources_mod.publish(prepared_resources, overwrite=options.overwrite)
             if store_cache is not None:
                 if store_cache.stats.hits or store_cache.stats.writes:
                     reporter.log("info", store_cache.stats.summary())

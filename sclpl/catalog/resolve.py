@@ -16,8 +16,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
+import hashlib
 
 from sclpl.errors import UnknownTarget, did_you_mean
+from sclpl.ext.resources import ResourceNotFound, resource_provider, resource_scheme
 from sclpl.run import compile_json
 from sclpl.run.ir import WorkflowDoc
 from sclpl.run.sclpll import parse as parse_sclpll
@@ -36,6 +38,8 @@ class Located:
     doc: WorkflowDoc
     path: Path
     source: str  # "path" | "cwd" | "project" | "user"
+    #: The logical remote identity, retained after its bytes are staged locally.
+    origin_uri: str | None = None
 
     def describe(self) -> str:
         return f"{self.doc.name} ({self.source}: {self.path})"
@@ -51,6 +55,8 @@ def load(path: Path) -> WorkflowDoc:
 
 def resolve(target: str, *, extra_dirs: list[Path] | None = None) -> Located:
     """Find a workflow by name or path, or raise listing what is available."""
+    if resource_scheme(target) is not None:
+        return _resolve_resource(target)
     candidate = Path(target)
     if candidate.exists() and candidate.is_file():
         return Located(doc=load(candidate), path=candidate, source="path")
@@ -68,6 +74,34 @@ def resolve(target: str, *, extra_dirs: list[Path] | None = None) -> Located:
                 return Located(doc=load(found), path=found, source=source)
 
     raise _not_found(target, extra_dirs)
+
+
+def _resolve_resource(target: str) -> Located:
+    """Stage and parse a provider workflow without teaching core about its scheme."""
+    provider = resource_provider(target)
+    uri = provider.normalize(target)
+    if target.endswith("/"):
+        bundle_root = f"{uri.rstrip('/')}/"
+        candidates = [f"{bundle_root}workflow.sclpll", f"{bundle_root}workflow.json"]
+        found = [candidate for candidate in candidates if provider.exists(candidate)]
+        if len(found) != 1:
+            if len(found) == 2:
+                raise UnknownTarget(f"remote workflow bundle {provider.display_uri(uri)} is ambiguous")
+            raise UnknownTarget(f"remote workflow bundle {provider.display_uri(uri)} has no workflow.sclpll or workflow.json")
+        uri = found[0]
+    suffix = Path(uri).suffix.lower()
+    if suffix not in SUFFIXES:
+        raise UnknownTarget(f"remote workflow {provider.display_uri(uri)} needs a .sclpll or .json suffix")
+    root = Path.home() / ".sclpl" / "tmp" / "workflows"
+    root.mkdir(parents=True, exist_ok=True)
+    staged = root / f"{hashlib.sha256(uri.encode()).hexdigest()[:16]}{suffix}"
+    try:
+        with staged.open("wb") as handle:
+            provider.download(uri, handle)
+    except ResourceNotFound as error:
+        staged.unlink(missing_ok=True)
+        raise UnknownTarget(f"remote workflow {provider.display_uri(uri)} does not exist") from error
+    return Located(doc=load(staged), path=staged, source="resource", origin_uri=uri)
 
 
 def _looks_like_a_path(target: str) -> bool:

@@ -340,7 +340,7 @@ def _read_manifest(directory: Path, source: str) -> Plugin | None:
         description=str(block.get("description", "")),
     )
 
-    for kind in ("connector", "function", "verb", "auth", "paginator", "backend"):
+    for kind in ("connector", "function", "verb", "auth", "paginator", "backend", "resource"):
         for entry in data.get(kind, []):
             if isinstance(entry, dict):
                 plugin.contributes.append(

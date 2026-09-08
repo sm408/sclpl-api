@@ -76,6 +76,7 @@ def preflight(
     check_files: bool = True,
     require_ports: bool = True,
     policy: Policy | None = None,
+    resource_base: str | None = None,
 ) -> Report:
     """Check a workflow end to end without executing it.
 
@@ -98,6 +99,7 @@ def preflight(
             named_out=named_out,
             positional=positional,
             optional=_unwritten_ports(doc, mode),
+            resource_base=resource_base,
         )
     except ValidationError as error:
         if require_ports:

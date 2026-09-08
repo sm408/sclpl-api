@@ -7,6 +7,12 @@ once the public package API is declared stable.
 
 - Continued documentation and repository maintenance.
 
+## 0.9.1
+
+- Added provider-neutral remote workflow and port resource support.
+- Added controlled local staging and revision-aware provider publication.
+- Added the optional Azure Blob resource plugin (`azblob://`).
+
 ## 0.1.0
 
 - CLI workflow runner for HTTP APIs with JSON and SCLPLL workflow surfaces.
@@ -14,4 +20,3 @@ once the public package API is declared stable.
 - Table transforms and exports for CSV, JSON, NDJSON, Parquet, Excel, and SQLite.
 - Python function extensions and capability-declared plugins.
 - Local run history, secret storage, redaction, generated references, and CI quality gates.
-

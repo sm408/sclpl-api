@@ -20,6 +20,7 @@ from pathlib import Path
 from typing import Any
 
 from sclpl.errors import ValidationError, did_you_mean
+from sclpl.ext.resources import ResourceRef, display_resource_uri, resource_provider, resource_ref, resource_scheme
 from sclpl.run.ir import Port, WorkflowDoc
 from sclpl.tables.io import BY_EXTENSION, STDIO, Format
 
@@ -32,6 +33,8 @@ class Binding:
     direction: str
     #: Empty when an optional port went unbound.
     paths: list[Path] = field(default_factory=list)
+    #: Logical remote identities; paths appear only after resource preparation.
+    resources: list[ResourceRef] = field(default_factory=list)
     format: Format = "auto"
     is_stdio: bool = False
     required: bool = True
@@ -42,11 +45,13 @@ class Binding:
 
     @property
     def bound(self) -> bool:
-        return bool(self.paths) or self.is_stdio
+        return bool(self.paths) or bool(self.resources) or self.is_stdio
 
     def describe(self) -> str:
         if self.is_stdio:
             return "stdin" if self.direction == "in" else "stdout"
+        if self.resources:
+            return display_resource_uri(self.resources[0].uri)
         if not self.paths:
             return "(unbound)"
         if len(self.paths) == 1:
@@ -74,6 +79,7 @@ def bind(
     named_out: dict[str, str] | None = None,
     positional: list[str] | None = None,
     optional: Iterable[str] = (),
+    resource_base: str | None = None,
 ) -> Bindings:
     """Bind every declared port, or raise saying which one could not be.
 
@@ -121,8 +127,8 @@ def bind(
                 continue
         assigned[port.name] = queue.pop(0)
 
-    inputs = {port.name: _make(port, assigned.get(port.name), "in") for port in doc.inputs}
-    outputs = {port.name: _make(port, assigned.get(port.name), "out") for port in doc.outputs}
+    inputs = {port.name: _make(port, assigned.get(port.name), "in", resource_base) for port in doc.inputs}
+    outputs = {port.name: _make(port, assigned.get(port.name), "out", resource_base) for port in doc.outputs}
 
     if queue:
         raise ValidationError(
@@ -146,9 +152,14 @@ def bind(
     return Bindings(inputs=inputs, outputs=outputs)
 
 
-def _make(port: Port, spec: str | None, direction: str) -> Binding:
+def _make(port: Port, spec: str | None, direction: str, resource_base: str | None) -> Binding:
     if spec is None:
         spec = port.default
+    if spec is None and resource_base is not None:
+        extension = next((suffix for suffix, fmt in BY_EXTENSION.items() if fmt == port.format), "")
+        if extension:
+            folder = "inputs" if direction == "in" else "outputs"
+            spec = f"{folder}/{port.name}{extension}"
     if spec is None:
         return Binding(name=port.name, direction=direction, required=port.required)
 
@@ -162,6 +173,11 @@ def _make(port: Port, spec: str | None, direction: str) -> Binding:
             required=port.required,
         )
 
+    if resource_base is not None and resource_scheme(path_text) is None and not Path(path_text).is_absolute():
+        path_text = resource_provider(resource_base).resolve(resource_base, path_text)
+    if resource_scheme(path_text) is not None:
+        ref = resource_ref(path_text)
+        return Binding(name=port.name, direction=direction, resources=[ref], format=fmt or port.format, required=port.required)
     paths = _expand(path_text, direction)
     resolved = fmt or (
         port.format if port.format != "auto" else _infer(paths[0] if paths else None)
