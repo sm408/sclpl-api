@@ -122,6 +122,7 @@ argument. `any` means the operator does not care.
 | `save_parquet` | any | Write records to Parquet: columnar, compressed, and typed. |
 | `secret` | any | The named credential. Fails loudly rather than sending an empty header. |
 | `select` | any | Keep only the named columns. |
+| `sleep` | any | Pause the step for ms milliseconds, then return ms. |
 | `slug` | str | A lowercase, dash-separated form safe for filenames. |
 | `sort` | list | The elements sorted, optionally by a field. |
 | `sort_by` | any | Sort records by one or more columns. |

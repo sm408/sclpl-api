@@ -26,6 +26,9 @@ once the public package API is declared stable.
   `producers_of`, and `prune` now all break a timestamp tie by insertion order,
   so "most recent" is deterministic instead of whatever a tied `ORDER BY`
   scan happened to return.
+- Added: a `sleep(ms)` built-in function that pauses a step for the given number of
+  milliseconds, then returns it. Runs on the event-loop lane, so it costs nothing but
+  the calling step's own progress -- every other step keeps running while it waits.
 - Continued documentation and repository maintenance.
 
 ## 0.1.0
