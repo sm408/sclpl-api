@@ -9,6 +9,7 @@ deliberately) rather than slipping through as an incidental refactor.
 from __future__ import annotations
 
 import json
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -39,7 +40,11 @@ def test_help_exits_zero_and_names_the_tool() -> None:
 def test_no_baseline_command_disappeared_even_if_new_ones_arrived() -> None:
     """A superset is fine; losing one silently is the failure this guards."""
     result = run_cli("--help")
-    present = [name for name in BASELINE_COMMANDS if f"| {name}" in result.stdout]
+    present = [
+        name
+        for name in BASELINE_COMMANDS
+        if re.search(rf"^\|\s+{re.escape(name)}\s+", result.stdout, flags=re.MULTILINE)
+    ]
     assert present == BASELINE_COMMANDS
 
 
