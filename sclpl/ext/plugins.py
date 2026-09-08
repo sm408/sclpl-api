@@ -274,7 +274,7 @@ def _entry_points() -> list[Plugin]:
         except Exception:  # noqa: BLE001 - loading to find the manifest must not throw
             found.append(plugin)
             continue
-        described = _read_manifest(manifest.parent, "entry-point")
+        described = _read_manifest(Path(manifest.parent), "entry-point")
         if described is not None:
             described.module = point.value
             described.name = described.name or point.name

@@ -55,9 +55,7 @@ def test_file_digest_changes_when_the_bytes_change(tmp_path: Path) -> None:
 # -- producers_of -----------------------------------------------------------------
 
 
-def test_producers_of_finds_the_run_that_wrote_a_path(
-    private_home: Path, tmp_path: Path
-) -> None:
+def test_producers_of_finds_the_run_that_wrote_a_path(private_home: Path, tmp_path: Path) -> None:
     out = tmp_path / "report.csv"
     with db.History(private_home) as history:
         record(history, "aaaa1111", ports=[("out", "report", str(out), "deadbeef")])

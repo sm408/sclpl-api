@@ -272,14 +272,23 @@ class History:
 
     # -- reading -----------------------------------------------------------------
 
+    #: `started_at` (see `now()` below) has one-second resolution, not enough to
+    #: order two runs that started in the same second -- easy to hit back-to-back on
+    #: a fast machine, not just in theory. Every `ORDER BY started_at DESC` in this
+    #: class also orders by `rowid DESC`: SQLite assigns a strictly increasing rowid
+    #: per insert (this table has no `WITHOUT ROWID`), so it breaks a timestamp tie
+    #: the same way every time -- the row committed last sorts first -- rather than
+    #: whatever order the query planner happened to produce for that scan.
+
     def recent(self, limit: int = 20, *, workflow: str | None = None) -> list[sqlite3.Row]:
         if workflow:
             return self._db.execute(
-                "SELECT * FROM runs WHERE workflow = ? ORDER BY started_at DESC LIMIT ?",
+                "SELECT * FROM runs WHERE workflow = ?"
+                " ORDER BY started_at DESC, rowid DESC LIMIT ?",
                 (workflow, limit),
             ).fetchall()
         return self._db.execute(
-            "SELECT * FROM runs ORDER BY started_at DESC LIMIT ?", (limit,)
+            "SELECT * FROM runs ORDER BY started_at DESC, rowid DESC LIMIT ?", (limit,)
         ).fetchall()
 
     def find(self, identifier: str) -> sqlite3.Row:
@@ -295,7 +304,8 @@ class History:
             return exact
 
         matches: list[sqlite3.Row] = self._db.execute(
-            "SELECT * FROM runs WHERE id LIKE ? OR name LIKE ? ORDER BY started_at DESC",
+            "SELECT * FROM runs WHERE id LIKE ? OR name LIKE ?"
+            " ORDER BY started_at DESC, rowid DESC",
             (f"{identifier}%", f"{identifier}%"),
         ).fetchall()
         if len(matches) == 1:
@@ -342,7 +352,7 @@ class History:
             "SELECT run_ports.*, runs.name AS run_name, runs.started_at FROM run_ports "
             "JOIN runs ON runs.id = run_ports.run_id "
             "WHERE run_ports.direction = 'out' AND run_ports.path != '' "
-            "ORDER BY runs.started_at DESC"
+            "ORDER BY runs.started_at DESC, runs.rowid DESC"
         ).fetchall()
         return [row for row in rows if canonical_path(Path(row["path"])) == target]
 
@@ -368,7 +378,7 @@ class History:
             " LEFT JOIN run_steps s ON s.run_id = r.id"
             " WHERE r.name LIKE ? OR r.workflow LIKE ? OR r.mode LIKE ?"
             "    OR t.tag LIKE ? OR s.error LIKE ?"
-            " ORDER BY r.started_at DESC LIMIT ?",
+            " ORDER BY r.started_at DESC, r.rowid DESC LIMIT ?",
             (pattern, pattern, pattern, pattern, pattern, limit),
         ).fetchall()
 
@@ -388,7 +398,7 @@ class History:
         survivors = {
             row["id"]
             for row in self._db.execute(
-                "SELECT id FROM runs WHERE pinned = 0 ORDER BY started_at DESC LIMIT ?",
+                "SELECT id FROM runs WHERE pinned = 0 ORDER BY started_at DESC, rowid DESC LIMIT ?",
                 (max(0, keep),),
             )
         }
