@@ -47,6 +47,13 @@ from sclpl.tables.base import (
 )
 from sclpl.tables.flatten import flatten_records, infer_schema, records_of
 from sclpl.values.ref import register_reader
+from sclpl.ext.resources import (
+    ResourceCapabilities,
+    ResourceInfo,
+    ResourceProvider,
+    ResourceRef,
+    register_resource_provider,
+)
 
 F = TypeVar("F", bound=Callable[..., Any])
 
@@ -75,6 +82,10 @@ def connector(name: str, *, lane: str | None = None, version: int = 1) -> Callab
 
 __all__ = [
     "API_VERSION",
+    "ResourceCapabilities",
+    "ResourceInfo",
+    "ResourceProvider",
+    "ResourceRef",
     "AssertionFailed",
     "MissingExtra",
     "SclplError",
@@ -94,5 +105,6 @@ __all__ = [
     "overload",
     "records_of",
     "register_reader",
+    "register_resource_provider",
     "set_backend",
 ]
