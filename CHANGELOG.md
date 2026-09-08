@@ -11,6 +11,10 @@ once the public package API is declared stable.
   next to real output files after a run releases it.
 - Fixed: a failed `assert` step's remedy claimed `-vv` would show the values it was
   checking; it now actually does, as a bounded, redaction-aware debug log line.
+- Fixed: `mypy` failed on Linux (as CI runs it) over the Windows-only `msvcrt` import
+  in `state/locking.py`, an `importlib.metadata` typing change in `ext/plugins.py`,
+  and missing annotations in `test_test_manifests.py` -- all pre-existing, surfaced
+  once the also-pre-existing `ruff format` drift ahead of them was fixed.
 - Continued documentation and repository maintenance.
 
 ## 0.1.0

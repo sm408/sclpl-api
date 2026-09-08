@@ -73,7 +73,7 @@ class Lock:
 def _try_lock(handle: BinaryIO) -> bool:
     try:
         if os.name == "nt":
-            import msvcrt
+            msvcrt: Any = __import__("msvcrt")
 
             handle.seek(0)
             if handle.tell() == 0:
@@ -92,7 +92,7 @@ def _try_lock(handle: BinaryIO) -> bool:
 
 def _unlock(handle: BinaryIO) -> None:
     if os.name == "nt":
-        import msvcrt
+        msvcrt: Any = __import__("msvcrt")
 
         handle.seek(0)
         msvcrt.locking(handle.fileno(), msvcrt.LK_UNLCK, 1)
