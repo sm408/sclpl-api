@@ -958,6 +958,20 @@ async def _condition(clause: str, runtime: Runtime, step: Step) -> bool:
         ) from error
 
 
+#: A debug preview is for a human skimming -vv output, not a full dump -- a step that
+#: asserts against a multi-megabyte page would otherwise flood the log with exactly
+#: the value it was already too noisy to show at the default verbosity.
+_ASSERT_PREVIEW_LIMIT = 500
+
+
+def _preview(value: Any) -> str:
+    """A bounded repr, truncated rather than wrapped so it stays one log line."""
+    text = repr(value)
+    if len(text) > _ASSERT_PREVIEW_LIMIT:
+        return text[:_ASSERT_PREVIEW_LIMIT] + "... (truncated)"
+    return text
+
+
 async def _assert(step: Step, value: Any, runtime: Runtime) -> None:
     """Check a step's assertion against what it produced.
 
@@ -973,6 +987,15 @@ async def _assert(step: Step, value: Any, runtime: Runtime) -> None:
     outcome = await evaluate(parse(expression), runtime.context(frame))
     if not _truthy(outcome):
         named = f" ({clause})" if clause in runtime.doc.rules else ""
+        # The remedy below promises -vv shows the checked value -- emit it, or that
+        # promise is just words. Redaction still applies: this goes through the same
+        # reporter every other event does, so a resolved secret inside `value` is
+        # scrubbed on the way out exactly as it would be anywhere else.
+        runtime.reporter.log(
+            "debug",
+            f"step {step.id!r} asserted against {_preview(value)}",
+            step.id,
+        )
         raise AssertionFailed(
             f"step {step.id!r} failed its assertion{named}",
             where=expression,
