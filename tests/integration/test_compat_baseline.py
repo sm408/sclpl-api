@@ -40,10 +40,14 @@ def test_help_exits_zero_and_names_the_tool() -> None:
 def test_no_baseline_command_disappeared_even_if_new_ones_arrived() -> None:
     """A superset is fine; losing one silently is the failure this guards."""
     result = run_cli("--help")
+    # Typer renders its command table with either ASCII or Unicode box borders,
+    # depending on the installed terminal renderer.  The compatibility contract
+    # is the command set, not which border glyph that renderer selected.
+    help_text = result.stdout.replace("│", "|")
     present = [
         name
         for name in BASELINE_COMMANDS
-        if re.search(rf"^\|\s+{re.escape(name)}\s+", result.stdout, flags=re.MULTILINE)
+        if re.search(rf"^\|\s+{re.escape(name)}\s+", help_text, flags=re.MULTILINE)
     ]
     assert present == BASELINE_COMMANDS
 
