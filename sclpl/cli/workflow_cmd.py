@@ -26,6 +26,7 @@ from sclpl.run.preflight import preflight
 from sclpl.run.runner import Options, run_workflow
 from sclpl.run.sclpll import emit as emit_sclpll
 from sclpl.state import db
+from sclpl.values.cache import Policy
 
 
 def register(app: typer.Typer) -> None:
@@ -152,7 +153,15 @@ def run(
         ),
     ] = None,
 ) -> None:
-    located = _locate(workflow)
+    resource_policy = Policy.from_flags(
+        no_cache=no_cache, refresh=refresh, offline=offline, http_cache=http_cache
+    )
+    located = _locate(
+        workflow,
+        resource_cache_read=resource_policy.read,
+        resource_cache_write=resource_policy.write,
+        resource_cache_require_hit=resource_policy.require_hit,
+    )
     doc = located.doc
     if locked:
         resolved_project = project_context.load()
@@ -411,12 +420,21 @@ def _load(target: str) -> WorkflowDoc:
     return _locate(target).doc
 
 
-def _locate(target: str) -> catalog.Located:
+def _locate(
+    target: str,
+    *,
+    resource_cache_read: bool = True,
+    resource_cache_write: bool = True,
+    resource_cache_require_hit: bool = False,
+) -> catalog.Located:
     try:
         resolved_project = project_context.load()
         return catalog.resolve(
             target,
             extra_dirs=resolved_project.workflow_dirs if resolved_project is not None else None,
+            resource_cache_read=resource_cache_read,
+            resource_cache_write=resource_cache_write,
+            resource_cache_require_hit=resource_cache_require_hit,
         )
     except SclplError as error:
         typer.echo(str(error), err=True)

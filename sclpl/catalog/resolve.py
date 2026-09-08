@@ -23,6 +23,7 @@ from sclpl.ext.resources import ResourceNotFound, resource_provider, resource_sc
 from sclpl.run import compile_json
 from sclpl.run.ir import WorkflowDoc
 from sclpl.run.sclpll import parse as parse_sclpll
+from sclpl.state.resource_cache import ResourceCache
 
 SUFFIXES = (".sclpll", ".json")
 
@@ -53,10 +54,22 @@ def load(path: Path) -> WorkflowDoc:
     return parse_sclpll(text, origin=str(path))
 
 
-def resolve(target: str, *, extra_dirs: list[Path] | None = None) -> Located:
+def resolve(
+    target: str,
+    *,
+    extra_dirs: list[Path] | None = None,
+    resource_cache_read: bool = True,
+    resource_cache_write: bool = True,
+    resource_cache_require_hit: bool = False,
+) -> Located:
     """Find a workflow by name or path, or raise listing what is available."""
     if resource_scheme(target) is not None:
-        return _resolve_resource(target)
+        return _resolve_resource(
+            target,
+            cache_read=resource_cache_read,
+            cache_write=resource_cache_write,
+            cache_require_hit=resource_cache_require_hit,
+        )
     candidate = Path(target)
     if candidate.exists() and candidate.is_file():
         return Located(doc=load(candidate), path=candidate, source="path")
@@ -76,14 +89,29 @@ def resolve(target: str, *, extra_dirs: list[Path] | None = None) -> Located:
     raise _not_found(target, extra_dirs)
 
 
-def _resolve_resource(target: str) -> Located:
+def _resolve_resource(
+    target: str,
+    *,
+    cache_read: bool,
+    cache_write: bool,
+    cache_require_hit: bool,
+) -> Located:
     """Stage and parse a provider workflow without teaching core about its scheme."""
     provider = resource_provider(target)
     uri = provider.normalize(target)
     if target.endswith("/"):
         bundle_root = f"{uri.rstrip('/')}/"
         candidates = [f"{bundle_root}workflow.sclpll", f"{bundle_root}workflow.json"]
-        found = [candidate for candidate in candidates if provider.exists(candidate)]
+        resource_cache = ResourceCache()
+        found = [
+            candidate
+            for candidate in candidates
+            if (
+                resource_cache.get(candidate) is not None
+                if cache_require_hit
+                else provider.exists(candidate)
+            )
+        ]
         if len(found) != 1:
             if len(found) == 2:
                 raise UnknownTarget(
@@ -103,8 +131,14 @@ def _resolve_resource(target: str) -> Located:
     root.mkdir(parents=True, exist_ok=True)
     staged = root / f"{hashlib.sha256(uri.encode()).hexdigest()[:16]}{suffix}"
     try:
-        with staged.open("wb") as handle:
-            provider.download(uri, handle)
+        ResourceCache().materialize(
+            provider,
+            uri,
+            staged,
+            read=cache_read,
+            write=cache_write,
+            require_hit=cache_require_hit,
+        )
     except ResourceNotFound as error:
         staged.unlink(missing_ok=True)
         raise UnknownTarget(

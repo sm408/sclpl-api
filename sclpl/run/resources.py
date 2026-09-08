@@ -6,9 +6,11 @@ import shutil
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from sclpl.errors import CacheMiss
 from sclpl.ext.resources import ResourceNotFound, ResourceRef, resource_provider
 from sclpl.run.ports import Bindings
 from sclpl.state.db import default_root
+from sclpl.state.resource_cache import ResourceCache
 
 
 @dataclass(slots=True)
@@ -28,11 +30,27 @@ class PreparedResources:
         shutil.rmtree(self.root, ignore_errors=True)
 
 
-def prepare(bindings: Bindings, *, run_id: str, root: Path | None = None) -> PreparedResources:
+def prepare(
+    bindings: Bindings,
+    *,
+    run_id: str,
+    root: Path | None = None,
+    cache_read: bool = True,
+    cache_write: bool = True,
+    cache_require_hit: bool = False,
+) -> PreparedResources:
     """Materialize remote inputs and allocate local staging for remote outputs."""
+    if cache_require_hit and any(binding.resources for binding in bindings.outputs.values()):
+        raise CacheMiss(
+            "--offline cannot publish a remote output",
+            remedies=["remove --offline before publishing remote outputs"],
+        )
     staging = root or default_root() / "tmp" / run_id
     staging.mkdir(parents=True, exist_ok=True)
     prepared = PreparedResources(staging)
+    # An explicit staging root is an isolated test/embedding run, so keep its cache
+    # alongside the staging files instead of reaching into the caller's real home.
+    resource_cache = ResourceCache(root / "resource-cache" if root is not None else None)
     for binding in bindings.inputs.values():
         for index, ref in enumerate(binding.resources):
             provider = resource_provider(ref.uri)
@@ -40,8 +58,14 @@ def prepare(bindings: Bindings, *, run_id: str, root: Path | None = None) -> Pre
             target = staging / "inputs" / binding.name / f"{index}{suffix}"
             target.parent.mkdir(parents=True, exist_ok=True)
             try:
-                with target.open("wb") as handle:
-                    info = provider.download(ref.uri, handle)
+                info = resource_cache.materialize(
+                    provider,
+                    ref.uri,
+                    target,
+                    read=cache_read,
+                    write=cache_write,
+                    require_hit=cache_require_hit,
+                )
             except ResourceNotFound:
                 if binding.required:
                     raise

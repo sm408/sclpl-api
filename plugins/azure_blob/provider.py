@@ -2,15 +2,15 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterable
+import os
+from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass
-from datetime import datetime
 from typing import Any, BinaryIO
 from urllib.parse import urlsplit, urlunsplit
 
 from sclpl.ext.api import (
-    ResourceCapabilities,
     ResourceAuthenticationError,
+    ResourceCapabilities,
     ResourceConflict,
     ResourceInfo,
     ResourceInvalidURI,
@@ -42,6 +42,21 @@ def parse_uri(uri: str) -> AzureBlobURI:
 
 class AzureBlobProvider:
     scheme = "azblob"
+
+    def __init__(
+        self,
+        *,
+        environment: Mapping[str, str] | None = None,
+        credential_factory: Callable[[str], Any] | None = None,
+    ) -> None:
+        """Configure authentication without placing credentials in resource URIs.
+
+        Hosts which own a custom Azure ``TokenCredential`` can provide it through
+        ``credential_factory``. Command-line use is configured through the
+        environment variables documented in ``docs/remote-resources.md``.
+        """
+        self._environment = environment if environment is not None else os.environ
+        self._credential_factory = credential_factory
 
     def capabilities(self) -> ResourceCapabilities:
         return ResourceCapabilities(write=True, list=True, revisions=True, conditional_write=True)
@@ -84,7 +99,9 @@ class AzureBlobProvider:
                     size=getattr(item, "size", None),
                     modified=getattr(item, "last_modified", None),
                     revision=getattr(item, "etag", None),
-                    content_type=getattr(getattr(item, "content_settings", None), "content_type", None),
+                    content_type=getattr(
+                        getattr(item, "content_settings", None), "content_type", None
+                    ),
                 )
                 for item in container.list_blobs(name_starts_with=details.blob)
             ]
@@ -100,7 +117,14 @@ class AzureBlobProvider:
         except Exception as error:
             raise self._translate(error, uri) from error
 
-    def upload(self, source: BinaryIO, uri: str, *, overwrite: bool = False, expected_revision: str | None = None) -> ResourceInfo:
+    def upload(
+        self,
+        source: BinaryIO,
+        uri: str,
+        *,
+        overwrite: bool = False,
+        expected_revision: str | None = None,
+    ) -> ResourceInfo:
         try:
             client = self._blob(uri)
             kwargs: dict[str, Any] = {"overwrite": overwrite}
@@ -121,11 +145,76 @@ class AzureBlobProvider:
 
     def _service(self, account: str) -> Any:
         try:
-            from azure.identity import DefaultAzureCredential  # type: ignore[import-untyped]
-            from azure.storage.blob import BlobServiceClient
+            DefaultAzureCredential, BlobServiceClient, AzureSasCredential = self._imports()
         except ImportError as error:
             raise ResourceUnavailable("azblob requires: pip install sclpl-azure-blob") from error
-        return BlobServiceClient(f"https://{account}.blob.core.windows.net", credential=DefaultAzureCredential())
+        auth = self._setting("AUTH", default="default").lower().replace("_", "-")
+        if auth == "connection-string":
+            return BlobServiceClient.from_connection_string(
+                self._secret("CONNECTION_STRING", "AZURE_STORAGE_CONNECTION_STRING")
+            )
+
+        account_url = self._account_url(account)
+        if auth == "account-key":
+            return BlobServiceClient(account_url, credential=self._secret("ACCOUNT_KEY"))
+        if auth == "sas":
+            if AzureSasCredential is None:
+                raise ResourceUnavailable("azblob requires: pip install sclpl-azure-blob")
+            return BlobServiceClient(
+                account_url, credential=AzureSasCredential(self._secret("SAS_TOKEN").lstrip("?"))
+            )
+        if auth == "custom":
+            if self._credential_factory is None:
+                raise ResourceAuthenticationError(
+                    "azblob custom authentication requires "
+                    "AzureBlobProvider(credential_factory=...)"
+                )
+            return BlobServiceClient(account_url, credential=self._credential_factory(account))
+        if auth != "default":
+            raise ResourceAuthenticationError(
+                "azblob SCLPL_AZURE_BLOB_AUTH must be one of: default, connection-string, "
+                "account-key, sas, custom"
+            )
+
+        # Azure Identity itself selects Azure CLI/developer login, service-principal
+        # environment credentials, workload identity, or managed identity. An
+        # explicitly named managed identity is the sole Azure-specific override we
+        # add; all other standard Azure Identity settings remain untouched.
+        managed_identity_client_id = self._setting("MANAGED_IDENTITY_CLIENT_ID")
+        credential_kwargs: dict[str, str] = {}
+        if managed_identity_client_id:
+            credential_kwargs["managed_identity_client_id"] = managed_identity_client_id
+        return BlobServiceClient(
+            account_url, credential=DefaultAzureCredential(**credential_kwargs)
+        )
+
+    @staticmethod
+    def _imports() -> tuple[Any, Any, Any]:
+        from azure.core.credentials import AzureSasCredential
+        from azure.identity import DefaultAzureCredential  # type: ignore[import-untyped]
+        from azure.storage.blob import BlobServiceClient
+
+        return DefaultAzureCredential, BlobServiceClient, AzureSasCredential
+
+    def _account_url(self, account: str) -> str:
+        endpoint = self._setting("ACCOUNT_URL")
+        if endpoint:
+            return endpoint.format(account=account).rstrip("/")
+        suffix = self._setting("ENDPOINT_SUFFIX", default="blob.core.windows.net")
+        return f"https://{account}.{suffix.strip('/')}"
+
+    def _setting(self, name: str, *, default: str = "") -> str:
+        return self._environment.get(f"SCLPL_AZURE_BLOB_{name}", default).strip()
+
+    def _secret(self, name: str, fallback: str | None = None) -> str:
+        value = self._setting(name)
+        if not value and fallback is not None:
+            value = self._environment.get(fallback, "").strip()
+        if not value:
+            raise ResourceAuthenticationError(
+                f"azblob authentication mode requires SCLPL_AZURE_BLOB_{name}"
+            )
+        return value
 
     def _blob(self, uri: str) -> Any:
         details = parse_uri(uri)
@@ -142,7 +231,7 @@ class AzureBlobProvider:
 
     def _translate(self, error: Exception, uri: str) -> SclplError:
         status = getattr(error, "status_code", None)
-        message = f"Azure Blob {self.display_uri(uri)}: {error}"
+        message = f"Azure Blob {self.display_uri(uri)}: {self._redact_error(str(error))}"
         if status == 404:
             return ResourceNotFound(message)
         if status in (401,):
@@ -152,3 +241,16 @@ class AzureBlobProvider:
         if status in (409, 412):
             return ResourceConflict(message)
         return ResourceUnavailable(message)
+
+    def _redact_error(self, text: str) -> str:
+        """Configured credentials must not leak through Azure SDK diagnostics."""
+        secrets = [
+            self._setting("CONNECTION_STRING"),
+            self._environment.get("AZURE_STORAGE_CONNECTION_STRING", ""),
+            self._setting("ACCOUNT_KEY"),
+            self._setting("SAS_TOKEN"),
+        ]
+        for secret in secrets:
+            if secret:
+                text = text.replace(secret, "[redacted]")
+        return text

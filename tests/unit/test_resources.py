@@ -10,7 +10,7 @@ from _pytest.monkeypatch import MonkeyPatch
 
 from sclpl import bootstrap
 from sclpl.catalog.resolve import resolve
-from sclpl.errors import UnknownTarget
+from sclpl.errors import CacheMiss, UnknownTarget
 from sclpl.ext.resources import (
     ResourceCapabilities,
     ResourceConflict,
@@ -115,6 +115,20 @@ def test_remote_bundle_loads_and_preserves_its_logical_origin(
     assert located.origin_uri == "memory://jobs/orders/workflow.sclpll"
 
 
+def test_remote_bundle_runs_offline_from_the_resource_cache(
+    tmp_path: Path, monkeypatch: MonkeyPatch
+) -> None:
+    monkeypatch.setattr("pathlib.Path.home", lambda: tmp_path)
+    provider = Memory({"memory://jobs/orders/workflow.sclpll": b"@workflow orders\n"})
+    register_resource_provider("memory", provider)
+
+    resolve("memory://jobs/orders/")
+    provider.objects.clear()
+    located = resolve("memory://jobs/orders/", resource_cache_require_hit=True)
+
+    assert located.doc.name == "orders"
+
+
 def test_remote_bundle_refuses_ambiguous_workflow_surfaces(
     tmp_path: Path, monkeypatch: MonkeyPatch
 ) -> None:
@@ -170,6 +184,14 @@ def test_remote_create_only_publication_refuses_a_racing_destination(tmp_path: P
     output_path.write_bytes(b"new\n")
     with pytest.raises(ResourceConflict):
         publish(prepared, overwrite=False)
+
+
+def test_offline_refuses_remote_output_publication(tmp_path: Path) -> None:
+    register_resource_provider("memory", Memory())
+    doc = WorkflowDoc(name="orders", outputs=[Port(name="report", format="csv")])
+    bindings = bind(doc, resource_base="memory://jobs/orders/")
+    with pytest.raises(CacheMiss, match="cannot publish"):
+        prepare(bindings, run_id="offline-output", root=tmp_path / "stage", cache_require_hit=True)
 
 
 @pytest.mark.asyncio

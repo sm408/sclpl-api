@@ -232,13 +232,34 @@ async def run_workflow(doc: WorkflowDoc, options: Options, reporter: Reporter) -
         return Result(report=report, exit_code=0)
 
     assert report.bindings is not None
+    resource_policy = cache.Policy.from_flags(
+        no_cache=options.no_cache,
+        refresh=options.refresh,
+        offline=options.offline,
+        http_cache=options.http_cache,
+    )
     prepared_resources = None
     if any(binding.resources for binding in report.bindings.all()):
-        prepared_resources = resources_mod.prepare(
-            report.bindings,
-            run_id=options.run_id or db.run_id(doc.name, started),
-            root=options.scratch_dir,
-        )
+        try:
+            prepared_resources = resources_mod.prepare(
+                report.bindings,
+                run_id=options.run_id or db.run_id(doc.name, started),
+                root=options.scratch_dir,
+                cache_read=resource_policy.read,
+                cache_write=resource_policy.write,
+                cache_require_hit=resource_policy.require_hit,
+            )
+        except SclplError as problem:
+            reporter.log("error", str(problem))
+            reporter.emit(
+                RunFinished(
+                    status="failed",
+                    duration_ms=_ms(started),
+                    counts={},
+                    exit_code=problem.exit_code,
+                )
+            )
+            return Result(report=report, exit_code=problem.exit_code)
 
     limits = _limits(doc, options)
     store = ValueStore(keep_all=options.keep_all, scratch=Scratch(options.scratch_dir))
@@ -249,13 +270,9 @@ async def run_workflow(doc: WorkflowDoc, options: Options, reporter: Reporter) -
     )
 
     pools = lanes.Pools(max_processes=min(4, limits.concurrency))
-    policy = cache.Policy.from_flags(
-        no_cache=options.no_cache,
-        refresh=options.refresh,
-        offline=options.offline,
-        http_cache=options.http_cache,
-    )
-    store_cache = cache.Cache(cache.default_root(), policy=policy) if policy.enabled else None
+    store_cache = None
+    if resource_policy.enabled:
+        store_cache = cache.Cache(cache.default_root(), policy=resource_policy)
     # G3: this run's own eligible step values, durably filed for a later resume.
     # Tied to `options.record`, not to `store_cache`/its policy -- a checkpoint
     # with no history row naming this run is never reachable by a future resume

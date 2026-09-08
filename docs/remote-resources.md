@@ -37,6 +37,49 @@ workflow files. URI displays remove query strings, and remote overwrite publishe
 only against the revision observed before execution. A changed destination raises a
 conflict instead of silently losing another writer's update.
 
+### Azure authentication and endpoints
+
+Set `SCLPL_AZURE_BLOB_AUTH` to select an explicit mode. Secret values stay in the
+environment (or the host's secret-injection system), never in a workflow or `azblob://`
+URI.
+
+| Mode | Required configuration | Typical use |
+| --- | --- | --- |
+| `default` (default) | Azure Identity standard environment/CLI/managed identity configuration | developer login, managed identity, workload identity, service principal |
+| `connection-string` | `SCLPL_AZURE_BLOB_CONNECTION_STRING` (or Azure's `AZURE_STORAGE_CONNECTION_STRING`) | emulator or established connection-string deployments |
+| `account-key` | `SCLPL_AZURE_BLOB_ACCOUNT_KEY` | constrained legacy deployments |
+| `sas` | `SCLPL_AZURE_BLOB_SAS_TOKEN` | short-lived, scoped access; the leading `?` is accepted |
+| `custom` | construct `AzureBlobProvider(credential_factory=...)` in an embedding host | application-owned `TokenCredential` |
+
+For a user-assigned managed identity, keep `default` mode and set
+`SCLPL_AZURE_BLOB_MANAGED_IDENTITY_CLIENT_ID`. Workload identity and service-principal
+configuration follow the standard Azure Identity environment variables.
+
+For private endpoints, sovereign clouds, or test emulators that are not using a
+connection string, set `SCLPL_AZURE_BLOB_ACCOUNT_URL`. It may contain `{account}`, for
+example `https://{account}.privatelink.blob.core.windows.net`. Alternatively set
+`SCLPL_AZURE_BLOB_ENDPOINT_SUFFIX` (for example `blob.core.usgovcloudapi.net`).
+
+`SCLPL_AZURE_BLOB_AUTH=default` deliberately leaves credential selection to
+`DefaultAzureCredential`; Azure's own service-principal, workload-token, and
+managed-identity environment settings remain effective without being copied into
+SCLPL configuration.
+
+## Remote cache and offline runs
+
+Remote workflows and inputs are stored beneath `~/.sclpl/resources` as
+content-addressed blobs. The cache index keys a normalized resource URI by hash, so it
+does not retain signed URI query strings. When a provider supplies revisions, SCLPL
+checks the current revision online and reuses only the matching cached blob.
+
+`sclpl run --offline azblob://...` makes no Azure calls: the workflow bundle and every
+remote input must already be cached. A missing object exits with code 5 and recommends
+one ordinary online run. Outputs are still never published by a failed execution.
+
+`--refresh` bypasses existing remote cache entries and replaces them after download;
+`--no-cache` bypasses remote caching entirely. Providers without revision support are
+always downloaded online, but their latest materialized copy remains usable offline.
+
 Troubleshooting: install `sclpl-azure-blob` in the same Python environment as
 `sclpl`, then confirm the identity has Storage Blob Data Reader for workflows/inputs
 and Storage Blob Data Contributor for outputs. `sclpl validate azblob://...` fetches
