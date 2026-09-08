@@ -20,7 +20,13 @@ from pathlib import Path
 from typing import Any
 
 from sclpl.errors import ValidationError, did_you_mean
-from sclpl.ext.resources import ResourceRef, display_resource_uri, resource_provider, resource_ref, resource_scheme
+from sclpl.ext.resources import (
+    ResourceRef,
+    display_resource_uri,
+    resource_provider,
+    resource_ref,
+    resource_scheme,
+)
 from sclpl.run.ir import Port, WorkflowDoc
 from sclpl.tables.io import BY_EXTENSION, STDIO, Format
 
@@ -127,8 +133,13 @@ def bind(
                 continue
         assigned[port.name] = queue.pop(0)
 
-    inputs = {port.name: _make(port, assigned.get(port.name), "in", resource_base) for port in doc.inputs}
-    outputs = {port.name: _make(port, assigned.get(port.name), "out", resource_base) for port in doc.outputs}
+    inputs = {
+        port.name: _make(port, assigned.get(port.name), "in", resource_base) for port in doc.inputs
+    }
+    outputs = {
+        port.name: _make(port, assigned.get(port.name), "out", resource_base)
+        for port in doc.outputs
+    }
 
     if queue:
         raise ValidationError(
@@ -173,11 +184,21 @@ def _make(port: Port, spec: str | None, direction: str, resource_base: str | Non
             required=port.required,
         )
 
-    if resource_base is not None and resource_scheme(path_text) is None and not Path(path_text).is_absolute():
+    if (
+        resource_base is not None
+        and resource_scheme(path_text) is None
+        and not Path(path_text).is_absolute()
+    ):
         path_text = resource_provider(resource_base).resolve(resource_base, path_text)
     if resource_scheme(path_text) is not None:
         ref = resource_ref(path_text)
-        return Binding(name=port.name, direction=direction, resources=[ref], format=fmt or port.format, required=port.required)
+        return Binding(
+            name=port.name,
+            direction=direction,
+            resources=[ref],
+            format=fmt or port.format,
+            required=port.required,
+        )
     paths = _expand(path_text, direction)
     resolved = fmt or (
         port.format if port.format != "auto" else _infer(paths[0] if paths else None)

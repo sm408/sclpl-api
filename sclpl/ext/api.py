@@ -37,20 +37,10 @@ from sclpl.errors import (
 )
 from sclpl.expr.dispatch import generic, overload
 from sclpl.ext.functions import function
-from sclpl.tables.base import (
-    MissingExtra,
-    Table,
-    TableBackend,
-    as_table,
-    is_table,
-    set_backend,
-)
-from sclpl.tables.flatten import flatten_records, infer_schema, records_of
-from sclpl.values.ref import register_reader
 from sclpl.ext.resources import (
     ResourceAuthenticationError,
-    ResourceConflict,
     ResourceCapabilities,
+    ResourceConflict,
     ResourceInfo,
     ResourceInvalidURI,
     ResourceNotFound,
@@ -61,6 +51,16 @@ from sclpl.ext.resources import (
     ResourceUnsupportedOperation,
     register_resource_provider,
 )
+from sclpl.tables.base import (
+    MissingExtra,
+    Table,
+    TableBackend,
+    as_table,
+    is_table,
+    set_backend,
+)
+from sclpl.tables.flatten import flatten_records, infer_schema, records_of
+from sclpl.values.ref import register_reader
 
 F = TypeVar("F", bound=Callable[..., Any])
 
