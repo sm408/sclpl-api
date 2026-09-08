@@ -232,9 +232,13 @@ async def run_workflow(doc: WorkflowDoc, options: Options, reporter: Reporter) -
         return Result(report=report, exit_code=0)
 
     assert report.bindings is not None
-    prepared_resources = resources_mod.prepare(
-        report.bindings, run_id=options.run_id or db.run_id(doc.name, started), root=options.scratch_dir
-    )
+    prepared_resources = None
+    if any(binding.resources for binding in report.bindings.all()):
+        prepared_resources = resources_mod.prepare(
+            report.bindings,
+            run_id=options.run_id or db.run_id(doc.name, started),
+            root=options.scratch_dir,
+        )
 
     limits = _limits(doc, options)
     store = ValueStore(keep_all=options.keep_all, scratch=Scratch(options.scratch_dir))
@@ -333,7 +337,7 @@ async def run_workflow(doc: WorkflowDoc, options: Options, reporter: Reporter) -
                 publication_state = _finish_publication(
                     ledger, doc, options, outcome, started, reporter
                 )
-            if outcome.status == "ok" and prepared_resources.outputs:
+            if outcome.status == "ok" and prepared_resources is not None and prepared_resources.outputs:
                 resources_mod.publish(prepared_resources, overwrite=options.overwrite)
             if store_cache is not None:
                 if store_cache.stats.hits or store_cache.stats.writes:
