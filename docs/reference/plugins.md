@@ -7,6 +7,7 @@
 
 | Plugin | Version | Capabilities | Contributes |
 |---|---|---|---|
+| azure_blob | 0.9.1 | network, secrets:read, subprocess | `azblob` |
 | example | 0.1.0 | none | `example.echo`, `greet` |
 | fs | 1.0.0 | fs:read, fs:write | `fs.glob`, `fs.stat`, `fs.exists`, `fs.copy`, `fs.move`, `fs.remove`, `fs.mkdir` |
 | sqlite | 1.0.0 | fs:read, fs:write | `sqlite.query`, `sqlite.write`, `sqlite.exec`, `sqlite.schema` |
