@@ -17,6 +17,7 @@ first time; use the reference pages later as a lookup.
 |---|---|
 | [Workflow anatomy](workflow-anatomy.md) | What each section and line changes |
 | [SCLPLL reference](sclpll-reference.md) | Complete file syntax and supported clauses |
+| [Workflow catalog](workflow-catalog.md) | Copy-and-adapt catalog of directives, step forms, clauses, and plugins |
 | [Glossary](glossary.md) | What workflow terms mean in plain language |
 | [Examples](../../examples/) | Runnable files, from one request to plugins |
 
@@ -47,4 +48,3 @@ python -m sclpl convert workflow.sclpll workflow.json
 
 `validate` is the safe first command: it does not call the network or write workflow outputs.
 `explain` shows the graph, roots, pruning, and memory decisions. `run` executes it.
-
