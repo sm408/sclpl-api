@@ -56,6 +56,20 @@ def domain(url: str) -> str:
 Keep functions typed, deterministic where possible, and covered by a focused unit test.
 Use a plugin when the capability needs packaging, discovery, or an external dependency.
 
+## Publish a remote workflow bundle
+
+Keep port declarations storage-agnostic and use the conventional bundle layout:
+
+```text
+jobs/orders/workflow.sclpll
+jobs/orders/inputs/customers.csv
+jobs/orders/outputs/report.csv
+```
+
+After installing `sclpl-azure-blob`, use `azblob://account/container/jobs/orders/` as the
+target. Inputs are staged locally, so existing readers and writers do not change. `--overwrite`
+only replaces the destination revision observed before the run; it is not a blind overwrite.
+
 ## Data engineer checklist
 
 - Give every network step a timeout and an appropriate retry policy.
@@ -63,3 +77,5 @@ Use a plugin when the capability needs packaging, discovery, or an external depe
 - Assert the columns and types required by downstream users.
 - Keep secrets in `sclpl secret`, never in workflow files.
 - Run `validate`, `explain`, tests, and the full quality gates before merging.
+- Use explicit local `--in` or `--out` bindings for experiments; preserve bundle defaults for
+  reproducible scheduled runs.

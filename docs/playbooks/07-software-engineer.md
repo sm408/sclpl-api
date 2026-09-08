@@ -8,6 +8,11 @@ or builds plugins that contribute connectors and capabilities.
 External code should import from `sclpl.ext.api` or `sclpl.ext.functions`. The bundled plugins
 are examples of the same public surface used by third-party packages.
 
+Resource providers use the same boundary: import `ResourceProvider`, `ResourceRef`,
+`ResourceInfo`, `ResourceCapabilities`, and `register_resource_provider` from
+`sclpl.ext.api`, never from runner internals. Core owns staging and publication sequencing;
+the provider owns URI parsing, authentication, transfer, revision tokens, and SDK errors.
+
 ```bash
 python -m sclpl plugin list
 python -m sclpl plugin describe text
@@ -23,6 +28,13 @@ python -m sclpl --deny-capability network plugin list
 
 Plugins are trusted Python code, not sandboxed code. The capability contract controls loading
 policy and makes the requested access visible.
+
+## Build a resource provider
+
+Implement `normalize`, `resolve`, `stat`, `exists`, `download`, `upload`, and `display_uri`.
+Redact credentials in `display_uri` and map stale conditional writes to `ResourceConflict`.
+Test with the core `memory://` lifecycle before adding a provider integration test such as
+Azurite. Do not add provider-specific scheme parsing or SDK objects to the runner.
 
 ## Run the plugin example
 

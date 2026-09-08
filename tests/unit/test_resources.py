@@ -7,6 +7,7 @@ import pytest
 
 from sclpl.catalog.resolve import resolve
 from sclpl import bootstrap
+from sclpl.errors import UnknownTarget
 from sclpl.ext.resources import (
     ResourceCapabilities,
     ResourceConflict,
@@ -51,6 +52,10 @@ class Memory:
         return []
 
     def download(self, uri: str, target: BytesIO) -> ResourceInfo:
+        if uri not in self.objects:
+            from sclpl.ext.resources import ResourceNotFound
+
+            raise ResourceNotFound(f"missing {uri}")
         target.write(self.objects[uri])
         return ResourceInfo(uri=uri)
 
@@ -98,6 +103,21 @@ def test_remote_bundle_loads_and_preserves_its_logical_origin(tmp_path, monkeypa
     assert located.origin_uri == "memory://jobs/orders/workflow.sclpll"
 
 
+def test_remote_bundle_refuses_ambiguous_workflow_surfaces(tmp_path, monkeypatch) -> None:
+    monkeypatch.setattr("pathlib.Path.home", lambda: tmp_path)
+    register_resource_provider(
+        "memory",
+        Memory(
+            {
+                "memory://jobs/orders/workflow.sclpll": b"@workflow orders\n",
+                "memory://jobs/orders/workflow.json": b'{"name": "orders"}',
+            }
+        ),
+    )
+    with pytest.raises(UnknownTarget, match="ambiguous"):
+        resolve("memory://jobs/orders/")
+
+
 def test_remote_inputs_materialize_and_outputs_publish_through_provider(tmp_path) -> None:
     provider = Memory({"memory://jobs/orders/inputs/customers.csv": b"id\n1\n"})
     register_resource_provider("memory", provider)
@@ -112,6 +132,25 @@ def test_remote_inputs_materialize_and_outputs_publish_through_provider(tmp_path
     bindings.outputs["report"].path.write_bytes(b"id\n2\n")
     publish(prepared, overwrite=False)
     assert provider.objects["memory://jobs/orders/outputs/report.csv"] == b"id\n2\n"
+
+
+def test_missing_optional_remote_input_remains_unbound(tmp_path) -> None:
+    register_resource_provider("memory", Memory())
+    doc = WorkflowDoc(name="orders", inputs=[Port(name="notes", format="json", required=False)])
+    bindings = bind(doc, resource_base="memory://jobs/orders/")
+    prepare(bindings, run_id="optional-resource", root=tmp_path / "stage")
+    assert bindings.inputs["notes"].paths == []
+
+
+def test_remote_create_only_publication_refuses_a_racing_destination(tmp_path) -> None:
+    provider = Memory({"memory://jobs/orders/outputs/report.csv": b"old\n"})
+    register_resource_provider("memory", provider)
+    doc = WorkflowDoc(name="orders", outputs=[Port(name="report", format="csv")])
+    bindings = bind(doc, resource_base="memory://jobs/orders/")
+    prepared = prepare(bindings, run_id="conflict-resource", root=tmp_path / "stage")
+    bindings.outputs["report"].path.write_bytes(b"new\n")
+    with pytest.raises(ResourceConflict):
+        publish(prepared, overwrite=False)
 
 
 @pytest.mark.asyncio

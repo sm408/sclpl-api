@@ -3,6 +3,20 @@
 This is a running implementation record for the unified upgrade. Each entry captures
 the decision, its tradeoff, and the evidence available when it was made.
 
+## 2026-09-09 — Provider-neutral remote resource release (v0.9.1)
+
+- **Decision:** Storage-specific URI parsing, authentication, SDK calls, and ETag handling
+  live in an optional resource-provider plugin. Core exposes a stable resource API, resolves
+  workflow-relative resources, stages inputs/outputs locally, and publishes through providers.
+- **Why:** Existing readers and writers already consume local paths. This keeps Azure details
+  out of the runner and lets a future S3/GCS provider reuse the same lifecycle.
+- **Tradeoff:** v0.9.1 stages data locally and cannot atomically commit multiple remote objects.
+  Revision-aware publication prevents blind lost updates; remote generation transactions are
+  deferred.
+- **Evidence:** `memory://` tests cover collisions, bundle ambiguity, optional absence,
+  materialization, create-only conflict, and a runner/writer/publish path. Azure tests cover
+  URI parsing, redaction, and capabilities; focused release suite and strict mypy pass.
+
 ## 2026-09-05 — Integration branch before final merge
 
 - **Decision:** Work on `integration/unified-upgrade`, with small reviewable commits,
