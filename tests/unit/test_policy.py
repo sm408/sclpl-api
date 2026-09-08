@@ -76,6 +76,11 @@ def test_output_root_rejects_a_path_traversal_that_walks_back_out(tmp_path: Path
 
 
 def test_output_root_follows_a_symlink_to_its_real_location(tmp_path: Path) -> None:
+    """A declared output root is routinely a symlink to a mounted volume (the
+    ordinary shape of a Docker/Kubernetes bind mount) -- writing through it must
+    work, and the boundary it establishes must still catch an escape through some
+    other, undeclared location once resolved.
+    """
     real_outside = tmp_path.parent / f"{tmp_path.name}-outside"
     real_outside.mkdir(exist_ok=True)
     link = tmp_path / "outputs"
@@ -92,11 +97,13 @@ def test_output_root_follows_a_symlink_to_its_real_location(tmp_path: Path) -> N
         project = load_project(project=tmp_path)
         assert project is not None
         resolved = policy.parse(project)
-        # The declared root is the symlink; a file written "under" it actually lands
-        # in `real_outside`, which was never declared -- resolving both sides is what
-        # catches this rather than comparing the unresolved path strings.
+        # A write reached through the declared symlink resolves to exactly what was
+        # declared -- allowed, not an escape.
+        resolved.check_output(link / "report.csv")  # does not raise
+        # A write resolving somewhere else entirely -- not under the symlink's real
+        # target -- is still denied.
         with pytest.raises(PolicyDenied):
-            resolved.check_output(link / "report.csv")
+            resolved.check_output(real_outside.parent / "elsewhere" / "report.csv")
     finally:
         link.unlink(missing_ok=True)
 

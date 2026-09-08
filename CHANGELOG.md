@@ -20,7 +20,8 @@ once the public package API is declared stable.
   failed to parse at all, refusing every workflow run in that project outright.
   `check_output`'s resolved-path comparison against the declared roots already
   enforced the real security boundary; the root's own location no longer has to
-  stay inside the project tree to be declared.
+  stay inside the project tree to be declared, and a write reached through that
+  declared symlink is correctly allowed rather than denied.
 - Fixed: two runs recorded in the same second (`started_at` has one-second
   resolution) could come back from `runs`/history queries in either order,
   since nothing broke the tie -- `history recent`, `find`, `search`,
