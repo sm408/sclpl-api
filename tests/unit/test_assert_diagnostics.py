@@ -78,9 +78,7 @@ async def test_a_resolved_secret_in_the_checked_value_is_still_redacted() -> Non
     async with Reporter([recorder]) as reporter:
         reporter.secret("hunter2-distinctive")
         with pytest.raises(AssertionFailed):
-            await _assert(
-                _step("false"), {"token": "hunter2-distinctive"}, _runtime(doc, reporter)
-            )
+            await _assert(_step("false"), {"token": "hunter2-distinctive"}, _runtime(doc, reporter))
 
     debug_records = _debug_records(recorder)
     assert len(debug_records) == 1
