@@ -19,6 +19,17 @@ from sclpl.errors import ValidationError
 from sclpl.state.locking import Lock, canonical_path, output_lock_path, output_locks
 
 
+def test_releasing_a_lock_removes_its_file(tmp_path: Path) -> None:
+    """A `.sclpl-lock` file that outlives every run that ever used it just piles up
+    beside real outputs forever -- exactly what a user running workflows against a
+    real project noticed. Release must not leave it behind.
+    """
+    path = tmp_path / "mutation.lock"
+    with Lock(path):
+        assert path.exists()
+    assert not path.exists()
+
+
 def test_lock_times_out_with_owner_details(tmp_path: Path) -> None:
     path = tmp_path / "mutation.lock"
     with Lock(path), pytest.raises(ValidationError, match="current owner: pid="):
@@ -38,6 +49,13 @@ def test_two_different_outputs_never_wait_on_each_other(tmp_path: Path) -> None:
     b = tmp_path / "b.csv"
     with output_locks([a], timeout=0), output_locks([b], timeout=0):
         pass  # neither raised: acquiring b did not need a's lock released first
+
+
+def test_releasing_an_output_lock_removes_its_file(tmp_path: Path) -> None:
+    path = tmp_path / "report.csv"
+    with output_locks([path]):
+        assert output_lock_path(path).exists()
+    assert not output_lock_path(path).exists()
 
 
 def test_the_same_output_is_exclusive(tmp_path: Path) -> None:
