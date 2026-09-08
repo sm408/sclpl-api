@@ -433,3 +433,33 @@ See [the decision log](DECISION-LOG.md) for implementation tradeoffs and evidenc
   started; G3's own publication path is unaffected only in the sense that a
   reused step was never scheduled, so it never appears as a failure either --
   publication proceeds exactly as if every step, reused or rerun, succeeded.
+- [x] G4 recover publication without duplicating it: `run/publication.py`'s
+  `publish()` now writes a durable per-generation intent record (every port's
+  scratch path, real destination, and scratch-content digest) *before* the
+  first file moves, and removes it once its own replace loop returns control
+  -- success or partial failure alike. A crash between committing one file and
+  the next (the process killed outright, not merely a step failing) leaves
+  that record behind as the only evidence of what was in flight, since the
+  process that started the generation never got to say what happened to it.
+  New `recover(workflow)` reads it back: a port whose scratch file still
+  exists never got its `os.replace`, and is completed now; a port whose
+  scratch file is already gone was already committed, verified against the
+  digest recorded at intent time rather than trusted on the strength of the
+  file simply being present (a destination that no longer matches is reported
+  `tampered`, not silently accepted); and if a *newer* generation has already
+  published since the crash (the current manifest names a different
+  generation), the old, interrupted one is reported `ambiguous` and nothing is
+  touched -- completing it now could overwrite a newer, complete generation
+  with an older, partial one. New `sclpl runs recover-publication <workflow>`
+  acquires the same C5 output locks a run itself would hold over the
+  destinations involved before touching anything, so recovery never races a
+  concurrent run or another recovery attempt. The intent record is keyed per
+  *generation*, not merely per workflow (`{workflow}.{generation}.pending.json`)
+  -- an early version kept one shared record per workflow, and a real test
+  caught it being silently overwritten by an unrelated, later publish attempt
+  before `recover()` ever got to see the crash it was meant to preserve
+  evidence of.
+- **Batch G complete** (G1-G4): durable checkpoints, resume eligibility
+  planning, resume execution, and publication crash-recovery are all real,
+  tested, and wired end to end through the CLI (`sclpl run --resume-from`,
+  `sclpl runs resume-plan`, `sclpl runs recover-publication`).

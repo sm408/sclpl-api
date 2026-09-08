@@ -8,8 +8,8 @@ from pathlib import Path
 
 import pytest
 
-from sclpl.run.publication import Ledger, discard, publish
-from sclpl.state.db import default_root
+from sclpl.run.publication import Ledger, _write_pending, discard, publish, recover
+from sclpl.state.db import default_root, file_digest
 
 
 @pytest.fixture(autouse=True)
@@ -131,3 +131,130 @@ def test_manifest_lives_under_the_shared_publications_root(tmp_path: Path) -> No
     ledger.stage("report", destination).write_text("data", encoding="utf-8")
     result = publish(ledger, workflow="orders", run_id="run1")
     assert result.manifest_path == default_root() / "publications" / "orders.json"
+
+
+# -- G4: recovering an interrupted publish -------------------------------------------
+
+
+def test_a_normal_publish_leaves_no_pending_record_to_recover(tmp_path: Path) -> None:
+    destination = tmp_path / "report.csv"
+    ledger = Ledger()
+    ledger.stage("report", destination).write_text("data", encoding="utf-8")
+    publish(ledger, workflow="orders", run_id="run1")
+
+    assert recover("orders").found is False
+
+
+def test_recover_with_nothing_pending_reports_not_found() -> None:
+    assert recover("never-published").found is False
+
+
+def test_recover_finishes_a_generation_that_crashed_before_any_file_moved(
+    tmp_path: Path,
+) -> None:
+    """The crash this whole mechanism exists for: the intent record landed, but
+    the process died before `publish()`'s own loop replaced a single file.
+    """
+    destination = tmp_path / "report.csv"
+    ledger = Ledger()
+    ledger.stage("report", destination).write_text("this generation's data", encoding="utf-8")
+    _write_pending(ledger, "orders", "run1", "run1-deadbeef")
+    assert not destination.exists()  # publish() itself never ran
+
+    report = recover("orders")
+
+    assert report.found
+    assert report.completed == ("report",)
+    assert report.already_committed == ()
+    assert report.tampered == ()
+    assert not report.ambiguous
+    assert destination.read_text(encoding="utf-8") == "this generation's data"
+    assert report.manifest_path is not None
+    manifest = json.loads(report.manifest_path.read_text(encoding="utf-8"))
+    assert manifest["generation"] == "run1-deadbeef"
+    assert manifest["files"]["report"] == str(destination)
+    # The intent record itself is gone: this generation has a real outcome now.
+    assert recover("orders").found is False
+
+
+def test_recover_recognizes_a_port_that_already_committed_before_the_crash(
+    tmp_path: Path,
+) -> None:
+    """One file replaced, then the crash -- before the *next* one. `recover()`
+    must not re-move a file that is already sitting at its real destination
+    (there is no scratch file left to move it from in the first place).
+    """
+    a = tmp_path / "a.csv"
+    b = tmp_path / "b.csv"
+    ledger = Ledger()
+    scratch_a = ledger.stage("a", a)
+    scratch_a.write_text("a-data", encoding="utf-8")
+    ledger.stage("b", b).write_text("b-data", encoding="utf-8")
+    _write_pending(ledger, "orders", "run1", "run1-deadbeef")
+    # Simulate publish()'s own loop having gotten exactly this far: "a" moved,
+    # "b" did not, then the process died.
+    os.replace(scratch_a, a)
+
+    report = recover("orders")
+
+    assert report.completed == ("b",)
+    assert report.already_committed == ("a",)
+    assert report.tampered == ()
+    assert a.read_text(encoding="utf-8") == "a-data"
+    assert b.read_text(encoding="utf-8") == "b-data"
+    manifest = json.loads(report.manifest_path.read_text(encoding="utf-8"))  # type: ignore[union-attr]
+    assert set(manifest["files"]) == {"a", "b"}
+
+
+def test_recover_reports_a_committed_destination_that_no_longer_matches_as_tampered(
+    tmp_path: Path,
+) -> None:
+    destination = tmp_path / "report.csv"
+    ledger = Ledger()
+    scratch = ledger.stage("report", destination)
+    scratch.write_text("original", encoding="utf-8")
+    _write_pending(ledger, "orders", "run1", "run1-deadbeef")
+    os.replace(scratch, destination)
+    # Something else changed the destination after the crash but before recovery.
+    destination.write_text("changed by someone else", encoding="utf-8")
+    pending_path = default_root() / "publications" / "orders.run1-deadbeef.pending.json"
+    assert (
+        file_digest(destination)
+        != json.loads(pending_path.read_text(encoding="utf-8"))["ports"]["report"]["digest"]
+    )
+
+    report = recover("orders")
+
+    assert report.tampered == ("report",)
+    assert report.completed == ()
+    assert report.already_committed == ()
+    assert not report.ok
+    # A tampered port is not claimed in the manifest as a trustworthy publish.
+    assert report.manifest_path is None
+
+
+def test_recover_refuses_a_stale_generation_a_newer_publish_has_superseded(
+    tmp_path: Path,
+) -> None:
+    """A resume (or a plain rerun) completed a whole new, later generation after
+    the crash. Finishing the old, interrupted one now would risk overwriting
+    it -- reported as ambiguous, and nothing is touched.
+    """
+    old_destination = tmp_path / "report.csv"
+    old_ledger = Ledger()
+    old_ledger.stage("report", old_destination).write_text("stale", encoding="utf-8")
+    _write_pending(old_ledger, "orders", "run1", "run1-deadbeef")
+
+    new_ledger = Ledger()
+    new_ledger.stage("report", old_destination).write_text("fresh", encoding="utf-8")
+    publish(new_ledger, workflow="orders", run_id="run2")
+    assert old_destination.read_text(encoding="utf-8") == "fresh"
+
+    report = recover("orders")
+
+    assert report.found
+    assert report.ambiguous
+    assert report.completed == ()
+    assert old_destination.read_text(encoding="utf-8") == "fresh"  # untouched
+    # The stale record survives -- it is the only evidence, until someone looks.
+    assert (default_root() / "publications" / "orders.run1-deadbeef.pending.json").is_file()

@@ -1238,3 +1238,72 @@ the decision, its tradeoff, and the evidence available when it was made.
   zero regressions, including after the Windows-filename fix (which two
   pre-existing, previously-passing integration tests caught immediately once
   checkpoint writes went live on a real dynamic-loop workflow).
+
+## 2026-09-08 — G4 recover publication without duplicating it
+
+- **Decision:** `run/publication.py`'s `publish()` writes a durable intent
+  record before its replace loop starts -- every port's scratch path, real
+  destination, and a digest of the scratch file's content, all under a path
+  keyed by generation (`{workflow}.{generation}.pending.json`), not merely by
+  workflow. It is removed the moment the loop finishes, on any outcome; its
+  only job is surviving a crash the same process cannot itself report. New
+  `recover(workflow)` reads the oldest such leftover record and settles each
+  port: scratch file still there means the replace never happened, and it
+  happens now; scratch file gone means it already happened, confirmed against
+  the recorded digest rather than assumed; a destination that no longer
+  matches that digest is `tampered`, reported and left untouched, never
+  silently trusted. If the workflow's current manifest already names a
+  *different* generation, the record is stale -- a resume or a plain rerun
+  already completed something newer since the crash -- and `recover()` reports
+  `ambiguous` and touches nothing, since finishing the old one now could
+  overwrite the newer, real one. `sclpl runs recover-publication <workflow>`
+  is the operator entry point: it locks the pending generation's own
+  destinations with the same C5 mechanism a run holds before touching
+  anything, so recovery cannot race a concurrent run or another recovery pass.
+- **Why:** SPEC's G4 accept criteria near-verbatim: staged/unvalidated outputs
+  are never reused as trusted published artifacts (a `tampered` port is
+  reported, not folded into the recovered manifest); completed generations are
+  recognized (the digest check on an already-committed port, and the
+  generation-mismatch check against the current manifest); ambiguous
+  fixed-path multi-output commits are reported for safe recovery rather than
+  guessed at. The scenario this closes has no other durable trace today: if
+  the process is killed *during* `publish()`'s own loop (not a step failing,
+  which `_remember`/`_finish_publication` already handle, but the process
+  itself dying), `_remember()` never runs at all -- the run's history row is
+  stuck at "running" forever, and without this record there would be nothing
+  left to say which files had already moved and which had not, beyond
+  whatever an operator could reconstruct by hand from the filesystem.
+- **Tradeoff:** the intent record's own write is best-effort
+  (`contextlib.suppress(OSError)`) -- a generation `recover()` cannot later
+  reconstruct is a strictly worse debugging position than before this batch,
+  but it must never become a *new* reason this run's actual outputs fail to
+  publish; a real, uncaught test failure (the pre-existing
+  `test_a_failed_replace_is_reported_as_interrupted_not_silently_dropped`
+  monkeypatches `os.replace` globally) caught this the first time it was
+  written without the guard. Keying the pending record per-generation rather
+  than per-workflow was also a correction, not the original design: a first
+  version used one shared `{workflow}.pending.json`, and a test deliberately
+  constructing "an old crash, then an unrelated newer publish completes
+  normally" caught the newer publish's own intent-write silently clobbering
+  the older crash's evidence before `recover()` ever got a chance to see it.
+  `recover()` itself is not wired into `run_workflow`'s own startup -- it is a
+  deliberate, separate operator action (`sclpl runs recover-publication`),
+  matching "reported for safe recovery" rather than an automatic, unattended
+  repair a normal run might trigger as a surprising side effect.
+- **Evidence:** `tests/unit/test_publication.py` gained 7 tests: a normal
+  publish leaves nothing to recover; `recover()` with nothing pending reports
+  cleanly; a generation that crashed before any file moved is completed in
+  full, with a real manifest, and the record itself is then gone; a port that
+  already committed before the crash is recognized by digest and left alone
+  while its sibling (still staged) is completed; a destination tampered with
+  after the crash is reported, not trusted, and excluded from the recovered
+  manifest; and a stale generation superseded by a newer, already-complete
+  publish is refused outright, with the old record left in place as evidence.
+  Full project suite: 1064 passed, 2 skipped (unchanged); one integration test
+  (`test_runs_which_on_a_path_no_run_ever_produced_fails_clearly`) hit a
+  60s subprocess timeout on this run and passed cleanly in 1.45s in isolation
+  immediately after -- an environment flake unrelated to this batch (`runs
+  which` is untouched F3 code), not a regression.
+- **Batch G is now complete**: G1 (durable checkpoints), G2 (resume
+  eligibility planning), G3 (resume execution), and G4 (publication crash
+  recovery) are all real, tested, and reachable through the CLI.

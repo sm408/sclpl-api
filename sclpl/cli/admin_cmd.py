@@ -264,6 +264,50 @@ def runs_resume_plan(
         raise typer.Exit(EXIT_USAGE)
 
 
+@runs_app.command("recover-publication")
+def runs_recover_publication(
+    workflow: Annotated[str, typer.Argument(help="Workflow name, as it publishes under.")],
+) -> None:
+    """G4: complete or report on a publish this workflow's own last generation left
+    behind after a crash -- a process killed partway through committing staged
+    files to their real destinations.
+
+    A no-op, safely, for a workflow whose last publish finished normally: there is
+    nothing here to find. Locks every destination the interrupted generation would
+    touch first, the same C5 guarantee a run itself holds, so this never races a
+    concurrent run or another recovery attempt over the same files.
+    """
+    from sclpl.run import publication
+    from sclpl.state import locking
+
+    destinations = publication.pending_destinations(workflow)
+    with locking.output_locks(destinations):
+        report = publication.recover(workflow)
+
+    if not report.found:
+        typer.echo(f"{workflow}: nothing to recover", err=True)
+        return
+    if report.ambiguous:
+        typer.echo(
+            f"{workflow}: generation {report.generation} is stale -- "
+            "a newer one has already published since. Nothing was touched.",
+            err=True,
+        )
+        raise typer.Exit(EXIT_USAGE)
+    if report.completed:
+        typer.echo(f"  completed: {', '.join(report.completed)}")
+    if report.already_committed:
+        typer.echo(f"  already committed: {', '.join(report.already_committed)}")
+    if report.tampered:
+        typer.echo(
+            f"  tampered (destination no longer matches; not trusted): "
+            f"{', '.join(report.tampered)}",
+            err=True,
+        )
+    if not report.ok:
+        raise typer.Exit(EXIT_USAGE)
+
+
 @runs_app.command("export")
 def runs_export(
     run: RunArg,
