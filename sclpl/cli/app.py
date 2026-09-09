@@ -36,6 +36,7 @@ from sclpl.cli.options import (
     resolve_verbosity,
 )
 from sclpl.errors import EXIT_USAGE, SclplError, ValidationError
+from sclpl.ext.configuration import set_plugin_settings
 from sclpl.ext.plugins import parse_capabilities
 from sclpl.project import context as project_context
 from sclpl.project import policy as policy_mod
@@ -153,6 +154,8 @@ def main(
     denied = frozenset(deny_capability or ()) | _project_denied_capabilities()
     parse_capabilities(denied)
     if not _is_static_plugin_inspection():
+        loaded_project = project_context.load()
+        set_plugin_settings(loaded_project.plugin_settings if loaded_project is not None else {})
         bootstrap.activate_plugins(denied=denied)
 
     ctx.obj = GlobalOptions(

@@ -83,3 +83,40 @@ def test_unknown_key_schema_and_escaping_path_are_refused(tmp_path: Path) -> Non
     assert loaded is not None
     with pytest.raises(ValidationError, match="escapes"):
         _ = loaded.workflow_dirs
+
+
+def test_plugin_settings_merge_base_and_selected_environment(tmp_path: Path) -> None:
+    root = tmp_path / "project"
+    _write(
+        root,
+        MANIFEST
+        + """
+[plugins.azure_blob]
+endpoint_suffix = "blob.core.windows.net"
+max_concurrency = "2"
+
+[plugins.azure_blob.profiles.prod]
+endpoint_suffix = "blob.core.usgovcloudapi.net"
+
+[environments.staging.plugins.azure_blob]
+profile = "prod"
+max_concurrency = "8"
+""",
+    )
+    loaded = context.load(root, env="staging")
+    assert loaded is not None
+    assert loaded.plugin_settings == {
+        "azure_blob": {
+            "endpoint_suffix": "blob.core.windows.net",
+            "max_concurrency": "8",
+            "profile": "prod",
+            "profiles": {"prod": {"endpoint_suffix": "blob.core.usgovcloudapi.net"}},
+        }
+    }
+
+
+def test_plugin_configuration_refuses_secret_values(tmp_path: Path) -> None:
+    root = tmp_path / "project"
+    _write(root, MANIFEST + "\n[plugins.azure_blob]\naccount_key = 'not-allowed'\n")
+    with pytest.raises(ValidationError, match="may not contain secrets"):
+        context.load(root)

@@ -216,6 +216,31 @@ def test_azure_transfer_concurrency_is_provider_scoped_and_validated() -> None:
         AzureBlobProvider(environment={"SCLPL_AZURE_BLOB_MAX_CONCURRENCY": "0"})._transfer_options()
 
 
+def test_azure_configuration_profile_is_nonsecret_and_environment_overrides_it(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: dict[str, object] = {}
+
+    class Client:
+        def __init__(self, url: str, credential: object) -> None:
+            captured.update(url=url, credential=credential)
+
+    monkeypatch.setattr(AzureBlobProvider, "_imports", staticmethod(lambda: (object, Client, None)))
+    provider = AzureBlobProvider(
+        configuration={
+            "profile": "gov",
+            "profiles": {"gov": {"endpoint_suffix": "blob.core.usgovcloudapi.net"}},
+            "max_concurrency": "3",
+        }
+    )
+    provider._service("account")
+    assert captured["url"] == "https://account.blob.core.usgovcloudapi.net"
+    assert provider._transfer_options() == {"max_concurrency": 3}
+
+    monkeypatch.setenv("SCLPL_AZURE_BLOB_MAX_CONCURRENCY", "7")
+    assert provider._transfer_options() == {"max_concurrency": 7}
+
+
 def test_azure_resource_info_preserves_provider_metadata() -> None:
     class Properties:
         size = 1

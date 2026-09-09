@@ -34,6 +34,15 @@ class ProjectContext:
         return {**base, **overlay}
 
     @property
+    def plugin_settings(self) -> dict[str, dict[str, Any]]:
+        """Opaque, non-secret settings merged for the selected environment."""
+        base = _table(self.manifest, "plugins")
+        environments = _table(self.manifest, "environments")
+        overlay = _table(_table(environments.get(self.environment, {}), "plugins"), "")
+        names = set(base) | set(overlay)
+        return {name: _merge_tables(_table(base, name), _table(overlay, name)) for name in names}
+
+    @property
     def workflow_dirs(self) -> list[Path]:
         paths = _table(self.manifest, "workflows").get("paths", ["workflows"])
         if not isinstance(paths, list) or not all(isinstance(item, str) for item in paths):
@@ -68,6 +77,7 @@ class ProjectContext:
             "environment": self.environment,
             "environment_source": self.environment_source,
             "settings": self.settings,
+            "plugin_settings": self.plugin_settings,
             "workflow_paths": [str(path) for path in self.workflow_dirs],
             "test_paths": [str(path) for path in self.test_dirs],
         }
@@ -144,6 +154,7 @@ def _validate(raw: dict[str, Any], path: Path) -> None:
         "policy",
         "outputs",
         "notifications",
+        "plugins",
     }
     unknown = set(raw) - allowed
     if unknown:
@@ -163,10 +174,49 @@ def _validate(raw: dict[str, Any], path: Path) -> None:
     for name, value in environments.items():
         if not isinstance(name, str) or not isinstance(value, dict):
             raise ValidationError("environments must map names to tables", where=str(path))
+        _validate_plugin_tables(_table(value, "plugins"), path)
+    for name, value in _table(raw, "plugins").items():
+        if not isinstance(name, str) or not isinstance(value, dict):
+            raise ValidationError("plugins must map names to tables", where=str(path))
+    _validate_plugin_tables(_table(raw, "plugins"), path)
 
 
 def _table(value: dict[str, Any], name: str) -> dict[str, Any]:
+    if not name:
+        return value
     found = value.get(name, {})
     if not isinstance(found, dict):
         raise ValidationError(f"{name} must be a table")
     return found
+
+
+def _merge_tables(base: dict[str, Any], overlay: dict[str, Any]) -> dict[str, Any]:
+    merged = dict(base)
+    for key, value in overlay.items():
+        if isinstance(merged.get(key), dict) and isinstance(value, dict):
+            merged[key] = _merge_tables(merged[key], value)
+        else:
+            merged[key] = value
+    return merged
+
+
+def _validate_plugin_tables(plugins: dict[str, Any], path: Path) -> None:
+    """Keep opaque plugin configuration versionable and out of the secret plane."""
+    forbidden = {"secret", "password", "token", "account_key", "connection_string", "sas_token"}
+
+    def visit(value: object, trail: str = "") -> None:
+        if not isinstance(value, dict):
+            return
+        for key, child in value.items():
+            if not isinstance(key, str):
+                raise ValidationError("plugin configuration keys must be strings", where=str(path))
+            name = f"{trail}.{key}" if trail else key
+            if key.lower() in forbidden:
+                raise ValidationError(
+                    f"plugin configuration {name!r} may not contain secrets; "
+                    "use the environment or host secret store",
+                    where=str(path),
+                )
+            visit(child, name)
+
+    visit(plugins)

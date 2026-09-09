@@ -36,6 +36,7 @@ from sclpl.errors import (
     did_you_mean,
 )
 from sclpl.expr.dispatch import generic, overload
+from sclpl.ext.configuration import plugin_settings, set_plugin_settings
 from sclpl.ext.functions import function
 from sclpl.ext.resources import (
     ResourceAuthenticationError,
@@ -121,10 +122,12 @@ __all__ = [
     "generic",
     "infer_schema",
     "is_table",
+    "plugin_settings",
     "overload",
     "records_of",
     "register_reader",
     "register_resource_provider",
     "resource_providers",
     "set_backend",
+    "set_plugin_settings",
 ]

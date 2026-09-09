@@ -75,6 +75,7 @@ class AzureBlobProvider:
         self,
         *,
         environment: Mapping[str, str] | None = None,
+        configuration: Mapping[str, Any] | None = None,
         credential_factory: Callable[[str], Any] | None = None,
     ) -> None:
         """Configure authentication without placing credentials in resource URIs.
@@ -84,6 +85,7 @@ class AzureBlobProvider:
         environment variables documented in ``docs/remote-resources.md``.
         """
         self._environment = environment if environment is not None else os.environ
+        self._configuration = self._select_profile(configuration or {})
         self._credential_factory = credential_factory
 
     def capabilities(self) -> ResourceCapabilities:
@@ -286,7 +288,27 @@ class AzureBlobProvider:
         return f"https://{account}.{suffix.strip('/')}"
 
     def _setting(self, name: str, *, default: str = "") -> str:
-        return self._environment.get(f"SCLPL_AZURE_BLOB_{name}", default).strip()
+        value = self._environment.get(f"SCLPL_AZURE_BLOB_{name}")
+        if value is not None:
+            return value.strip()
+        configured = self._configuration.get(name.lower())
+        return configured.strip() if isinstance(configured, str) else default
+
+    @staticmethod
+    def _select_profile(configuration: Mapping[str, Any]) -> dict[str, Any]:
+        selected = configuration.get("profile")
+        profiles = configuration.get("profiles", {})
+        base = {
+            key: value for key, value in configuration.items() if key not in {"profile", "profiles"}
+        }
+        if selected is None:
+            return base
+        if not isinstance(selected, str) or not isinstance(profiles, Mapping):
+            raise ResourceAuthenticationError("azure_blob profile configuration is invalid")
+        profile = profiles.get(selected)
+        if not isinstance(profile, Mapping):
+            raise ResourceAuthenticationError(f"azure_blob profile {selected!r} is not configured")
+        return {**base, **profile}
 
     def _secret(self, name: str, fallback: str | None = None) -> str:
         value = self._setting(name)

@@ -65,6 +65,26 @@ example `https://{account}.privatelink.blob.core.windows.net`. Alternatively set
 managed-identity environment settings remain effective without being copied into
 SCLPL configuration.
 
+## Plugin configuration and profiles
+
+Non-secret Azure settings can live in a project manifest under
+`[plugins.azure_blob]`, with environment-specific values under
+`[environments.<name>.plugins.azure_blob]`. Nested tables merge, so a selected profile
+can keep a sovereign-cloud endpoint alongside an environment override:
+
+```toml
+[plugins.azure_blob.profiles.gov]
+endpoint_suffix = "blob.core.usgovcloudapi.net"
+
+[environments.production.plugins.azure_blob]
+profile = "gov"
+max_concurrency = "8"
+```
+
+The selected profile contributes only non-secret plugin settings. Environment variables
+such as `SCLPL_AZURE_BLOB_MAX_CONCURRENCY` override manifest values; credentials remain
+in Azure Identity, environment variables, or the embedding host's credential factory.
+
 ## Remote cache and offline runs
 
 Remote workflows and inputs are stored beneath `~/.sclpl/resources` as
