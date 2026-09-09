@@ -7,7 +7,7 @@ from typing import BinaryIO
 import pytest
 
 from sclpl.errors import EXIT_CACHE_MISS, CacheMiss
-from sclpl.ext.resources import ResourceCapabilities, ResourceInfo
+from sclpl.ext.resources import ResourceCapabilities, ResourceInfo, ResourceUnavailable
 from sclpl.state.resource_cache import ResourceCache
 
 
@@ -123,3 +123,42 @@ def test_resource_cache_detects_corruption_and_repairs_it_online(tmp_path: Path)
     info = cache.materialize(provider, uri, repaired)
     assert repaired.read_bytes() == b"trusted"
     assert info.checksum is not None and info.checksum.startswith("sha256:")
+
+
+def test_resource_cache_resumes_a_revision_pinned_partial_download(tmp_path: Path) -> None:
+    class ResumableMemory(MemoryProvider):
+        def __init__(self) -> None:
+            super().__init__(b"abcdefgh", "v1")
+            self.offsets: list[int] = []
+            self.fail_once = True
+
+        def capabilities(self) -> ResourceCapabilities:
+            return ResourceCapabilities(revisions=True, resumable_downloads=True)
+
+        def download_range(
+            self,
+            uri: str,
+            target: BinaryIO,
+            *,
+            offset: int,
+            expected_revision: str,
+        ) -> ResourceInfo:
+            assert expected_revision == self.revision
+            self.offsets.append(offset)
+            if self.fail_once:
+                self.fail_once = False
+                target.write(self.data[offset : offset + 3])
+                raise ResourceUnavailable("connection interrupted")
+            target.write(self.data[offset:])
+            return ResourceInfo(uri=uri, size=len(self.data), revision=self.revision)
+
+    cache = ResourceCache(tmp_path / "cache")
+    provider = ResumableMemory()
+    uri = "memory://account/c/large.csv"
+    with pytest.raises(ResourceUnavailable):
+        cache.materialize(provider, uri, tmp_path / "first")
+
+    completed = tmp_path / "completed"
+    cache.materialize(provider, uri, completed)
+    assert completed.read_bytes() == b"abcdefgh"
+    assert provider.offsets == [0, 3]

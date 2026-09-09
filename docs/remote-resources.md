@@ -133,6 +133,14 @@ this provider only. Leave it unset to use Azure SDK defaults; it must be a posit
 integer. This setting is deliberately not a core runner option because other providers
 have different transfer models.
 
+## Resumable downloads
+
+For providers that advertise resumable downloads, SCLPL keeps an incomplete input in
+a revision-keyed private cache file and resumes it on the next online run. Azure Blob
+continues at the stored byte offset while requiring the ETag observed before the first
+attempt to remain unchanged. Partial files are never served offline or exposed as a
+successful cache entry; changed revisions start a new download.
+
 ## Distributed locks
 
 Providers advertise native locking through `sclpl resource doctor`. Azure Blob uses

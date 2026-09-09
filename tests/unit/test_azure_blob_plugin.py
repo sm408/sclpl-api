@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+import io
+import sys
+from types import ModuleType
+
 import pytest
 
 from plugins.azure_blob.provider import AzureBlobProvider, parse_uri
@@ -27,7 +31,51 @@ def test_azure_provider_declares_safe_resource_capabilities() -> None:
         and capabilities.conditional_write
         and capabilities.locks
         and capabilities.server_copy
+        and capabilities.resumable_downloads
     )
+
+
+def test_azure_resumable_download_passes_offset_and_revision(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: dict[str, object] = {}
+
+    class Downloader:
+        def readinto(self, target: io.BytesIO) -> None:
+            target.write(b"tail")
+
+    class Properties:
+        size = 7
+        last_modified = None
+        etag = "revision"
+        content_settings = None
+        metadata = None
+
+    class Client:
+        def download_blob(self, **kwargs: object) -> Downloader:
+            captured.update(kwargs)
+            return Downloader()
+
+        def get_blob_properties(self) -> Properties:
+            return Properties()
+
+    provider = AzureBlobProvider()
+    monkeypatch.setattr(provider, "_blob", lambda uri: Client())
+    core = ModuleType("azure.core")
+    core.__dict__["MatchConditions"] = type(
+        "MatchConditions", (), {"IfNotModified": "if-not-modified"}
+    )
+    monkeypatch.setitem(sys.modules, "azure.core", core)
+    monkeypatch.setattr(provider, "_transfer_options", lambda: {"max_concurrency": 2})
+    target = io.BytesIO()
+    info = provider.download_range(
+        "azblob://account/container/object.csv", target, offset=3, expected_revision="etag-1"
+    )
+    assert target.getvalue() == b"tail"
+    assert captured["offset"] == 3
+    assert captured["etag"] == "etag-1"
+    assert captured["max_concurrency"] == 2
+    assert info.revision == "revision"
 
 
 def test_azure_server_side_copy_waits_for_completion(monkeypatch: pytest.MonkeyPatch) -> None:

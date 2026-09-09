@@ -81,6 +81,7 @@ class ResourceCapabilities:
     conditional_write: bool = False
     locks: bool = False
     server_copy: bool = False
+    resumable_downloads: bool = False
 
 
 class ResourceLease(Protocol):
@@ -133,6 +134,19 @@ class ServerCopyResourceProvider(ResourceProvider, Protocol):
         *,
         overwrite: bool = False,
         expected_revision: str | None = None,
+    ) -> ResourceInfo: ...
+
+
+class ResumableResourceProvider(ResourceProvider, Protocol):
+    """Optional extension for revision-aware continuation of interrupted reads."""
+
+    def download_range(
+        self,
+        uri: str,
+        target: BinaryIO,
+        *,
+        offset: int,
+        expected_revision: str,
     ) -> ResourceInfo: ...
 
 

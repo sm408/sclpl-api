@@ -96,6 +96,7 @@ class AzureBlobProvider:
             conditional_write=True,
             locks=True,
             server_copy=True,
+            resumable_downloads=True,
         )
 
     def normalize(self, uri: str) -> str:
@@ -152,6 +153,30 @@ class AzureBlobProvider:
         try:
             client = self._blob(uri)
             downloader = client.download_blob(**self._transfer_options())
+            downloader.readinto(target)
+            return self._info(uri, client.get_blob_properties())
+        except Exception as error:
+            raise self._translate(error, uri) from error
+
+    def download_range(
+        self,
+        uri: str,
+        target: BinaryIO,
+        *,
+        offset: int,
+        expected_revision: str,
+    ) -> ResourceInfo:
+        """Continue a download only when the object still has the observed ETag."""
+        try:
+            from azure.core import MatchConditions
+
+            client = self._blob(uri)
+            downloader = client.download_blob(
+                offset=offset,
+                etag=expected_revision,
+                match_condition=MatchConditions.IfNotModified,
+                **self._transfer_options(),
+            )
             downloader.readinto(target)
             return self._info(uri, client.get_blob_properties())
         except Exception as error:

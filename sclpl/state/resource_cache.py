@@ -7,10 +7,11 @@ import json
 import shutil
 from dataclasses import dataclass, replace
 from pathlib import Path
+from typing import cast
 from uuid import uuid4
 
 from sclpl.errors import CacheMiss
-from sclpl.ext.resources import ResourceInfo, ResourceProvider
+from sclpl.ext.resources import ResourceInfo, ResourceProvider, ResumableResourceProvider
 from sclpl.state.db import default_root
 
 
@@ -36,6 +37,7 @@ class ResourceCache:
     def __init__(self, root: Path | None = None) -> None:
         self.root = root or default_root() / "resources"
         self._blobs = self.root / "blobs"
+        self._partials = self.root / "partials"
         self._index_path = self.root / "index.json"
 
     def materialize(
@@ -78,6 +80,17 @@ class ResourceCache:
                         checksum=cached.checksum,
                     )
 
+        if (
+            write
+            and expected is not None
+            and expected.revision is not None
+            and provider.capabilities().resumable_downloads
+            and callable(getattr(provider, "download_range", None))
+        ):
+            return self._resume_download(
+                cast(ResumableResourceProvider, provider), uri, target, expected
+            )
+
         target.parent.mkdir(parents=True, exist_ok=True)
         try:
             with target.open("wb") as handle:
@@ -89,6 +102,30 @@ class ResourceCache:
             cached = self.put(uri, target, info.revision)
             return replace(info, checksum=cached.checksum)
         return info
+
+    def _resume_download(
+        self,
+        provider: ResumableResourceProvider,
+        uri: str,
+        target: Path,
+        expected: ResourceInfo,
+    ) -> ResourceInfo:
+        """Continue a revision-pinned partial download, then atomically cache it."""
+        assert expected.revision is not None
+        partial = self._partial_path(uri, expected.revision)
+        partial.parent.mkdir(parents=True, exist_ok=True)
+        offset = partial.stat().st_size if partial.is_file() else 0
+        with partial.open("ab") as handle:
+            info = provider.download_range(
+                uri,
+                handle,
+                offset=offset,
+                expected_revision=expected.revision,
+            )
+        cached = self.put(uri, partial, info.revision)
+        partial.unlink(missing_ok=True)
+        self._copy(cached.path, target)
+        return replace(info, checksum=cached.checksum)
 
     def get(self, uri: str, revision: str | None = None) -> CachedResource | None:
         entry = self._index().get(self._key(uri))
@@ -168,6 +205,12 @@ class ResourceCache:
     @staticmethod
     def _revision_key(revision: str | None) -> str:
         return revision or ""
+
+    def _partial_path(self, uri: str, revision: str) -> Path:
+        return (
+            self._partials
+            / f"{self._key(uri)}-{hashlib.sha256(revision.encode()).hexdigest()}.part"
+        )
 
     @staticmethod
     def _copy(source: Path, target: Path) -> None:
