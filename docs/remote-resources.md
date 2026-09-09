@@ -115,6 +115,13 @@ the provider loaded, credentials are usable, and the selected identity can read 
 object. The command performs no write; it reports provider-declared write/list and
 conditional-write support separately.
 
+## Versioned Azure resources
+
+Azure Blob version IDs and snapshots can be addressed with `versionid` or `snapshot`
+query parameters, for example `azblob://account/container/report.csv?versionid=...`.
+These are honored for reads while display, diagnostics, and history continue to redact
+query strings.
+
 Troubleshooting: install `sclpl-azure-blob` in the same Python environment as
 `sclpl`, then confirm the identity has Storage Blob Data Reader for workflows/inputs
 and Storage Blob Data Contributor for outputs. `sclpl validate azblob://...` fetches

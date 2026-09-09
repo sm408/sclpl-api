@@ -6,7 +6,7 @@ import os
 from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass
 from typing import Any, BinaryIO
-from urllib.parse import urlsplit, urlunsplit
+from urllib.parse import parse_qs, urlsplit, urlunsplit
 
 from sclpl.ext.api import (
     ResourceAuthenticationError,
@@ -239,7 +239,15 @@ class AzureBlobProvider:
         details = parse_uri(uri)
         if not details.blob:
             raise ResourceInvalidURI("azblob operation requires a blob, not only a container")
-        return self._service(details.account).get_blob_client(details.container, details.blob)
+        query = parse_qs(urlsplit(uri).query)
+        kwargs: dict[str, str] = {}
+        if query.get("versionid"):
+            kwargs["version_id"] = query["versionid"][0]
+        if query.get("snapshot"):
+            kwargs["snapshot"] = query["snapshot"][0]
+        return self._service(details.account).get_blob_client(
+            details.container, details.blob, **kwargs
+        )
 
     def _info(self, uri: str, props: Any) -> ResourceInfo:
         return ResourceInfo(

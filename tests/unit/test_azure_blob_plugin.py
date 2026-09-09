@@ -160,3 +160,19 @@ def test_azure_resource_info_preserves_provider_metadata() -> None:
 
     info = AzureBlobProvider()._info("azblob://account/container/object.csv", Properties())
     assert info.metadata == {"owner": "analytics"}
+
+
+def test_azure_blob_client_preserves_version_or_snapshot_identity(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: dict[str, object] = {}
+
+    class Service:
+        def get_blob_client(self, container: str, blob: str, **kwargs: str) -> object:
+            captured.update(container=container, blob=blob, **kwargs)
+            return object()
+
+    provider = AzureBlobProvider()
+    monkeypatch.setattr(provider, "_service", lambda account: Service())
+    provider._blob("azblob://account/container/object.csv?versionid=version-1")
+    assert captured == {"container": "container", "blob": "object.csv", "version_id": "version-1"}
