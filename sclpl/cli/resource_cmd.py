@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from fnmatch import fnmatchcase
 from typing import Annotated
 
 import typer
@@ -58,7 +59,13 @@ def stat(uri: Annotated[str, typer.Argument(help="A provider resource URI.")]) -
 
 
 @app.command("ls")
-def ls(uri: Annotated[str, typer.Argument(help="A provider prefix URI.")]) -> None:
+def ls(
+    uri: Annotated[str, typer.Argument(help="A provider prefix URI.")],
+    pattern: Annotated[
+        str | None,
+        typer.Option("--glob", help="Optional provider-neutral glob against each logical URI."),
+    ] = None,
+) -> None:
     """List a provider prefix in stable URI order."""
     try:
         provider = resource_provider(uri)
@@ -67,6 +74,8 @@ def ls(uri: Annotated[str, typer.Argument(help="A provider prefix URI.")]) -> No
         typer.echo(str(error), err=True)
         raise typer.Exit(error.exit_code) from error
     for info in entries:
+        if pattern is not None and not fnmatchcase(info.uri, pattern):
+            continue
         size = str(info.size) if info.size is not None else "-"
         revision = info.revision or "-"
         typer.echo(f"{size:>12}  {revision:<20}  {display_resource_uri(info.uri)}")

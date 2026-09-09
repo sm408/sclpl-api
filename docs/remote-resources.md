@@ -188,6 +188,11 @@ conditional-write support separately.
 It also reports native server-copy and distributed-lock support, so an operation can
 be selected from declared provider behavior rather than from provider names.
 
+`sclpl resource ls <prefix> --glob '*.json'` applies one provider-neutral glob rule
+to normalized logical URIs after listing and before display. This is useful for
+inspection and is intentionally separate from input binding, where a matching glob
+creates multiple workflow resources.
+
 ## Versioned Azure resources
 
 Azure Blob version IDs and snapshots can be addressed with `versionid` or `snapshot`

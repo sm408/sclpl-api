@@ -11,7 +11,7 @@ from _pytest.monkeypatch import MonkeyPatch
 
 from sclpl import bootstrap
 from sclpl.catalog.resolve import resolve
-from sclpl.cli.resource_cmd import doctor
+from sclpl.cli.resource_cmd import doctor, ls
 from sclpl.errors import CacheMiss, UnknownTarget, ValidationError
 from sclpl.ext.resources import (
     ResourceCapabilities,
@@ -175,6 +175,24 @@ def test_resource_doctor_reports_readable_provider_without_writing(
     assert "authentication: usable" in rendered
     assert "write: supported" in rendered
     assert "server-copy: not supported" in rendered
+
+
+def test_resource_ls_applies_a_provider_neutral_uri_glob(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    register_resource_provider(
+        "memory",
+        Memory(
+            {
+                "memory://jobs/events/a.json": b"[]",
+                "memory://jobs/events/b.csv": b"x",
+            }
+        ),
+    )
+    ls("memory://jobs/events", pattern="*.json")
+    rendered = capsys.readouterr().out
+    assert "a.json" in rendered
+    assert "b.csv" not in rendered
 
 
 def test_unknown_scheme_has_generic_error() -> None:
