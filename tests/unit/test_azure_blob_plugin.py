@@ -39,7 +39,9 @@ def test_azure_default_auth_uses_configurable_endpoint(monkeypatch: pytest.Monke
         AzureBlobProvider, "_imports", staticmethod(lambda: (DefaultCredential, Client, None))
     )
     provider = AzureBlobProvider(
-        environment={"SCLPL_AZURE_BLOB_ACCOUNT_URL": "https://{account}.privatelink.blob.core.windows.net"}
+        environment={
+            "SCLPL_AZURE_BLOB_ACCOUNT_URL": "https://{account}.privatelink.blob.core.windows.net"
+        }
     )
     provider._service("orders")
     assert captured["url"] == "https://orders.privatelink.blob.core.windows.net"
@@ -132,7 +134,9 @@ def test_azure_sdk_errors_redact_configured_credentials() -> None:
             "SCLPL_AZURE_BLOB_SAS_TOKEN": "sas-secret",
         }
     )
-    rendered = str(provider._translate(Exception("failed account-key-secret sas-secret"), "azblob://a/c/x"))
+    rendered = str(
+        provider._translate(Exception("failed account-key-secret sas-secret"), "azblob://a/c/x")
+    )
     assert "account-key-secret" not in rendered
     assert "sas-secret" not in rendered
     assert rendered.count("[redacted]") == 2
