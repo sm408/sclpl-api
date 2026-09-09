@@ -10,7 +10,8 @@ from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import BinaryIO, Protocol
+from tempfile import SpooledTemporaryFile
+from typing import BinaryIO, Protocol, cast
 from urllib.parse import urlsplit
 
 from sclpl.errors import SclplError
@@ -165,6 +166,40 @@ def display_resource_uri(uri: str) -> str:
 def resource_providers() -> tuple[ResourceProvider, ...]:
     """Registered providers in stable scheme order, for diagnostics and CLI inspection."""
     return tuple(_PROVIDERS[scheme] for scheme in sorted(_PROVIDERS))
+
+
+def copy_resource(
+    source_uri: str,
+    destination_uri: str,
+    *,
+    overwrite: bool = False,
+    expected_revision: str | None = None,
+) -> ResourceInfo:
+    """Copy one resource across providers without exposing storage SDKs.
+
+    The provider-neutral fallback spools data in memory and then an OS-managed
+    temporary file when needed. It therefore works for every readable/writable
+    provider combination, including two different schemes. Providers may offer
+    a future server-side copy optimization without changing this public API.
+    """
+    source_provider = resource_provider(source_uri)
+    destination_provider = resource_provider(destination_uri)
+    source = source_provider.normalize(source_uri)
+    destination = destination_provider.normalize(destination_uri)
+    if not source_provider.capabilities().read:
+        raise ResourceUnsupportedOperation(f"provider {source_provider.scheme!r} cannot read")
+    if not destination_provider.capabilities().write:
+        raise ResourceUnsupportedOperation(f"provider {destination_provider.scheme!r} cannot write")
+    with SpooledTemporaryFile(max_size=8 * 1024 * 1024, mode="w+b") as temporary:
+        staging = cast(BinaryIO, temporary)
+        source_provider.download(source, staging)
+        staging.seek(0)
+        return destination_provider.upload(
+            staging,
+            destination,
+            overwrite=overwrite,
+            expected_revision=expected_revision,
+        )
 
 
 def clear_resource_providers() -> None:

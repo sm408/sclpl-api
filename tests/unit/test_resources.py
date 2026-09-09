@@ -19,6 +19,7 @@ from sclpl.ext.resources import (
     ResourceInfo,
     ResourceUnsupportedOperation,
     clear_resource_providers,
+    copy_resource,
     register_resource_provider,
     resource_provider,
     resource_providers,
@@ -108,6 +109,19 @@ def test_registered_resource_providers_are_stably_ordered() -> None:
     register_resource_provider("memory", first)
     register_resource_provider("archive", second)
     assert [provider.scheme for provider in resource_providers()] == ["archive", "memory"]
+
+
+def test_copy_resource_streams_between_registered_providers() -> None:
+    source = Memory({"memory://source/orders.csv": b"id,total\n1,42\n"})
+    destination = Memory()
+    destination.scheme = "archive"
+    register_resource_provider("memory", source)
+    register_resource_provider("archive", destination)
+
+    copied = copy_resource("memory://source/orders.csv", "archive://warehouse/orders.csv")
+
+    assert copied.uri == "archive://warehouse/orders.csv"
+    assert destination.objects["archive://warehouse/orders.csv"] == b"id,total\n1,42\n"
 
 
 def test_resource_doctor_reports_readable_provider_without_writing(

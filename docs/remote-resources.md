@@ -116,6 +116,14 @@ a context manager that releases the lease on exit. Azure accepts finite leases f
 through 60 seconds, or `-1` for an infinite lease. Keep leases short and use the
 context-manager form; workflows do not automatically acquire remote locks yet.
 
+## Cross-provider copies
+
+Embedding hosts can call `copy_resource(source_uri, destination_uri)` to copy between
+any readable source and writable destination provider. The default implementation
+streams through a bounded in-memory spool that rolls to an OS-managed temporary file
+for larger objects, so no provider-specific credentials or SDK types cross the public
+API boundary. Destination create-only and revision-aware write rules still apply.
+
 ## Diagnostics
 
 Use `sclpl resource doctor azblob://account/container/known-object.csv` to verify that

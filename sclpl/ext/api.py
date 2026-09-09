@@ -50,6 +50,7 @@ from sclpl.ext.resources import (
     ResourceRef,
     ResourceUnavailable,
     ResourceUnsupportedOperation,
+    copy_resource,
     register_resource_provider,
     resource_providers,
 )
@@ -113,6 +114,7 @@ __all__ = [
     "ValidationError",
     "as_table",
     "connector",
+    "copy_resource",
     "did_you_mean",
     "flatten_records",
     "function",
