@@ -76,6 +76,7 @@ def test_resource_cache_reuses_a_revision_and_serves_offline_without_network(
     assert provider.downloads == 1
     assert provider.stats == 2
     assert info.revision == "v1"
+    assert info.checksum == f"sha256:{cache.get(uri, 'v1').path.name}"  # type: ignore[union-attr]
     assert "sig=secret" not in (tmp_path / "cache" / "index.json").read_text(encoding="utf-8")
 
 
@@ -104,3 +105,21 @@ def test_resource_cache_offline_miss_has_the_standard_cache_exit_code(tmp_path: 
         )
     assert raised.value.exit_code == EXIT_CACHE_MISS
     assert "without --offline" in str(raised.value)
+
+
+def test_resource_cache_detects_corruption_and_repairs_it_online(tmp_path: Path) -> None:
+    cache = ResourceCache(tmp_path / "cache")
+    provider = MemoryProvider(b"trusted", "v1")
+    uri = "memory://account/c/input.csv"
+    cache.materialize(provider, uri, tmp_path / "first")
+    cached = cache.get(uri, "v1")
+    assert cached is not None
+    cached.path.write_bytes(b"corrupt")
+
+    with pytest.raises(CacheMiss):
+        cache.materialize(provider, uri, tmp_path / "offline", require_hit=True)
+
+    repaired = tmp_path / "repaired"
+    info = cache.materialize(provider, uri, repaired)
+    assert repaired.read_bytes() == b"trusted"
+    assert info.checksum is not None and info.checksum.startswith("sha256:")

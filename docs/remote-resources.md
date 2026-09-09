@@ -72,6 +72,11 @@ content-addressed blobs. The cache index keys a normalized resource URI by hash,
 does not retain signed URI query strings. When a provider supplies revisions, SCLPL
 checks the current revision online and reuses only the matching cached blob.
 
+Each cache address is a SHA-256 content checksum. SCLPL verifies that checksum before
+serving a cache hit; corrupted cache data is a miss in offline mode and is redownloaded
+and repaired by an online run. `ResourceInfo.checksum` reports this verified value as
+`sha256:<hex>` for cached materializations.
+
 `sclpl run --offline azblob://...` makes no Azure calls: the workflow bundle and every
 remote input must already be cached. A missing object exits with code 5 and recommends
 one ordinary online run. Outputs are still never published by a failed execution.

@@ -5,7 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import shutil
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from uuid import uuid4
 
@@ -19,6 +19,11 @@ class CachedResource:
     path: Path
     revision: str | None
     size: int
+
+    @property
+    def checksum(self) -> str:
+        """The SHA-256 address is also the verified cache integrity checksum."""
+        return f"sha256:{self.path.name}"
 
 
 class ResourceCache:
@@ -49,7 +54,12 @@ class ResourceCache:
             if cached is None:
                 raise self._miss(uri)
             self._copy(cached.path, target)
-            return ResourceInfo(uri=uri, size=cached.size, revision=cached.revision)
+            return ResourceInfo(
+                uri=uri,
+                size=cached.size,
+                revision=cached.revision,
+                checksum=cached.checksum,
+            )
 
         expected: ResourceInfo | None = None
         if read and provider.capabilities().revisions:
@@ -64,6 +74,8 @@ class ResourceCache:
                         modified=expected.modified,
                         revision=expected.revision,
                         content_type=expected.content_type,
+                        metadata=expected.metadata,
+                        checksum=cached.checksum,
                     )
 
         target.parent.mkdir(parents=True, exist_ok=True)
@@ -74,7 +86,8 @@ class ResourceCache:
             target.unlink(missing_ok=True)
             raise
         if write:
-            self.put(uri, target, info.revision)
+            cached = self.put(uri, target, info.revision)
+            return replace(info, checksum=cached.checksum)
         return info
 
     def get(self, uri: str, revision: str | None = None) -> CachedResource | None:
@@ -93,7 +106,7 @@ class ResourceCache:
         if not isinstance(blob, str) or not isinstance(size, int):
             return None
         path = self._blobs / blob
-        if not path.is_file():
+        if not path.is_file() or self._digest(path) != blob:
             return None
         stored_revision = value.get("revision")
         if stored_revision is not None and not isinstance(stored_revision, str):
@@ -110,7 +123,7 @@ class ResourceCache:
                 writer.write(chunk)
         blob = digest.hexdigest()
         cached_path = self._blobs / blob
-        if cached_path.is_file():
+        if cached_path.is_file() and self._digest(cached_path) == blob:
             temporary.unlink(missing_ok=True)
         else:
             temporary.replace(cached_path)
@@ -160,6 +173,14 @@ class ResourceCache:
     def _copy(source: Path, target: Path) -> None:
         target.parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(source, target)
+
+    @staticmethod
+    def _digest(path: Path) -> str:
+        digest = hashlib.sha256()
+        with path.open("rb") as reader:
+            for chunk in iter(lambda: reader.read(65536), b""):
+                digest.update(chunk)
+        return digest.hexdigest()
 
     @staticmethod
     def _miss(uri: str) -> CacheMiss:

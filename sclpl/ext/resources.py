@@ -68,6 +68,8 @@ class ResourceInfo:
     content_type: str | None = None
     #: Provider-owned fields; core preserves but never interprets these values.
     metadata: Mapping[str, str] | None = None
+    #: Content digest in ``algorithm:hex`` form when the provider can supply one.
+    checksum: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
