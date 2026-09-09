@@ -174,6 +174,7 @@ def test_resource_doctor_reports_readable_provider_without_writing(
     rendered = capsys.readouterr().out
     assert "authentication: usable" in rendered
     assert "write: supported" in rendered
+    assert "server-copy: not supported" in rendered
 
 
 def test_unknown_scheme_has_generic_error() -> None:

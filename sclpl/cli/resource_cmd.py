@@ -23,10 +23,17 @@ def providers() -> None:
     if not found:
         typer.echo("no resource providers registered")
         return
-    typer.echo(f"{'scheme':<12} read write list revisions conditional-write")
+    typer.echo(f"{'scheme':<12} read write list revisions conditional-write server-copy")
     for provider in found:
         caps = provider.capabilities()
-        flags = (caps.read, caps.write, caps.list, caps.revisions, caps.conditional_write)
+        flags = (
+            caps.read,
+            caps.write,
+            caps.list,
+            caps.revisions,
+            caps.conditional_write,
+            caps.server_copy,
+        )
         typer.echo(f"{provider.scheme:<12} " + " ".join("yes" if flag else "no" for flag in flags))
 
 
@@ -82,3 +89,4 @@ def doctor(uri: Annotated[str, typer.Argument(help="A readable provider object U
     typer.echo(f"list: {'supported' if caps.list else 'not supported'}")
     typer.echo(f"conditional-write: {'supported' if caps.conditional_write else 'not supported'}")
     typer.echo(f"distributed-locks: {'supported' if caps.locks else 'not supported'}")
+    typer.echo(f"server-copy: {'supported' if caps.server_copy else 'not supported'}")

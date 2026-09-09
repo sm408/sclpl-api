@@ -157,6 +157,8 @@ Use `sclpl resource doctor azblob://account/container/known-object.csv` to verif
 the provider loaded, credentials are usable, and the selected identity can read the
 object. The command performs no write; it reports provider-declared write/list and
 conditional-write support separately.
+It also reports native server-copy and distributed-lock support, so an operation can
+be selected from declared provider behavior rather than from provider names.
 
 ## Versioned Azure resources
 
