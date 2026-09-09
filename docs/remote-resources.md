@@ -94,6 +94,13 @@ sclpl run azblob://myaccount/workflows/jobs/orders/ `
 Remote globs are input-only; an output must name one exact destination URI. A pattern
 that matches nothing is a validation error rather than silently running with no input.
 
+## Immutable remote generations
+
+Use `--remote-generation` for multi-output remote workflows that need a completed-set
+view. Outputs upload to `generations/<run-id>/...`; only after every upload succeeds
+does SCLPL conditionally update the parent `latest.json` manifest. A failed upload can
+leave unreachable objects, but never a manifest for a partial generation.
+
 Troubleshooting: install `sclpl-azure-blob` in the same Python environment as
 `sclpl`, then confirm the identity has Storage Blob Data Reader for workflows/inputs
 and Storage Blob Data Contributor for outputs. `sclpl validate azblob://...` fetches

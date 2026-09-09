@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+import io
+import json
 import shutil
 from dataclasses import dataclass, field
 from pathlib import Path
+from urllib.parse import urlsplit, urlunsplit
 
 from sclpl.errors import CacheMiss
 from sclpl.ext.resources import ResourceNotFound, ResourceRef, resource_provider
@@ -103,3 +106,48 @@ def publish(prepared: PreparedResources, *, overwrite: bool) -> None:
                 expected_revision=output.expected_revision,
             )
         output.destination.revision = info.revision
+
+
+def publish_generation(prepared: PreparedResources, *, run_id: str) -> None:
+    """Publish remote outputs as immutable objects, then advance each latest manifest.
+
+    A failed generation can leave unreachable objects behind, but never a manifest
+    pointing at a partial set. Readers that follow ``latest.json`` therefore see only
+    completed generations.
+    """
+    groups: dict[str, list[RemoteOutput]] = {}
+    for output in prepared.outputs:
+        groups.setdefault(_parent_uri(output.destination.uri), []).append(output)
+    for parent, outputs in sorted(groups.items()):
+        entries: dict[str, str] = {}
+        provider = resource_provider(outputs[0].destination.uri)
+        for output in sorted(outputs, key=lambda item: item.port):
+            target, relative = _generation_uri(output.destination.uri, run_id)
+            with output.staged.open("rb") as source:
+                info = provider.upload(source, target, overwrite=False)
+            output.destination.revision = info.revision
+            entries[output.port] = relative
+        manifest_uri = f"{parent}/latest.json"
+        try:
+            expected = provider.stat(manifest_uri).revision
+        except ResourceNotFound:
+            expected = None
+        payload = json.dumps({"generation": run_id, "outputs": entries}, sort_keys=True).encode()
+        provider.upload(
+            io.BytesIO(payload), manifest_uri, overwrite=True, expected_revision=expected
+        )
+
+
+def _parent_uri(uri: str) -> str:
+    parsed = urlsplit(uri)
+    parent, _, _ = parsed.path.rpartition("/")
+    return urlunsplit((parsed.scheme, parsed.netloc, parent, parsed.query, ""))
+
+
+def _generation_uri(uri: str, run_id: str) -> tuple[str, str]:
+    parsed = urlsplit(uri)
+    parent, _, name = parsed.path.rpartition("/")
+    relative = f"generations/{run_id}/{name}"
+    return urlunsplit(
+        (parsed.scheme, parsed.netloc, f"{parent}/{relative}", parsed.query, "")
+    ), relative

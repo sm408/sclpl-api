@@ -104,6 +104,8 @@ class Options:
     #: Rerunning it anyway is a deliberate operator decision; this only silences
     #: the refusal, it does not make the rerun itself any safer.
     force_resume: frozenset[str] = frozenset()
+    #: Publish remote outputs beneath an immutable generation and advance latest.json last.
+    remote_generation: bool = False
     #: Logical base URI of a remotely loaded workflow, if any.
     resource_base: str | None = None
 
@@ -359,7 +361,10 @@ async def run_workflow(doc: WorkflowDoc, options: Options, reporter: Reporter) -
                 and prepared_resources is not None
                 and prepared_resources.outputs
             ):
-                resources_mod.publish(prepared_resources, overwrite=options.overwrite)
+                if options.remote_generation:
+                    resources_mod.publish_generation(prepared_resources, run_id=options.run_id)
+                else:
+                    resources_mod.publish(prepared_resources, overwrite=options.overwrite)
             if store_cache is not None:
                 if store_cache.stats.hits or store_cache.stats.writes:
                     reporter.log("info", store_cache.stats.summary())

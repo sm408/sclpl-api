@@ -20,6 +20,7 @@ from sclpl.cli import (
     launcher,
     plugin_cmd,
     project_cmd,
+    resource_cmd,
     test_cmd,
     workflow_cmd,
     workflow_project_cmd,
@@ -106,6 +107,7 @@ catalog_cmd.register(app)
 contract_cmd.register(app)
 plugin_cmd.register(app)
 project_cmd.register(app)
+resource_cmd.register(app)
 test_cmd.register(app)
 workflow_project_cmd.register(app)
 admin_cmd.register(app)

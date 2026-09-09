@@ -142,6 +142,11 @@ def display_resource_uri(uri: str) -> str:
     return provider.display_uri(provider.normalize(uri))
 
 
+def resource_providers() -> tuple[ResourceProvider, ...]:
+    """Registered providers in stable scheme order, for diagnostics and CLI inspection."""
+    return tuple(_PROVIDERS[scheme] for scheme in sorted(_PROVIDERS))
+
+
 def clear_resource_providers() -> None:
     """Test-only reset; not re-exported by the public plugin API."""
     _PROVIDERS.clear()

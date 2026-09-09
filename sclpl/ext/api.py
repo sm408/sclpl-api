@@ -50,6 +50,7 @@ from sclpl.ext.resources import (
     ResourceUnavailable,
     ResourceUnsupportedOperation,
     register_resource_provider,
+    resource_providers,
 )
 from sclpl.tables.base import (
     MissingExtra,
@@ -120,5 +121,6 @@ __all__ = [
     "records_of",
     "register_reader",
     "register_resource_provider",
+    "resource_providers",
     "set_backend",
 ]

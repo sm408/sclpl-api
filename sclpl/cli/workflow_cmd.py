@@ -73,6 +73,13 @@ def run(
             "--overwrite", help="Replace existing outputs even if project policy denies it."
         ),
     ] = False,
+    remote_generation: Annotated[
+        bool,
+        typer.Option(
+            "--remote-generation",
+            help="Publish remote outputs as an immutable generation and update latest.json last.",
+        ),
+    ] = False,
     dry_run: Annotated[
         bool, typer.Option("--dry-run", help="Plan and validate, but execute nothing.")
     ] = False,
@@ -189,6 +196,7 @@ def run(
         keep_going=keep_going,
         validate=not no_validate,
         overwrite=overwrite,
+        remote_generation=remote_generation,
         dry_run=dry_run,
         keep_all=keep_all,
         memory_budget=memory_budget,

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import io
+import json
 from collections.abc import Generator
 from pathlib import Path
 from typing import BinaryIO
@@ -19,13 +20,14 @@ from sclpl.ext.resources import (
     clear_resource_providers,
     register_resource_provider,
     resource_provider,
+    resource_providers,
     resource_ref,
 )
 from sclpl.render.plain import PlainSink
 from sclpl.render.reporter import Reporter
 from sclpl.run.ir import Port, WorkflowDoc
 from sclpl.run.ports import bind
-from sclpl.run.resources import prepare, publish
+from sclpl.run.resources import prepare, publish, publish_generation
 from sclpl.run.runner import Options, run_workflow
 from sclpl.run.sclpll import parse
 
@@ -96,6 +98,15 @@ def test_duplicate_scheme_is_refused_deterministically() -> None:
     register_resource_provider("memory", Memory())
     with pytest.raises(ResourceConflict, match="already registered"):
         register_resource_provider("memory", Memory())
+
+
+def test_registered_resource_providers_are_stably_ordered() -> None:
+    first = Memory()
+    second = Memory()
+    second.scheme = "archive"
+    register_resource_provider("memory", first)
+    register_resource_provider("archive", second)
+    assert [provider.scheme for provider in resource_providers()] == ["archive", "memory"]
 
 
 def test_unknown_scheme_has_generic_error() -> None:
@@ -235,6 +246,34 @@ def test_remote_create_only_publication_refuses_a_racing_destination(tmp_path: P
     output_path.write_bytes(b"new\n")
     with pytest.raises(ResourceConflict):
         publish(prepared, overwrite=False)
+
+
+def test_remote_generation_publication_advances_latest_only_after_all_outputs(
+    tmp_path: Path,
+) -> None:
+    provider = Memory()
+    register_resource_provider("memory", provider)
+    doc = WorkflowDoc(
+        name="orders",
+        outputs=[Port(name="report", format="csv"), Port(name="summary", format="json")],
+    )
+    bindings = bind(doc, resource_base="memory://jobs/orders/")
+    prepared = prepare(bindings, run_id="generation", root=tmp_path / "stage")
+    bindings.outputs["report"].path.write_bytes(b"report")  # type: ignore[union-attr]
+    bindings.outputs["summary"].path.write_bytes(b"summary")  # type: ignore[union-attr]
+
+    publish_generation(prepared, run_id="run-123")
+
+    root = "memory://jobs/orders/outputs"
+    assert provider.objects[f"{root}/generations/run-123/report.csv"] == b"report"
+    assert provider.objects[f"{root}/generations/run-123/summary.json"] == b"summary"
+    assert json.loads(provider.objects[f"{root}/latest.json"]) == {
+        "generation": "run-123",
+        "outputs": {
+            "report": "generations/run-123/report.csv",
+            "summary": "generations/run-123/summary.json",
+        },
+    }
 
 
 def test_offline_refuses_remote_output_publication(tmp_path: Path) -> None:
