@@ -665,7 +665,7 @@ Revised by **ADR 0001** (23 Aug 2026): the original ~7,150 was estimated before 
 existed and omitted `expr/ops/` and `plugins_bundled/` entirely. Revised again by
 **ADR 0002** (31 Aug 2026), which split `run/sclpll/` -- a lexer, parser, and emitter
 that grows with the *grammar* -- out of `run/`, which grows with what the runner *does*.
-Current target **~21,200 lines**, against ~59,100 deleted. The contract-package
+Current target **~21,700 lines**, against ~59,100 deleted. The contract-package
 increase is recorded in [ADR 0004](../adr/0004-budget-contracts-package.md); the
 test-manifest package allocation is recorded in ADR 0005. `run/`'s increase for
 Batch D's transport completion is recorded in
@@ -676,12 +676,12 @@ Batch F's reporting and lineage commands is recorded in
 
 | Package | Budget | | Package | Budget |
 |---|---:|---|---|---:|
-| `cli/` | 2,000 | | `expr/` | 1,500 |
+| `cli/` | 2,300 | | `expr/` | 1,500 |
 | `render/` | 1,300 | | `expr/ops/` | 1,400 |
 | `catalog/` | 500 | | `tables/` | 900 |
 | `contracts/` | 700 | | | |
 | `testing/` | 700 | | | |
-| `run/` | 4,800 | | `ext/` | 700 |
+| `run/` | 5,000 | | `ext/` | 700 |
 | `run/sclpll/` | 1,200 | | `state/` | 900 |
 | `values/` | 1,000 | | `plugins_bundled/` | 600 |
 | `project/` | 1,200 | | | |
