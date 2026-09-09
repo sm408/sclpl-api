@@ -8,6 +8,7 @@ report is what `run` would actually do.
 from __future__ import annotations
 
 import asyncio
+import io
 import sys
 from pathlib import Path
 from typing import Annotated, Any
@@ -17,6 +18,7 @@ import typer
 from sclpl.catalog import resolve as catalog
 from sclpl.cli.options import options_of
 from sclpl.errors import EXIT_INTERRUPTED, EXIT_USAGE, EXIT_VALIDATION, SclplError
+from sclpl.ext.resources import resource_provider, resource_scheme
 from sclpl.project import context as project_context
 from sclpl.project import identity, lock
 from sclpl.render.reporter import build_reporter
@@ -359,20 +361,24 @@ def _mermaid(plan: Any) -> str:
 
 def fmt(
     ctx: typer.Context,
-    path: Annotated[Path, typer.Argument(help="Workflow file to rewrite.")],
+    path: Annotated[str, typer.Argument(help="Local path or remote workflow URI to rewrite.")],
     check: Annotated[
         bool, typer.Option("--check", help="Exit 3 if it is not already canonical.")
     ] = False,
 ) -> None:
     """Rewrite a workflow in canonical form, in place."""
     del ctx
-    if not path.is_file():
+    if resource_scheme(path) is not None:
+        _fmt_remote(path, check)
+        return
+    local_path = Path(path)
+    if not local_path.is_file():
         typer.echo(f"{path} does not exist", err=True)
         raise typer.Exit(EXIT_USAGE)
 
-    doc = catalog.load(path)
-    formatted = compile_json.dumps(doc) if path.suffix == ".json" else emit_sclpll(doc)
-    current = path.read_text(encoding="utf-8")
+    doc = catalog.load(local_path)
+    formatted = compile_json.dumps(doc) if local_path.suffix == ".json" else emit_sclpll(doc)
+    current = local_path.read_text(encoding="utf-8")
 
     if formatted == current:
         typer.echo(f"{path}: already canonical", err=True)
@@ -380,8 +386,29 @@ def fmt(
     if check:
         typer.echo(f"{path}: not canonical", err=True)
         raise typer.Exit(EXIT_VALIDATION)
-    path.write_text(formatted, encoding="utf-8")
-    typer.echo(f"{path}: rewritten", err=True)
+    local_path.write_text(formatted, encoding="utf-8")
+    typer.echo(f"{local_path}: rewritten", err=True)
+
+
+def _fmt_remote(uri: str, check: bool) -> None:
+    located = _locate(uri)
+    formatted = (
+        compile_json.dumps(located.doc)
+        if located.path.suffix == ".json"
+        else emit_sclpll(located.doc)
+    )
+    current = located.path.read_text(encoding="utf-8")
+    if formatted == current:
+        return
+    if check:
+        raise typer.Exit(EXIT_VALIDATION)
+    assert located.origin_uri is not None
+    resource_provider(located.origin_uri).upload(
+        io.BytesIO(formatted.encode()),
+        located.origin_uri,
+        overwrite=True,
+        expected_revision=located.origin_revision,
+    )
 
 
 def convert(

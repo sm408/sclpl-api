@@ -41,6 +41,8 @@ class Located:
     source: str  # "path" | "cwd" | "project" | "user"
     #: The logical remote identity, retained after its bytes are staged locally.
     origin_uri: str | None = None
+    #: Provider revision observed when the remote source was materialized.
+    origin_revision: str | None = None
 
     def describe(self) -> str:
         return f"{self.doc.name} ({self.source}: {self.path})"
@@ -131,7 +133,7 @@ def _resolve_resource(
     root.mkdir(parents=True, exist_ok=True)
     staged = root / f"{hashlib.sha256(uri.encode()).hexdigest()[:16]}{suffix}"
     try:
-        ResourceCache().materialize(
+        info = ResourceCache().materialize(
             provider,
             uri,
             staged,
@@ -144,7 +146,13 @@ def _resolve_resource(
         raise UnknownTarget(
             f"remote workflow {provider.display_uri(uri)} does not exist"
         ) from error
-    return Located(doc=load(staged), path=staged, source="resource", origin_uri=uri)
+    return Located(
+        doc=load(staged),
+        path=staged,
+        source="resource",
+        origin_uri=uri,
+        origin_revision=info.revision,
+    )
 
 
 def _looks_like_a_path(target: str) -> bool:

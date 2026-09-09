@@ -135,6 +135,7 @@ def test_remote_bundle_loads_and_preserves_its_logical_origin(
     located = resolve("memory://jobs/orders/")
     assert located.doc.name == "orders"
     assert located.origin_uri == "memory://jobs/orders/workflow.sclpll"
+    assert located.origin_revision is None
 
 
 def test_remote_bundle_runs_offline_from_the_resource_cache(
