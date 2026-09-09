@@ -16,12 +16,15 @@ from __future__ import annotations
 import sys
 from collections.abc import Iterable
 from dataclasses import dataclass, field
+from fnmatch import fnmatchcase
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlsplit, urlunsplit
 
 from sclpl.errors import ValidationError, did_you_mean
 from sclpl.ext.resources import (
     ResourceRef,
+    ResourceUnsupportedOperation,
     display_resource_uri,
     resource_provider,
     resource_ref,
@@ -57,6 +60,8 @@ class Binding:
         if self.is_stdio:
             return "stdin" if self.direction == "in" else "stdout"
         if self.resources:
+            if len(self.resources) > 1:
+                return f"{len(self.resources)} remote resources"
             return display_resource_uri(self.resources[0].uri)
         if not self.paths:
             return "(unbound)"
@@ -191,11 +196,11 @@ def _make(port: Port, spec: str | None, direction: str, resource_base: str | Non
     ):
         path_text = resource_provider(resource_base).resolve(resource_base, path_text)
     if resource_scheme(path_text) is not None:
-        ref = resource_ref(path_text)
+        resources = _expand_resource(path_text, direction)
         return Binding(
             name=port.name,
             direction=direction,
-            resources=[ref],
+            resources=resources,
             format=fmt or port.format,
             required=port.required,
         )
@@ -210,6 +215,42 @@ def _make(port: Port, spec: str | None, direction: str, resource_base: str | Non
         format=resolved,
         required=port.required,
     )
+
+
+def _expand_resource(uri: str, direction: str) -> list[ResourceRef]:
+    """Expand a remote input pattern through the provider's generic listing API."""
+    parsed = urlsplit(uri)
+    wildcard = min(
+        (index for marker in "*?[" if (index := parsed.path.find(marker)) >= 0),
+        default=-1,
+    )
+    if wildcard < 0:
+        return [resource_ref(uri)]
+    if direction != "in":
+        raise ValidationError(
+            f"remote output pattern {uri!r} is not supported",
+            remedies=["bind an output to one exact resource URI"],
+        )
+    provider = resource_provider(uri)
+    if not provider.capabilities().list:
+        raise ResourceUnsupportedOperation(
+            f"resource provider {provider.scheme!r} cannot list resources for a glob"
+        )
+    prefix = urlunsplit((parsed.scheme, parsed.netloc, parsed.path[:wildcard], parsed.query, ""))
+    normalized_pattern = provider.normalize(uri)
+    matches = sorted(
+        {
+            provider.normalize(info.uri)
+            for info in provider.list(prefix)
+            if fnmatchcase(provider.normalize(info.uri), normalized_pattern)
+        }
+    )
+    if not matches:
+        raise ValidationError(
+            f"the remote pattern {display_resource_uri(uri)!r} matched no resources",
+            remedies=["check the prefix and pattern, or quote it so the shell does not expand it"],
+        )
+    return [resource_ref(match) for match in matches]
 
 
 def _split_format(spec: str) -> tuple[str, Format | None]:

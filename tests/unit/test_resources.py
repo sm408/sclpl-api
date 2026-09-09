@@ -10,7 +10,7 @@ from _pytest.monkeypatch import MonkeyPatch
 
 from sclpl import bootstrap
 from sclpl.catalog.resolve import resolve
-from sclpl.errors import CacheMiss, UnknownTarget
+from sclpl.errors import CacheMiss, UnknownTarget, ValidationError
 from sclpl.ext.resources import (
     ResourceCapabilities,
     ResourceConflict,
@@ -52,7 +52,7 @@ class Memory:
         return uri in self.objects
 
     def list(self, uri: str) -> list[ResourceInfo]:
-        return []
+        return [ResourceInfo(uri=key) for key in sorted(self.objects) if key.startswith(uri)]
 
     def download(self, uri: str, target: BinaryIO) -> ResourceInfo:
         if uri not in self.objects:
@@ -171,6 +171,57 @@ def test_missing_optional_remote_input_remains_unbound(tmp_path: Path) -> None:
     bindings = bind(doc, resource_base="memory://jobs/orders/")
     prepare(bindings, run_id="optional-resource", root=tmp_path / "stage")
     assert bindings.inputs["notes"].paths == []
+
+
+def test_remote_input_glob_lists_matches_in_stable_order() -> None:
+    register_resource_provider(
+        "memory",
+        Memory(
+            {
+                "memory://jobs/orders/inputs/events-2.json": b"[]",
+                "memory://jobs/orders/inputs/events-1.json": b"[]",
+                "memory://jobs/orders/inputs/ignore.csv": b"x\n",
+            }
+        ),
+    )
+    doc = WorkflowDoc(name="orders", inputs=[Port(name="events", format="json")])
+    bindings = bind(
+        doc,
+        named_in={"events": "memory://jobs/orders/inputs/events-*.json"},
+    )
+
+    assert [ref.uri for ref in bindings.inputs["events"].resources] == [
+        "memory://jobs/orders/inputs/events-1.json",
+        "memory://jobs/orders/inputs/events-2.json",
+    ]
+
+
+def test_remote_input_glob_requires_at_least_one_match() -> None:
+    register_resource_provider("memory", Memory())
+    doc = WorkflowDoc(name="orders", inputs=[Port(name="events", format="json")])
+
+    with pytest.raises(ValidationError, match="matched no resources"):
+        bind(doc, named_in={"events": "memory://jobs/orders/inputs/events-*.json"})
+
+
+def test_remote_input_glob_requires_provider_listing_support() -> None:
+    class NoListMemory(Memory):
+        def capabilities(self) -> ResourceCapabilities:
+            return ResourceCapabilities()
+
+    register_resource_provider("memory", NoListMemory())
+    doc = WorkflowDoc(name="orders", inputs=[Port(name="events", format="json")])
+
+    with pytest.raises(ResourceUnsupportedOperation, match="cannot list"):
+        bind(doc, named_in={"events": "memory://jobs/orders/inputs/events-*.json"})
+
+
+def test_remote_output_glob_is_refused() -> None:
+    register_resource_provider("memory", Memory())
+    doc = WorkflowDoc(name="orders", outputs=[Port(name="report", format="csv")])
+
+    with pytest.raises(ValidationError, match="output pattern"):
+        bind(doc, named_out={"report": "memory://jobs/orders/outputs/*.csv"})
 
 
 def test_remote_create_only_publication_refuses_a_racing_destination(tmp_path: Path) -> None:

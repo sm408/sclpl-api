@@ -80,6 +80,20 @@ one ordinary online run. Outputs are still never published by a failed execution
 `--no-cache` bypasses remote caching entirely. Providers without revision support are
 always downloaded online, but their latest materialized copy remains usable offline.
 
+## Remote input globs
+
+Input bindings can select multiple remote objects with a quoted glob. SCLPL asks the
+provider to list the fixed prefix, applies one provider-neutral match rule in core, and
+binds the resulting resources in stable URI order:
+
+```powershell
+sclpl run azblob://myaccount/workflows/jobs/orders/ `
+  --in events='azblob://myaccount/data/events/2026-09-*.json'
+```
+
+Remote globs are input-only; an output must name one exact destination URI. A pattern
+that matches nothing is a validation error rather than silently running with no input.
+
 Troubleshooting: install `sclpl-azure-blob` in the same Python environment as
 `sclpl`, then confirm the identity has Storage Blob Data Reader for workflows/inputs
 and Storage Blob Data Contributor for outputs. `sclpl validate azblob://...` fetches
