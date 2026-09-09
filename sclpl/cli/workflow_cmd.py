@@ -12,6 +12,7 @@ import io
 import sys
 from pathlib import Path
 from typing import Annotated, Any
+from urllib.parse import urlsplit
 
 import typer
 
@@ -413,7 +414,7 @@ def _fmt_remote(uri: str, check: bool) -> None:
 
 def convert(
     ctx: typer.Context,
-    source: Annotated[Path, typer.Argument(help="Workflow to read.")],
+    source: Annotated[str, typer.Argument(help="Local path or remote workflow URI to read.")],
     target: Annotated[
         Path | None, typer.Argument(help="Where to write it. Omit for stdout.")
     ] = None,
@@ -424,13 +425,18 @@ def convert(
     direction -- `fmt` then `convert` round-trips byte-identically.
     """
     del ctx
-    if not source.is_file():
-        typer.echo(f"{source} does not exist", err=True)
-        raise typer.Exit(EXIT_USAGE)
-
-    doc = catalog.load(source)
+    if resource_scheme(source) is not None:
+        doc = _locate(source).doc
+        source_suffix = Path(urlsplit(source).path).suffix
+    else:
+        local_source = Path(source)
+        if not local_source.is_file():
+            typer.echo(f"{source} does not exist", err=True)
+            raise typer.Exit(EXIT_USAGE)
+        doc = catalog.load(local_source)
+        source_suffix = local_source.suffix
     suffix = (
-        target.suffix.lower() if target else (".json" if source.suffix == ".sclpll" else ".sclpll")
+        target.suffix.lower() if target else (".json" if source_suffix == ".sclpll" else ".sclpll")
     )
     rendered = compile_json.dumps(doc) if suffix == ".json" else emit_sclpll(doc)
 
