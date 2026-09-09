@@ -55,6 +55,7 @@ from sclpl.ext.resources import (
     register_resource_provider,
     resource_providers,
 )
+from sclpl.resources_async import AsyncResourceProvider, ThreadedResourceProvider
 from sclpl.tables.base import (
     MissingExtra,
     Table,
@@ -93,6 +94,7 @@ def connector(name: str, *, lane: str | None = None, version: int = 1) -> Callab
 
 __all__ = [
     "API_VERSION",
+    "AsyncResourceProvider",
     "ResourceCapabilities",
     "ResourceAuthenticationError",
     "ResourceConflict",
@@ -111,6 +113,7 @@ __all__ = [
     "StepFailed",
     "Table",
     "TableBackend",
+    "ThreadedResourceProvider",
     "TypeDispatchError",
     "ValidationError",
     "as_table",

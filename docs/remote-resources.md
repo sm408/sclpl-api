@@ -141,6 +141,14 @@ continues at the stored byte offset while requiring the ETag observed before the
 attempt to remain unchanged. Partial files are never served offline or exposed as a
 successful cache entry; changed revisions start a new download.
 
+## Async providers
+
+`AsyncResourceProvider` is the async form of the public provider contract, exported
+through `sclpl.ext.api`. `ThreadedResourceProvider` adapts an existing synchronous
+provider without blocking an embedding application's event loop. The SCLPL runner
+continues to use the synchronous contract today, so provider authors can adopt async
+clients without splitting the stable resource API.
+
 ## Remote publication recovery
 
 Before fixed remote outputs publish, SCLPL records their redacted logical URIs, staged

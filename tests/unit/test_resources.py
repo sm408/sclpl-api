@@ -28,6 +28,7 @@ from sclpl.ext.resources import (
 )
 from sclpl.render.plain import PlainSink
 from sclpl.render.reporter import Reporter
+from sclpl.resources_async import ThreadedResourceProvider
 from sclpl.run.ir import Port, WorkflowDoc
 from sclpl.run.ports import bind
 from sclpl.run.resources import prepare, publish, publish_generation, recover
@@ -165,6 +166,13 @@ def test_copy_resource_prefers_same_provider_native_copy() -> None:
 
     assert provider.native_copies == 1
     assert provider.objects["memory://jobs/destination.csv"] == b"source"
+
+
+@pytest.mark.asyncio
+async def test_threaded_resource_provider_adapts_a_sync_provider() -> None:
+    provider = ThreadedResourceProvider(Memory({"memory://jobs/item.csv": b"id\n"}))
+    assert await provider.exists("memory://jobs/item.csv")
+    assert (await provider.stat("memory://jobs/item.csv")).uri == "memory://jobs/item.csv"
 
 
 def test_resource_doctor_reports_readable_provider_without_writing(
