@@ -129,6 +129,12 @@ streams through a bounded in-memory spool that rolls to an OS-managed temporary 
 for larger objects, so no provider-specific credentials or SDK types cross the public
 API boundary. Destination create-only and revision-aware write rules still apply.
 
+When source and destination use the same provider, SCLPL uses its optional native
+copy operation. Azure Blob starts a service-side copy and waits for its terminal state;
+`SCLPL_AZURE_BLOB_COPY_TIMEOUT` controls the wait in seconds (default `300`). The
+source URL is constructed only inside the Azure plugin and is never substituted for
+the canonical `azblob://` provenance URI.
+
 ## Provider conformance toolkit
 
 Provider authors can use `ResourceProviderFixture` and

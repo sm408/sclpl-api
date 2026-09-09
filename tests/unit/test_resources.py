@@ -139,6 +139,33 @@ def test_copy_resource_streams_between_registered_providers() -> None:
     assert destination.objects["archive://warehouse/orders.csv"] == b"id,total\n1,42\n"
 
 
+def test_copy_resource_prefers_same_provider_native_copy() -> None:
+    class NativeMemory(Memory):
+        def __init__(self) -> None:
+            super().__init__({"memory://jobs/source.csv": b"source"})
+            self.native_copies = 0
+
+        def copy(
+            self,
+            source_uri: str,
+            destination_uri: str,
+            *,
+            overwrite: bool = False,
+            expected_revision: str | None = None,
+        ) -> ResourceInfo:
+            del overwrite, expected_revision
+            self.native_copies += 1
+            self.objects[destination_uri] = self.objects[source_uri]
+            return ResourceInfo(uri=destination_uri)
+
+    provider = NativeMemory()
+    register_resource_provider("memory", provider)
+    copy_resource("memory://jobs/source.csv", "memory://jobs/destination.csv")
+
+    assert provider.native_copies == 1
+    assert provider.objects["memory://jobs/destination.csv"] == b"source"
+
+
 def test_resource_doctor_reports_readable_provider_without_writing(
     capsys: pytest.CaptureFixture[str],
 ) -> None:

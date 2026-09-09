@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 import os
+import time
 from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass
 from typing import Any, BinaryIO
-from urllib.parse import parse_qs, urlsplit, urlunsplit
+from urllib.parse import parse_qs, quote, urlsplit, urlunsplit
 
 from sclpl.ext.api import (
     ResourceAuthenticationError,
@@ -87,7 +88,12 @@ class AzureBlobProvider:
 
     def capabilities(self) -> ResourceCapabilities:
         return ResourceCapabilities(
-            write=True, list=True, revisions=True, conditional_write=True, locks=True
+            write=True,
+            list=True,
+            revisions=True,
+            conditional_write=True,
+            locks=True,
+            server_copy=True,
         )
 
     def normalize(self, uri: str) -> str:
@@ -186,6 +192,29 @@ class AzureBlobProvider:
                 raise
             raise self._translate(error, uri) from error
 
+    def copy(
+        self,
+        source_uri: str,
+        destination_uri: str,
+        *,
+        overwrite: bool = False,
+        expected_revision: str | None = None,
+    ) -> ResourceInfo:
+        """Use Azure's service-side copy without downloading object bytes locally."""
+        try:
+            destination = self._blob(destination_uri)
+            kwargs: dict[str, Any] = {}
+            if expected_revision is not None:
+                from azure.core import MatchConditions
+
+                kwargs.update(etag=expected_revision, match_condition=MatchConditions.IfNotModified)
+            elif not overwrite:
+                kwargs["if_none_match"] = "*"
+            destination.start_copy_from_url(self._copy_source_url(source_uri), **kwargs)
+            return self._info(destination_uri, self._wait_for_copy(destination, destination_uri))
+        except Exception as error:
+            raise self._translate(error, destination_uri) from error
+
     def display_uri(self, uri: str) -> str:
         parsed = urlsplit(uri)
         return urlunsplit((parsed.scheme, parsed.netloc, parsed.path, "", ""))
@@ -283,6 +312,38 @@ class AzureBlobProvider:
         if concurrency < 1:
             raise ResourceUnavailable("SCLPL_AZURE_BLOB_MAX_CONCURRENCY must be at least 1")
         return {"max_concurrency": concurrency}
+
+    def _copy_source_url(self, uri: str) -> str:
+        """Translate only for Azure's API; logical identities stay ``azblob://``."""
+        details = parse_uri(uri)
+        endpoint = urlsplit(self._account_url(details.account))
+        path = "/".join(
+            (endpoint.path.rstrip("/"), quote(details.container), quote(details.blob, safe="/"))
+        )
+        return urlunsplit((endpoint.scheme, endpoint.netloc, path, urlsplit(uri).query, ""))
+
+    def _wait_for_copy(self, client: Any, uri: str) -> Any:
+        deadline = time.monotonic() + self._copy_timeout()
+        while True:
+            properties = client.get_blob_properties()
+            status = getattr(getattr(properties, "copy", None), "status", "success").lower()
+            if status == "success":
+                return properties
+            if status != "pending":
+                raise ResourceUnavailable(f"Azure Blob {self.display_uri(uri)}: copy {status}")
+            if time.monotonic() >= deadline:
+                raise ResourceUnavailable(f"Azure Blob {self.display_uri(uri)}: copy timed out")
+            time.sleep(0.2)
+
+    def _copy_timeout(self) -> float:
+        value = self._setting("COPY_TIMEOUT", default="300")
+        try:
+            timeout = float(value)
+        except ValueError as error:
+            raise ResourceUnavailable("SCLPL_AZURE_BLOB_COPY_TIMEOUT must be a number") from error
+        if timeout <= 0:
+            raise ResourceUnavailable("SCLPL_AZURE_BLOB_COPY_TIMEOUT must be positive")
+        return timeout
 
     def _blob(self, uri: str) -> Any:
         details = parse_uri(uri)

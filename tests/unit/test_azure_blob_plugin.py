@@ -26,7 +26,40 @@ def test_azure_provider_declares_safe_resource_capabilities() -> None:
         and capabilities.list
         and capabilities.conditional_write
         and capabilities.locks
+        and capabilities.server_copy
     )
+
+
+def test_azure_server_side_copy_waits_for_completion(monkeypatch: pytest.MonkeyPatch) -> None:
+    copied: dict[str, object] = {}
+
+    class Properties:
+        copy = None
+        size = 2
+        last_modified = None
+        etag = "copied"
+        content_settings = None
+        metadata = None
+
+    class Destination:
+        def start_copy_from_url(self, source: str, **kwargs: object) -> None:
+            copied.update(source=source, **kwargs)
+
+        def get_blob_properties(self) -> Properties:
+            return Properties()
+
+    provider = AzureBlobProvider()
+    monkeypatch.setattr(provider, "_blob", lambda uri: Destination())
+    info = provider.copy(
+        "azblob://source/container/input file.csv?sig=token",
+        "azblob://destination/container/output.csv",
+    )
+
+    assert copied["source"] == (
+        "https://source.blob.core.windows.net/container/input%20file.csv?sig=token"
+    )
+    assert copied["if_none_match"] == "*"
+    assert info.revision == "copied"
 
 
 def test_azure_blob_lease_acquires_and_releases(

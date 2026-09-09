@@ -80,6 +80,7 @@ class ResourceCapabilities:
     revisions: bool = False
     conditional_write: bool = False
     locks: bool = False
+    server_copy: bool = False
 
 
 class ResourceLease(Protocol):
@@ -120,6 +121,19 @@ class LockingResourceProvider(ResourceProvider, Protocol):
     """Optional extension implemented only by providers with native leases."""
 
     def acquire_lock(self, uri: str, *, lease_duration: int = 60) -> ResourceLease: ...
+
+
+class ServerCopyResourceProvider(ResourceProvider, Protocol):
+    """Optional extension for same-provider copies that avoid local staging."""
+
+    def copy(
+        self,
+        source_uri: str,
+        destination_uri: str,
+        *,
+        overwrite: bool = False,
+        expected_revision: str | None = None,
+    ) -> ResourceInfo: ...
 
 
 _PROVIDERS: dict[str, ResourceProvider] = {}
@@ -192,6 +206,17 @@ def copy_resource(
         raise ResourceUnsupportedOperation(f"provider {source_provider.scheme!r} cannot read")
     if not destination_provider.capabilities().write:
         raise ResourceUnsupportedOperation(f"provider {destination_provider.scheme!r} cannot write")
+    native_copy = getattr(source_provider, "copy", None)
+    if source_provider is destination_provider and callable(native_copy):
+        return cast(
+            ResourceInfo,
+            native_copy(
+                source,
+                destination,
+                overwrite=overwrite,
+                expected_revision=expected_revision,
+            ),
+        )
     with SpooledTemporaryFile(max_size=8 * 1024 * 1024, mode="w+b") as temporary:
         staging = cast(BinaryIO, temporary)
         source_provider.download(source, staging)
