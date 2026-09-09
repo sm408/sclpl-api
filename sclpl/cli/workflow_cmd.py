@@ -19,7 +19,7 @@ import typer
 from sclpl.catalog import resolve as catalog
 from sclpl.cli.options import options_of
 from sclpl.errors import EXIT_INTERRUPTED, EXIT_USAGE, EXIT_VALIDATION, SclplError
-from sclpl.ext.resources import resource_provider, resource_scheme
+from sclpl.ext.resources import display_resource_uri, resource_provider, resource_scheme
 from sclpl.project import context as project_context
 from sclpl.project import identity, lock
 from sclpl.render.reporter import build_reporter
@@ -181,7 +181,15 @@ def run(
         try:
             lock.verify(
                 resolved_project,
-                identity.identify(doc.name, located.path, resolved_project),
+                identity.identify(
+                    doc.name,
+                    located.path,
+                    resolved_project,
+                    source_uri=(
+                        display_resource_uri(located.origin_uri) if located.origin_uri else None
+                    ),
+                    source_revision=located.origin_revision,
+                ),
             )
         except SclplError as error:
             typer.echo(str(error), err=True)

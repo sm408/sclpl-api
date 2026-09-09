@@ -57,3 +57,31 @@ def test_lock_never_contains_secret_values(tmp_path: Path) -> None:
     lock.write(loaded, [identity.identify("orders", workflow, loaded)])
 
     assert "secret" not in lock.path_for(loaded).read_text(encoding="utf-8").lower()
+
+
+def test_remote_workflow_identity_locks_logical_uri_revision_and_staged_digest(
+    tmp_path: Path,
+) -> None:
+    loaded, workflow = _project(tmp_path)
+    first = identity.identify(
+        "orders",
+        workflow,
+        loaded,
+        source_uri="azblob://account/container/jobs/orders/workflow.sclpll",
+        source_revision='"etag-v1"',
+    )
+    changed_revision = identity.identify(
+        "orders",
+        workflow,
+        loaded,
+        source_uri="azblob://account/container/jobs/orders/workflow.sclpll",
+        source_revision='"etag-v2"',
+    )
+    lock.write(loaded, [first])
+
+    recorded = lock.read(loaded).workflows["orders"]
+    assert recorded["source"] == "azblob://account/container/jobs/orders/workflow.sclpll"
+    assert recorded["source_revision"] == '"etag-v1"'
+    assert recorded["source_digest"] == first.source_digest
+    with pytest.raises(ValidationError, match="lock drift"):
+        lock.verify(loaded, changed_revision)

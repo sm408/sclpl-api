@@ -23,9 +23,10 @@ class WorkflowIdentity:
     configuration_digest: str
     digest: str
     runtime: str
+    source_revision: str | None = None
 
     def as_dict(self) -> dict[str, str]:
-        return {
+        values = {
             "name": self.name,
             "source": self.source,
             "source_digest": self.source_digest,
@@ -33,27 +34,40 @@ class WorkflowIdentity:
             "digest": self.digest,
             "runtime": self.runtime,
         }
+        if self.source_revision is not None:
+            values["source_revision"] = self.source_revision
+        return values
 
 
-def identify(name: str, path: Path, context: ProjectContext | None) -> WorkflowIdentity:
+def identify(
+    name: str,
+    path: Path,
+    context: ProjectContext | None,
+    *,
+    source_uri: str | None = None,
+    source_revision: str | None = None,
+) -> WorkflowIdentity:
     """Hash source and effective non-secret configuration without machine paths."""
-    source = _relative(path, context)
+    source = source_uri or _relative(path, context)
     source_digest = _digest(path.read_bytes())
     configuration = context.settings if context else {}
     configuration_digest = _canonical_digest(configuration)
     runtime = (
         f"python:{sys.version_info.major}.{sys.version_info.minor};platform:{platform.system()}"
     )
-    digest = _canonical_digest(
-        {
-            "schema": 1,
-            "name": name,
-            "source": source,
-            "source_digest": source_digest,
-            "configuration_digest": configuration_digest,
-        }
+    fingerprint: dict[str, str | int] = {
+        "schema": 1,
+        "name": name,
+        "source": source,
+        "source_digest": source_digest,
+        "configuration_digest": configuration_digest,
+    }
+    if source_revision is not None:
+        fingerprint["source_revision"] = source_revision
+    digest = _canonical_digest(fingerprint)
+    return WorkflowIdentity(
+        name, source, source_digest, configuration_digest, digest, runtime, source_revision
     )
-    return WorkflowIdentity(name, source, source_digest, configuration_digest, digest, runtime)
 
 
 def _relative(path: Path, context: ProjectContext | None) -> str:

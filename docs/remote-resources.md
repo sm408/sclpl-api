@@ -138,6 +138,13 @@ display output, `stat`/`exists`, normalized listing, and optional missing-object
 behavior without creating or deleting remote data. `assert_resource_error` verifies
 that failed SDK calls are translated to SCLPL's public resource-error hierarchy.
 
+## Remote workflow locks
+
+`sclpl run --locked` and `sclpl workflow lock` preserve a remote workflow's redacted
+logical URI, observed provider revision, and staged source digest. A changed ETag (or
+other provider revision token) therefore causes lock drift even when a cached staging
+path happens to be reused. Query-string credentials are excluded from the lockfile.
+
 ## Diagnostics
 
 Use `sclpl resource doctor azblob://account/container/known-object.csv` to verify that

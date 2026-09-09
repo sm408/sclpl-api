@@ -9,6 +9,7 @@ import typer
 
 from sclpl.catalog import resolve
 from sclpl.cli import workflow_cmd
+from sclpl.ext.resources import display_resource_uri
 from sclpl.project import context, identity, lock
 
 
@@ -44,7 +45,17 @@ def lock_workflows(
     identified = []
     for target in selected:
         located = resolve.resolve(target, extra_dirs=loaded.workflow_dirs)
-        identified.append(identity.identify(located.doc.name, located.path, loaded))
+        identified.append(
+            identity.identify(
+                located.doc.name,
+                located.path,
+                loaded,
+                source_uri=(
+                    display_resource_uri(located.origin_uri) if located.origin_uri else None
+                ),
+                source_revision=located.origin_revision,
+            )
+        )
     if check:
         for item in identified:
             lock.verify(loaded, item)
