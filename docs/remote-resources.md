@@ -129,6 +129,15 @@ streams through a bounded in-memory spool that rolls to an OS-managed temporary 
 for larger objects, so no provider-specific credentials or SDK types cross the public
 API boundary. Destination create-only and revision-aware write rules still apply.
 
+## Provider conformance toolkit
+
+Provider authors can use `ResourceProviderFixture` and
+`assert_resource_provider_contract` from `sclpl.testing.resources` against an
+existing fixture object. The suite checks URI normalization and resolution, safe
+display output, `stat`/`exists`, normalized listing, and optional missing-object
+behavior without creating or deleting remote data. `assert_resource_error` verifies
+that failed SDK calls are translated to SCLPL's public resource-error hierarchy.
+
 ## Diagnostics
 
 Use `sclpl resource doctor azblob://account/container/known-object.csv` to verify that

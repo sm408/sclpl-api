@@ -32,6 +32,7 @@ from sclpl.run.ports import bind
 from sclpl.run.resources import prepare, publish, publish_generation
 from sclpl.run.runner import Options, run_workflow
 from sclpl.run.sclpll import parse
+from sclpl.testing.resources import ResourceProviderFixture, assert_resource_provider_contract
 
 
 class Memory:
@@ -109,6 +110,20 @@ def test_registered_resource_providers_are_stably_ordered() -> None:
     register_resource_provider("memory", first)
     register_resource_provider("archive", second)
     assert [provider.scheme for provider in resource_providers()] == ["archive", "memory"]
+
+
+def test_provider_conformance_toolkit_checks_a_non_destructive_fixture() -> None:
+    provider = Memory({"memory://jobs/orders/workflow.sclpll": b"@workflow orders\n"})
+    info = assert_resource_provider_contract(
+        provider,
+        ResourceProviderFixture(
+            "memory://jobs/orders/workflow.sclpll",
+            relative_reference="inputs/customers.csv",
+            resolved_uri="memory://jobs/orders/workflow.sclpll/inputs/customers.csv",
+            missing_uri="memory://jobs/orders/missing.sclpll",
+        ),
+    )
+    assert info.uri == "memory://jobs/orders/workflow.sclpll"
 
 
 def test_copy_resource_streams_between_registered_providers() -> None:
