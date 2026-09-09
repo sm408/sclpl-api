@@ -95,7 +95,9 @@ class AzureBlobProvider:
             container = self._service(details.account).get_container_client(details.container)
             return [
                 ResourceInfo(
-                    uri=self.normalize(f"azblob://{details.account}/{details.container}/{item.name}"),
+                    uri=self.normalize(
+                        f"azblob://{details.account}/{details.container}/{item.name}"
+                    ),
                     size=getattr(item, "size", None),
                     modified=getattr(item, "last_modified", None),
                     revision=getattr(item, "etag", None),
@@ -111,7 +113,7 @@ class AzureBlobProvider:
     def download(self, uri: str, target: BinaryIO) -> ResourceInfo:
         try:
             client = self._blob(uri)
-            downloader = client.download_blob()
+            downloader = client.download_blob(**self._transfer_options())
             downloader.readinto(target)
             return self._info(uri, client.get_blob_properties())
         except Exception as error:
@@ -128,6 +130,7 @@ class AzureBlobProvider:
         try:
             client = self._blob(uri)
             kwargs: dict[str, Any] = {"overwrite": overwrite}
+            kwargs.update(self._transfer_options())
             if expected_revision is not None:
                 from azure.core import MatchConditions
 
@@ -216,6 +219,21 @@ class AzureBlobProvider:
             )
         return value
 
+    def _transfer_options(self) -> dict[str, int]:
+        """Azure SDK transfer settings, intentionally namespaced to this provider."""
+        value = self._setting("MAX_CONCURRENCY")
+        if not value:
+            return {}
+        try:
+            concurrency = int(value)
+        except ValueError as error:
+            raise ResourceUnavailable(
+                "SCLPL_AZURE_BLOB_MAX_CONCURRENCY must be an integer"
+            ) from error
+        if concurrency < 1:
+            raise ResourceUnavailable("SCLPL_AZURE_BLOB_MAX_CONCURRENCY must be at least 1")
+        return {"max_concurrency": concurrency}
+
     def _blob(self, uri: str) -> Any:
         details = parse_uri(uri)
         if not details.blob:
@@ -224,8 +242,10 @@ class AzureBlobProvider:
 
     def _info(self, uri: str, props: Any) -> ResourceInfo:
         return ResourceInfo(
-            uri=self.normalize(uri), size=getattr(props, "size", None),
-            modified=getattr(props, "last_modified", None), revision=getattr(props, "etag", None),
+            uri=self.normalize(uri),
+            size=getattr(props, "size", None),
+            modified=getattr(props, "last_modified", None),
+            revision=getattr(props, "etag", None),
             content_type=getattr(getattr(props, "content_settings", None), "content_type", None),
         )
 

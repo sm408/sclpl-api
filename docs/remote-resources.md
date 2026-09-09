@@ -101,6 +101,13 @@ view. Outputs upload to `generations/<run-id>/...`; only after every upload succ
 does SCLPL conditionally update the parent `latest.json` manifest. A failed upload can
 leave unreachable objects, but never a manifest for a partial generation.
 
+## Azure transfer tuning
+
+`SCLPL_AZURE_BLOB_MAX_CONCURRENCY` sets Azure SDK upload and download concurrency for
+this provider only. Leave it unset to use Azure SDK defaults; it must be a positive
+integer. This setting is deliberately not a core runner option because other providers
+have different transfer models.
+
 Troubleshooting: install `sclpl-azure-blob` in the same Python environment as
 `sclpl`, then confirm the identity has Storage Blob Data Reader for workflows/inputs
 and Storage Blob Data Contributor for outputs. `sclpl validate azblob://...` fetches

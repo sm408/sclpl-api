@@ -3,7 +3,7 @@ from __future__ import annotations
 import pytest
 
 from plugins.azure_blob.provider import AzureBlobProvider, parse_uri
-from sclpl.ext.resources import ResourceAuthenticationError, ResourceInvalidURI
+from sclpl.ext.resources import ResourceAuthenticationError, ResourceInvalidURI, ResourceUnavailable
 
 
 def test_azure_uri_parsing_and_redaction() -> None:
@@ -140,3 +140,11 @@ def test_azure_sdk_errors_redact_configured_credentials() -> None:
     assert "account-key-secret" not in rendered
     assert "sas-secret" not in rendered
     assert rendered.count("[redacted]") == 2
+
+
+def test_azure_transfer_concurrency_is_provider_scoped_and_validated() -> None:
+    assert AzureBlobProvider(
+        environment={"SCLPL_AZURE_BLOB_MAX_CONCURRENCY": "4"}
+    )._transfer_options() == {"max_concurrency": 4}
+    with pytest.raises(ResourceUnavailable, match="at least 1"):
+        AzureBlobProvider(environment={"SCLPL_AZURE_BLOB_MAX_CONCURRENCY": "0"})._transfer_options()
