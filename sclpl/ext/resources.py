@@ -6,7 +6,7 @@ authentication models stay in provider packages.
 
 from __future__ import annotations
 
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -65,6 +65,8 @@ class ResourceInfo:
     modified: datetime | None = None
     revision: str | None = None
     content_type: str | None = None
+    #: Provider-owned fields; core preserves but never interprets these values.
+    metadata: Mapping[str, str] | None = None
 
 
 @dataclass(frozen=True, slots=True)

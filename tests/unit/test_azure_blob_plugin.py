@@ -148,3 +148,15 @@ def test_azure_transfer_concurrency_is_provider_scoped_and_validated() -> None:
     )._transfer_options() == {"max_concurrency": 4}
     with pytest.raises(ResourceUnavailable, match="at least 1"):
         AzureBlobProvider(environment={"SCLPL_AZURE_BLOB_MAX_CONCURRENCY": "0"})._transfer_options()
+
+
+def test_azure_resource_info_preserves_provider_metadata() -> None:
+    class Properties:
+        size = 1
+        last_modified = None
+        etag = "revision"
+        content_settings = None
+        metadata = {"owner": "analytics"}
+
+    info = AzureBlobProvider()._info("azblob://account/container/object.csv", Properties())
+    assert info.metadata == {"owner": "analytics"}

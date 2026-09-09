@@ -44,6 +44,10 @@ def stat(uri: Annotated[str, typer.Argument(help="A provider resource URI.")]) -
     typer.echo(f"modified: {info.modified.isoformat() if info.modified else '-'}")
     typer.echo(f"revision: {info.revision or '-'}")
     typer.echo(f"content-type: {info.content_type or '-'}")
+    if info.metadata:
+        typer.echo("metadata:")
+        for key, value in sorted(info.metadata.items()):
+            typer.echo(f"  {key}: {value}")
 
 
 @app.command("ls")

@@ -104,6 +104,7 @@ class AzureBlobProvider:
                     content_type=getattr(
                         getattr(item, "content_settings", None), "content_type", None
                     ),
+                    metadata=dict(getattr(item, "metadata", None) or {}),
                 )
                 for item in container.list_blobs(name_starts_with=details.blob)
             ]
@@ -247,6 +248,7 @@ class AzureBlobProvider:
             modified=getattr(props, "last_modified", None),
             revision=getattr(props, "etag", None),
             content_type=getattr(getattr(props, "content_settings", None), "content_type", None),
+            metadata=dict(getattr(props, "metadata", None) or {}),
         )
 
     def _translate(self, error: Exception, uri: str) -> SclplError:
