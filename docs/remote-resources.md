@@ -141,6 +141,16 @@ continues at the stored byte offset while requiring the ETag observed before the
 attempt to remain unchanged. Partial files are never served offline or exposed as a
 successful cache entry; changed revisions start a new download.
 
+## Remote publication recovery
+
+Before fixed remote outputs publish, SCLPL records their redacted logical URIs, staged
+file digests, and expected revisions. If publication is interrupted, run
+`sclpl resource recover <run-id>`. Recovery verifies a previously published port by
+its returned revision, checks each remaining staged digest, and uploads only remaining
+ports using their original conditional-write expectation. It refuses a changed
+destination or missing/tampered staged file rather than guessing. Immutable
+`--remote-generation` publication already protects readers with its final manifest.
+
 ## Distributed locks
 
 Providers advertise native locking through `sclpl resource doctor`. Azure Blob uses

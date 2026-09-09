@@ -9,6 +9,7 @@ import typer
 
 from sclpl.errors import SclplError
 from sclpl.ext.resources import display_resource_uri, resource_provider, resource_providers
+from sclpl.run.resources import recover as recover_remote
 
 app = typer.Typer(help="Inspect remote resource providers and prefixes.", no_args_is_help=True)
 
@@ -99,3 +100,22 @@ def doctor(uri: Annotated[str, typer.Argument(help="A readable provider object U
     typer.echo(f"conditional-write: {'supported' if caps.conditional_write else 'not supported'}")
     typer.echo(f"distributed-locks: {'supported' if caps.locks else 'not supported'}")
     typer.echo(f"server-copy: {'supported' if caps.server_copy else 'not supported'}")
+
+
+@app.command("recover")
+def recover(
+    run_id: Annotated[str, typer.Argument(help="Interrupted remote publication run ID.")],
+) -> None:
+    """Verify and complete a fixed-output remote publication left interrupted."""
+    try:
+        report = recover_remote(run_id)
+    except SclplError as error:
+        typer.echo(str(error), err=True)
+        raise typer.Exit(error.exit_code) from error
+    if not report.found:
+        typer.echo(f"{run_id}: no pending remote publication")
+        return
+    if report.already_published:
+        typer.echo(f"already-published: {', '.join(report.already_published)}")
+    if report.completed:
+        typer.echo(f"completed: {', '.join(report.completed)}")

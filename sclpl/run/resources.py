@@ -10,9 +10,15 @@ from pathlib import Path
 from urllib.parse import urlsplit, urlunsplit
 
 from sclpl.errors import CacheMiss
-from sclpl.ext.resources import ResourceNotFound, ResourceRef, resource_provider
+from sclpl.ext.resources import (
+    ResourceConflict,
+    ResourceNotFound,
+    ResourceRef,
+    display_resource_uri,
+    resource_provider,
+)
 from sclpl.run.ports import Bindings
-from sclpl.state.db import default_root
+from sclpl.state.db import default_root, file_digest
 from sclpl.state.resource_cache import ResourceCache
 
 
@@ -27,6 +33,8 @@ class RemoteOutput:
 @dataclass(slots=True)
 class PreparedResources:
     root: Path
+    run_id: str
+    journal_root: Path
     outputs: list[RemoteOutput] = field(default_factory=list)
 
     def cleanup(self) -> None:
@@ -50,7 +58,11 @@ def prepare(
         )
     staging = root or default_root() / "tmp" / run_id
     staging.mkdir(parents=True, exist_ok=True)
-    prepared = PreparedResources(staging)
+    prepared = PreparedResources(
+        staging,
+        run_id,
+        (root or default_root()) / "resource-publications",
+    )
     # An explicit staging root is an isolated test/embedding run, so keep its cache
     # alongside the staging files instead of reaching into the caller's real home.
     resource_cache = ResourceCache(root / "resource-cache" if root is not None else None)
@@ -94,6 +106,7 @@ def prepare(
 
 def publish(prepared: PreparedResources, *, overwrite: bool) -> None:
     """Publish successful staged outputs with safe create/replace conditions."""
+    journal = _write_pending(prepared, overwrite)
     for output in sorted(prepared.outputs, key=lambda item: item.port):
         provider = resource_provider(output.destination.uri)
         if not output.staged.is_file():
@@ -106,6 +119,91 @@ def publish(prepared: PreparedResources, *, overwrite: bool) -> None:
                 expected_revision=output.expected_revision,
             )
         output.destination.revision = info.revision
+        _mark_published(journal, output.port, info.revision)
+    journal.unlink(missing_ok=True)
+
+
+@dataclass(frozen=True, slots=True)
+class RemoteRecoveryReport:
+    found: bool
+    completed: tuple[str, ...] = ()
+    already_published: tuple[str, ...] = ()
+
+
+def recover(run_id: str, *, root: Path | None = None) -> RemoteRecoveryReport:
+    """Retry a fixed-output publication only when its staged evidence is intact."""
+    path = (root or default_root()) / "resource-publications" / f"{run_id}.pending.json"
+    if not path.is_file():
+        return RemoteRecoveryReport(found=False)
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    completed: list[str] = []
+    already: list[str] = []
+    for port, item in sorted(payload["outputs"].items()):
+        provider = resource_provider(item["uri"])
+        published = item.get("published")
+        if published:
+            revision = item.get("published_revision")
+            if not isinstance(revision, str):
+                raise ResourceConflict(
+                    f"remote recovery {run_id}: published output {port!r} lacks revision"
+                )
+            if provider.stat(item["uri"]).revision != revision:
+                raise ResourceConflict(
+                    f"remote recovery {run_id}: published destination {port!r} changed"
+                )
+            already.append(port)
+            continue
+        staged = Path(item["staged"])
+        if not staged.is_file() or file_digest(staged) != item["digest"]:
+            raise ResourceConflict(
+                f"remote recovery {run_id}: staged output {port!r} is unavailable"
+            )
+        with staged.open("rb") as source:
+            info = provider.upload(
+                source,
+                item["uri"],
+                overwrite=bool(payload["overwrite"]),
+                expected_revision=item.get("expected_revision"),
+            )
+        _mark_published(path, port, info.revision)
+        completed.append(port)
+    path.unlink(missing_ok=True)
+    return RemoteRecoveryReport(True, tuple(completed), tuple(already))
+
+
+def _pending_path(prepared: PreparedResources) -> Path:
+    return prepared.journal_root / f"{prepared.run_id}.pending.json"
+
+
+def _write_pending(prepared: PreparedResources, overwrite: bool) -> Path:
+    path = _pending_path(prepared)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    payload = {
+        "overwrite": overwrite,
+        "outputs": {
+            output.port: {
+                "uri": display_resource_uri(output.destination.uri),
+                "staged": str(output.staged),
+                "digest": file_digest(output.staged),
+                "expected_revision": output.expected_revision,
+            }
+            for output in prepared.outputs
+            if output.staged.is_file()
+        },
+    }
+    temporary = path.with_suffix(".tmp")
+    temporary.write_text(json.dumps(payload, sort_keys=True), encoding="utf-8")
+    temporary.replace(path)
+    return path
+
+
+def _mark_published(path: Path, port: str, revision: str | None) -> None:
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    payload["outputs"][port]["published"] = True
+    payload["outputs"][port]["published_revision"] = revision
+    temporary = path.with_suffix(".tmp")
+    temporary.write_text(json.dumps(payload, sort_keys=True), encoding="utf-8")
+    temporary.replace(path)
 
 
 def publish_generation(prepared: PreparedResources, *, run_id: str) -> None:

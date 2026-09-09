@@ -17,6 +17,7 @@ from sclpl.ext.resources import (
     ResourceCapabilities,
     ResourceConflict,
     ResourceInfo,
+    ResourceUnavailable,
     ResourceUnsupportedOperation,
     clear_resource_providers,
     copy_resource,
@@ -29,7 +30,7 @@ from sclpl.render.plain import PlainSink
 from sclpl.render.reporter import Reporter
 from sclpl.run.ir import Port, WorkflowDoc
 from sclpl.run.ports import bind
-from sclpl.run.resources import prepare, publish, publish_generation
+from sclpl.run.resources import prepare, publish, publish_generation, recover
 from sclpl.run.runner import Options, run_workflow
 from sclpl.run.sclpll import parse
 from sclpl.testing.resources import ResourceProviderFixture, assert_resource_provider_contract
@@ -361,6 +362,58 @@ def test_remote_generation_publication_advances_latest_only_after_all_outputs(
             "summary": "generations/run-123/summary.json",
         },
     }
+
+
+def test_remote_publication_recovery_retries_only_unpublished_outputs(tmp_path: Path) -> None:
+    class RecoverableMemory(Memory):
+        def __init__(self) -> None:
+            super().__init__()
+            self.revisions: dict[str, str] = {}
+            self.fail_summary = True
+
+        def stat(self, uri: str) -> ResourceInfo:
+            if uri not in self.objects:
+                from sclpl.ext.resources import ResourceNotFound
+
+                raise ResourceNotFound(uri)
+            return ResourceInfo(uri=uri, revision=self.revisions[uri])
+
+        def upload(
+            self,
+            source: BinaryIO,
+            uri: str,
+            *,
+            overwrite: bool = False,
+            expected_revision: str | None = None,
+        ) -> ResourceInfo:
+            del overwrite, expected_revision
+            if uri.endswith("summary.json") and self.fail_summary:
+                self.fail_summary = False
+                raise ResourceUnavailable("interrupted")
+            self.objects[uri] = source.read()
+            revision = f"v{len(self.revisions) + 1}"
+            self.revisions[uri] = revision
+            return ResourceInfo(uri=uri, revision=revision)
+
+    provider = RecoverableMemory()
+    register_resource_provider("memory", provider)
+    doc = WorkflowDoc(
+        name="orders",
+        outputs=[Port(name="report", format="csv"), Port(name="summary", format="json")],
+    )
+    bindings = bind(doc, resource_base="memory://jobs/orders/")
+    root = tmp_path / "stage"
+    prepared = prepare(bindings, run_id="remote-recover", root=root)
+    bindings.outputs["report"].path.write_bytes(b"report")  # type: ignore[union-attr]
+    bindings.outputs["summary"].path.write_bytes(b"summary")  # type: ignore[union-attr]
+    with pytest.raises(ResourceUnavailable):
+        publish(prepared, overwrite=False)
+
+    report = recover("remote-recover", root=root)
+    assert report.completed == ("summary",)
+    assert report.already_published == ("report",)
+    assert provider.objects["memory://jobs/orders/outputs/report.csv"] == b"report"
+    assert provider.objects["memory://jobs/orders/outputs/summary.json"] == b"summary"
 
 
 def test_offline_refuses_remote_output_publication(tmp_path: Path) -> None:
