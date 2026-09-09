@@ -59,3 +59,21 @@ def ls(uri: Annotated[str, typer.Argument(help="A provider prefix URI.")]) -> No
         size = str(info.size) if info.size is not None else "-"
         revision = info.revision or "-"
         typer.echo(f"{size:>12}  {revision:<20}  {display_resource_uri(info.uri)}")
+
+
+@app.command("doctor")
+def doctor(uri: Annotated[str, typer.Argument(help="A readable provider object URI.")]) -> None:
+    """Verify installed provider, credentials, and read access without writing."""
+    try:
+        provider = resource_provider(uri)
+        info = provider.stat(uri)
+    except SclplError as error:
+        typer.echo(f"provider: failed\n{error}", err=True)
+        raise typer.Exit(error.exit_code) from error
+    caps = provider.capabilities()
+    typer.echo(f"provider: {provider.scheme} (loaded)")
+    typer.echo("authentication: usable")
+    typer.echo(f"read: yes ({display_resource_uri(info.uri)})")
+    typer.echo(f"write: {'supported' if caps.write else 'not supported'}")
+    typer.echo(f"list: {'supported' if caps.list else 'not supported'}")
+    typer.echo(f"conditional-write: {'supported' if caps.conditional_write else 'not supported'}")

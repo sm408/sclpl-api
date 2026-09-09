@@ -108,6 +108,13 @@ this provider only. Leave it unset to use Azure SDK defaults; it must be a posit
 integer. This setting is deliberately not a core runner option because other providers
 have different transfer models.
 
+## Diagnostics
+
+Use `sclpl resource doctor azblob://account/container/known-object.csv` to verify that
+the provider loaded, credentials are usable, and the selected identity can read the
+object. The command performs no write; it reports provider-declared write/list and
+conditional-write support separately.
+
 Troubleshooting: install `sclpl-azure-blob` in the same Python environment as
 `sclpl`, then confirm the identity has Storage Blob Data Reader for workflows/inputs
 and Storage Blob Data Contributor for outputs. `sclpl validate azblob://...` fetches
