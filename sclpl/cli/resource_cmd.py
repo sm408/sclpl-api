@@ -81,3 +81,4 @@ def doctor(uri: Annotated[str, typer.Argument(help="A readable provider object U
     typer.echo(f"write: {'supported' if caps.write else 'not supported'}")
     typer.echo(f"list: {'supported' if caps.list else 'not supported'}")
     typer.echo(f"conditional-write: {'supported' if caps.conditional_write else 'not supported'}")
+    typer.echo(f"distributed-locks: {'supported' if caps.locks else 'not supported'}")

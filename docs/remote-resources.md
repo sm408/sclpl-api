@@ -108,6 +108,14 @@ this provider only. Leave it unset to use Azure SDK defaults; it must be a posit
 integer. This setting is deliberately not a core runner option because other providers
 have different transfer models.
 
+## Distributed locks
+
+Providers advertise native locking through `sclpl resource doctor`. Azure Blob uses
+an Azure Blob lease on an existing blob: `acquire_lock(uri, lease_duration=60)` returns
+a context manager that releases the lease on exit. Azure accepts finite leases from 15
+through 60 seconds, or `-1` for an infinite lease. Keep leases short and use the
+context-manager form; workflows do not automatically acquire remote locks yet.
+
 ## Diagnostics
 
 Use `sclpl resource doctor azblob://account/container/known-object.csv` to verify that

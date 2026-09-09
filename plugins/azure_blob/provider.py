@@ -32,6 +32,33 @@ class AzureBlobURI:
         return f"https://{self.account}.blob.core.windows.net"
 
 
+@dataclass(slots=True)
+class AzureBlobLease:
+    """A native Azure blob lease exposed through the provider-neutral contract."""
+
+    uri: str
+    lease_id: str
+    _lease: Any
+    _provider: AzureBlobProvider
+    _released: bool = False
+
+    def release(self) -> None:
+        if self._released:
+            return
+        try:
+            self._lease.release()
+        except Exception as error:
+            raise self._provider._translate(error, self.uri) from error
+        self._released = True
+
+    def __enter__(self) -> AzureBlobLease:
+        return self
+
+    def __exit__(self, exc_type: object, exc_value: object, traceback: object) -> None:
+        del exc_type, exc_value, traceback
+        self.release()
+
+
 def parse_uri(uri: str) -> AzureBlobURI:
     parsed = urlsplit(uri)
     parts = [part for part in parsed.path.split("/") if part]
@@ -59,7 +86,9 @@ class AzureBlobProvider:
         self._credential_factory = credential_factory
 
     def capabilities(self) -> ResourceCapabilities:
-        return ResourceCapabilities(write=True, list=True, revisions=True, conditional_write=True)
+        return ResourceCapabilities(
+            write=True, list=True, revisions=True, conditional_write=True, locks=True
+        )
 
     def normalize(self, uri: str) -> str:
         parsed = urlsplit(uri)
@@ -143,6 +172,20 @@ class AzureBlobProvider:
         except Exception as error:
             raise self._translate(error, uri) from error
 
+    def acquire_lock(self, uri: str, *, lease_duration: int = 60) -> AzureBlobLease:
+        """Acquire an Azure Blob lease for an existing blob."""
+        if lease_duration != -1 and not 15 <= lease_duration <= 60:
+            raise ResourceInvalidURI("Azure Blob lease_duration must be -1 or between 15 and 60")
+        try:
+            LeaseClient = self._lease_import()
+            lease = LeaseClient(self._blob(uri))
+            lease_id = lease.acquire(lease_duration=lease_duration)
+            return AzureBlobLease(self.normalize(uri), str(lease_id), lease, self)
+        except Exception as error:
+            if isinstance(error, ResourceInvalidURI):
+                raise
+            raise self._translate(error, uri) from error
+
     def display_uri(self, uri: str) -> str:
         parsed = urlsplit(uri)
         return urlunsplit((parsed.scheme, parsed.netloc, parsed.path, "", ""))
@@ -199,6 +242,12 @@ class AzureBlobProvider:
         from azure.storage.blob import BlobServiceClient
 
         return DefaultAzureCredential, BlobServiceClient, AzureSasCredential
+
+    @staticmethod
+    def _lease_import() -> Any:
+        from azure.storage.blob import BlobLeaseClient
+
+        return BlobLeaseClient
 
     def _account_url(self, account: str) -> str:
         endpoint = self._setting("ACCOUNT_URL")

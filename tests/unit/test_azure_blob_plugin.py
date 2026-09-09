@@ -21,7 +21,40 @@ def test_azure_uri_requires_account_and_container() -> None:
 
 def test_azure_provider_declares_safe_resource_capabilities() -> None:
     capabilities = AzureBlobProvider().capabilities()
-    assert capabilities.write and capabilities.list and capabilities.conditional_write
+    assert (
+        capabilities.write
+        and capabilities.list
+        and capabilities.conditional_write
+        and capabilities.locks
+    )
+
+
+def test_azure_blob_lease_acquires_and_releases(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    events: list[object] = []
+
+    class Lease:
+        def __init__(self, blob: object) -> None:
+            events.append(blob)
+
+        def acquire(self, *, lease_duration: int) -> str:
+            events.append(lease_duration)
+            return "lease-id"
+
+        def release(self) -> None:
+            events.append("release")
+
+    provider = AzureBlobProvider()
+    monkeypatch.setattr(provider, "_blob", lambda uri: "blob-client")
+    monkeypatch.setattr(provider, "_lease_import", lambda: Lease)
+    with provider.acquire_lock("azblob://account/container/object.csv", lease_duration=30) as lease:
+        assert lease.uri == "azblob://account/container/object.csv"
+        assert lease.lease_id == "lease-id"
+    assert events == ["blob-client", 30, "release"]
+
+    with pytest.raises(ResourceInvalidURI, match="between 15 and 60"):
+        provider.acquire_lock("azblob://account/container/object.csv", lease_duration=2)
 
 
 def test_azure_default_auth_uses_configurable_endpoint(monkeypatch: pytest.MonkeyPatch) -> None:

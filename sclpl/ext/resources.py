@@ -76,6 +76,18 @@ class ResourceCapabilities:
     list: bool = False
     revisions: bool = False
     conditional_write: bool = False
+    locks: bool = False
+
+
+class ResourceLease(Protocol):
+    """An exclusive, provider-owned resource lease."""
+
+    uri: str
+    lease_id: str
+
+    def release(self) -> None: ...
+    def __enter__(self) -> ResourceLease: ...
+    def __exit__(self, exc_type: object, exc_value: object, traceback: object) -> None: ...
 
 
 class ResourceProvider(Protocol):
@@ -99,6 +111,12 @@ class ResourceProvider(Protocol):
         expected_revision: str | None = None,
     ) -> ResourceInfo: ...
     def display_uri(self, uri: str) -> str: ...
+
+
+class LockingResourceProvider(ResourceProvider, Protocol):
+    """Optional extension implemented only by providers with native leases."""
+
+    def acquire_lock(self, uri: str, *, lease_duration: int = 60) -> ResourceLease: ...
 
 
 _PROVIDERS: dict[str, ResourceProvider] = {}
