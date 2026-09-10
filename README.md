@@ -67,7 +67,7 @@ history, and export results without turning every workflow into a custom Python 
 | Validate data, not just HTTP | Assertions with distinct exit codes |
 | Work with tabular results | Flattening, joins, grouping, CSV, Excel, Parquet |
 | Run safely at scale | Retries, cache, memory spilling, lane assignment |
-| Extend the tool | Python functions and plugins through `sclpl.ext.api` |
+| Extend the tool | Ordinary Python scripts, typed functions, and plugins through `sclpl.ext.api` |
 
 ## Showcase
 
@@ -186,6 +186,7 @@ An assertion failure exits **4**, not 1. Automation can tell "the API failed" ap
 | Area | Commands |
 |---|---|
 | Workflows | `sclpl run`, `validate`, `explain`, `fmt`, `convert` |
+| Python scripts | `sclpl python SCRIPT.py [ARGS...]`; `python` workflow steps |
 | One request | `sclpl call` |
 | Catalogue | `sclpl import`, `list`, `show`, `remove` |
 | History | `sclpl runs list`, `show`, `search`, `diff`, `replay`, `export`, `pin`, `prune` |
@@ -232,6 +233,27 @@ Start with:
 | [`examples/12-text-plugin-library.sclpll`](examples/12-text-plugin-library.sclpll) | Bundled text plugin helpers |
 
 ## Extending
+
+Use an ordinary local script when you need one project-specific step, without creating a
+plugin package:
+
+```bash
+sclpl python scripts/report.py --month 2026-09
+```
+
+The script uses the same Python environment as `sclpl`, so it can `import sclpl` when useful.
+To place it in a workflow, call the built-in `python` function. `input=` is sent as JSON on
+standard input; JSON written to standard output becomes the next step's value:
+
+```sclpll
+@step scored
+  python "scripts/score.py" args=["--model", "v2"] input=@fetch.body
+```
+
+See the [Python script example](examples/13-python-script.sclpll) and the
+[workflow guide](docs/guide/workflow-anatomy.md#ordinary-python-scripts) for the complete
+contract. Scripts are trusted local code; use a plugin when the integration needs reusable
+distribution, discovery, or declared capabilities.
 
 Scaffold a plugin:
 

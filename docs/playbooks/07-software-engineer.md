@@ -59,6 +59,16 @@ python -m sclpl docs build --check
 Never hand-edit `docs/reference/`. Add tests for successful values, invalid values, and any
 security-sensitive path.
 
+## Choose a script or a plugin
+
+Use the built-in `python` workflow function for a project-local `.py` script. It forwards
+`args` as command-line arguments and connects `input`/stdout with JSON. The standalone form is
+`sclpl python SCRIPT.py [ARGS...]`. Both deliberately run trusted local code in the active
+environment; neither is a sandbox.
+
+Choose a plugin instead when callers need installation/discovery, a stable named connector, or
+capability declarations that users can deny before the plugin imports.
+
 ## Work on the engine safely
 
 The important invariants are:

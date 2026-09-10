@@ -91,7 +91,7 @@ The first body line selects the kind:
 |---|---|---|
 | `get`, `post`, `put`, `patch`, `delete`, `head`, `options` | HTTP | Call an API |
 | `let` | Binding | Compute or store a value |
-| Registered function name | Function | Transform, validate, read, or write |
+| Registered function name | Function | Transform, validate, read, write, or run a Python script |
 | `foreach` | Fan-out | Run a body for each item |
 | `when` | Conditional | Choose a branch |
 | `while`, `do_while` | Loop | Repeat a bounded body |
@@ -131,6 +131,22 @@ The first body line selects the kind:
 `retry`, `cache`, `lane`, `tag`, `assert`, `skip_if`, `retry_if`, and `keep` can follow any
 compatible step. `assert` failures use exit code `4`.
 
+## Python scripts
+
+The built-in `python` function runs a normal local `.py` file. Its `args` reach the script as
+ordinary command-line arguments. `input` is serialised as JSON to standard input; JSON printed
+to standard output becomes the step value. Empty output becomes `null`, while non-JSON output is
+kept as text. Put logs and diagnostics on standard error.
+
+```sclpll
+@step scored
+  python "scripts/score.py" args=["--model", "v2"] input=@rows
+```
+
+Run a script outside a workflow with `sclpl python scripts/score.py --model v2`. Both paths use
+the active SCLPL Python environment, so the script may import `sclpl`. Scripts are trusted local
+code and are not sandboxed.
+
 ## Expressions
 
 Expressions support literals, references, paths, calls, interpolation, comparisons, arithmetic,
@@ -168,4 +184,3 @@ python -m sclpl convert workflow.sclpll workflow.json
 
 The JSON surface represents the same workflow IR. Formatting and conversion are intended to be
 stable and are covered by the project's tests.
-

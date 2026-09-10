@@ -5,7 +5,14 @@ tags:
 
 # Extending sclpl
 
-Three ways to add vocabulary, in increasing order of ceremony.
+Four ways to add behaviour, in increasing order of ceremony.
+
+## An ordinary script
+
+For a project-local task that does not need a reusable registered name. Call it with
+`sclpl python script.py [ARGS...]`, or use the `python` workflow function with `args` and JSON
+`input`. It runs in the active environment, can import `sclpl`, and is trusted code rather than
+a sandboxed extension.
 
 ## An operator
 

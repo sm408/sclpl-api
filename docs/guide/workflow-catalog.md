@@ -214,6 +214,29 @@ signature; [expressions](../reference/expressions.md) lists every operator. Core
 `filter_rows`, `dedupe`, `sort_by`, `profile`, `assert_rowcount`, `assert_schema`,
 `assert_unique`, and `secret`.
 
+### Ordinary Python scripts
+
+The `python` built-in runs a local Python source file without requiring a plugin. The optional
+`args` list is forwarded as the script's command-line arguments. The optional `input` value is
+sent as JSON on stdin. Parse JSON stdout as the result; empty stdout is `null`, and other stdout
+is returned as text. Keep logs on stderr.
+
+```sclpll
+@step source
+  let [{"id": 1, "amount": 12.5}]
+
+@step scored
+  python "examples/13-python-script.py" args=["--multiplier", "2"] input=@source
+
+@step verified
+  assert_schema @scored {"id": "integer", "score": "number"}
+```
+
+For a standalone invocation, use `sclpl python examples/13-python-script.py --multiplier 2`.
+The script runs in the active SCLPL Python environment and can therefore `import sclpl` if it
+needs supported library functionality. It is trusted local code, not a sandboxed extension. Use
+a plugin when the integration needs reusable packaging, discovery, or declared capabilities.
+
 ### `foreach`
 
 ```sclpll

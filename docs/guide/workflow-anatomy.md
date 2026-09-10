@@ -107,6 +107,41 @@ Any registered built-in function or plugin connector can be used as the first li
 Arguments before `=` are positional; `name=value` arguments are keyword arguments. JSON objects,
 lists, numbers, booleans, `null`, quoted strings, and references are supported.
 
+## Ordinary Python scripts
+
+Run a normal script directly, with its arguments unchanged. It runs with the same Python
+environment as SCLPL, so `import sclpl` works without packaging the script as a plugin:
+
+```bash
+sclpl python scripts/report.py --month 2026-09
+```
+
+Use the built-in `python` function when that script belongs in a workflow. Its usual command-line
+arguments stay ordinary arguments; `input=` sends a workflow value as JSON on standard input.
+A JSON value printed to standard output becomes the step result, ready for the next step. Empty
+output becomes `null`; other text output becomes a string. Write logs and diagnostics to stderr.
+
+```sclpll
+@step scored
+  python "scripts/score.py" args=["--model", "v2"] input=@fetch.body
+
+@step checked
+  assert_rowcount @scored min=1
+```
+
+For example, `score.py` can remain a plain script:
+
+```python
+import json
+import sys
+
+rows = json.load(sys.stdin)
+json.dump([{"id": row["id"], "score": 1} for row in rows], sys.stdout)
+```
+
+Scripts are trusted local code, like plugins: SCLPL does not sandbox them. Use a plugin only when
+you need a reusable, named integration rather than a project-local script.
+
 ## Outputs
 
 The workflow declares formats, while the caller supplies paths:
@@ -172,4 +207,3 @@ planner still enforces the workflow's concurrency ceiling.
 - Validate before running and use `--json` when another program consumes run events.
 - Use `--offline` to require cache hits and avoid the network.
 - Use `sclpl runs show`, `diff`, and `export` to inspect a completed run.
-

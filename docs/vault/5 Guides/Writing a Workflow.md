@@ -149,6 +149,20 @@ sclpl run hello.sclpll -m smoke
 A mode can only **subtract**. Pruning something a kept step needs is caught at validate
 time with the fix named. → [[Modes and Ports]]
 
+## Calling an ordinary Python script
+
+```
+@step scored
+  python "scripts/score.py" args=["--model", "v2"] input=@checked
+```
+
+`args` remains the script's normal command line. `input` is JSON on stdin, and JSON stdout is
+the `@scored` value. Put logging on stderr. The file can also run by itself with
+`sclpl python scripts/score.py --model v2`; it shares SCLPL's active Python environment.
+
+The boundary is for trusted project-local code, not sandboxing. Package and declare a plugin
+when callers need discovery or capability policy.
+
 ## Before you run it
 
 ```bash

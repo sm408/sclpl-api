@@ -56,6 +56,20 @@ def domain(url: str) -> str:
 Keep functions typed, deterministic where possible, and covered by a focused unit test.
 Use a plugin when the capability needs packaging, discovery, or an external dependency.
 
+## Reuse an ordinary Python script
+
+For a project-local transformation, keep a normal script and connect it to the workflow instead
+of packaging a plugin. `input=` arrives as JSON on stdin; JSON stdout becomes the next value:
+
+```sclpll
+@step enriched
+  python "scripts/enrich.py" args=["--source", "crm"] input=@checked
+```
+
+Run the same script directly with `sclpl python scripts/enrich.py --source crm`. It uses the
+active SCLPL Python environment, so `import sclpl` is available when needed. Scripts are trusted
+local code; write diagnostics to stderr and reserve stdout for the workflow result.
+
 ## Publish a remote workflow bundle
 
 Keep port declarations storage-agnostic and use the conventional bundle layout:

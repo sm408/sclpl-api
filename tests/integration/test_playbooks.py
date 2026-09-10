@@ -75,6 +75,20 @@ def test_every_example_validates(path: Path, tmp_path: Path, home: Path) -> None
 # -- and they run ------------------------------------------------------------------
 
 
+def test_python_script_example_runs(tmp_path: Path, home: Path) -> None:
+    """The documented script boundary performs a real JSON round trip."""
+    result = run_cli(
+        "run",
+        str(EXAMPLES / "13-python-script.sclpll"),
+        "--no-record",
+        "--no-cache",
+        cwd=EXAMPLES.parent,
+        home=home,
+    )
+    assert result.returncode == 0, result.stderr
+    assert "ok   verified" in result.stderr
+
+
 def test_playbook_one_fetches_every_page_into_a_csv(
     tmp_path: Path, home: Path, server_url: str
 ) -> None:
@@ -278,6 +292,7 @@ def test_the_readme_commands_all_exist() -> None:
         "list",
         "show",
         "remove",
+        "python",
         "runs",
         "secret",
         "plugin",

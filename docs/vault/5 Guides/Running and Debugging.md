@@ -15,6 +15,7 @@ tags:
 | `sclpl explain` | Show the execution plan |
 | `sclpl fmt` | Rewrite in canonical form |
 | `sclpl convert` | Between the JSON and SCLPLL surfaces |
+| `sclpl python SCRIPT.py [ARGS...]` | Run an ordinary script in the active SCLPL Python environment |
 | `sclpl import` / `list` / `show` / `remove` | The catalogue |
 
 Bare shorthand `sclpl <wf> [mode] [in…] [out…]` works for typing. **Scripts and CI use
@@ -45,6 +46,10 @@ Progress is on **stderr**; data is on **stdout**
 sclpl run wf --out report=- 2>/dev/null | jq '.[0]'
 sclpl run wf --json 2> events.ndjson
 ```
+
+For a workflow `python` step, the child script follows the same boundary: JSON stdout becomes
+the step value and stderr is its diagnostics. `input=@value` supplies JSON stdin; `args=[...]`
+supplies normal command-line arguments.
 
 ## When something is wrong
 

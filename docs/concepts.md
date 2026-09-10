@@ -35,6 +35,9 @@ One thing a workflow does. Eight kinds: `http`, `fn`, `let`, `foreach`, `if`, `w
 A step's **id** is also the name its value binds to. `@fetch` means "what the step
 called `fetch` produced".
 
+The built-in `python` function is a function step that runs a local Python script. It passes an
+optional workflow value as JSON on stdin and turns JSON stdout into the next step value.
+
 ## Reference
 
 `@name`, and the only way a dependency is created. Reading `@orders` makes your step
@@ -136,6 +139,8 @@ load one that asked for something you did not want.
 
 There is no sandbox. A plugin is trusted code, and the guarantee is about *loading*
 rather than about running — which is the guarantee that can actually be kept.
+
+Ordinary scripts run with `sclpl python` or a workflow `python` step are trusted local code too.
 
 ## Run
 

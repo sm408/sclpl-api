@@ -34,6 +34,7 @@
 | `pivot(data, index, column, value)` | Turn distinct values of one column into columns of their own. |
 | `pluck(data, column, default=null)` | Return one column as a list, preserving row order. |
 | `profile(data)` | A summary of the data: row count, columns, types, and null counts. |
+| `python(script, args=null, input=null, cwd=null)` | Run a Python script; optional JSON stdin and JSON stdout connect workflow values. |
 | `read(path)` | Read a file, choosing the format from the extension. |
 | `read_csv(path)` | Read a CSV file into a table. |
 | `read_excel(path, sheet=0)` | Read a sheet of an Excel workbook into a table. |

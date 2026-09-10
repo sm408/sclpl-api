@@ -39,15 +39,52 @@ WORKFLOW = """
 """
 
 
-def run_cli(*args: str, cwd: Path | None = None) -> subprocess.CompletedProcess[str]:
+def run_cli(
+    *args: str, cwd: Path | None = None, home: Path | None = None
+) -> subprocess.CompletedProcess[str]:
+    env = {**os.environ, "PYTHONPATH": os.getcwd(), "SCLPL_RENDER": "plain"}
+    if home is not None:
+        env["SCLPL_HOME"] = str(home / "state")
+        env["SCLPL_CACHE_DIR"] = str(home / "cache")
     return subprocess.run(
         [sys.executable, "-m", "sclpl", *args],
         capture_output=True,
         text=True,
         timeout=120,
         cwd=cwd,
-        env={**os.environ, "PYTHONPATH": os.getcwd(), "SCLPL_RENDER": "plain"},
+        env=env,
     )
+
+
+def test_python_command_runs_a_normal_script_and_forwards_its_arguments(tmp_path: Path) -> None:
+    script = tmp_path / "report.py"
+    script.write_text(
+        "import sys\nfrom sclpl import __version__\nprint(f'{__version__}:{sys.argv[2]}')\n",
+        encoding="utf-8",
+    )
+    result = run_cli("python", str(script), "--greeting", "hello")
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip() == "0.9.1:hello"
+
+
+def test_python_step_passes_its_json_result_to_the_next_workflow_step(tmp_path: Path) -> None:
+    script = tmp_path / "double.py"
+    script.write_text(
+        "import json, sys\n"
+        "json.dump([number * 2 for number in json.load(sys.stdin)], sys.stdout)\n",
+        encoding="utf-8",
+    )
+    workflow = tmp_path / "scripts.sclpll"
+    workflow.write_text(
+        "@workflow scripts\n\n"
+        "@step doubled\n"
+        f'  python "{script}" input=[2, 3]\n\n'
+        "@step total\n"
+        "  let sum(@doubled)\n",
+        encoding="utf-8",
+    )
+    result = run_cli("run", str(workflow), "--no-record", home=tmp_path / "sclpl")
+    assert result.returncode == 0, result.stderr
 
 
 @pytest.fixture
