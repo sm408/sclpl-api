@@ -216,23 +216,25 @@ signature; [expressions](../reference/expressions.md) lists every operator. Core
 
 ### Ordinary Python scripts
 
-The `python` built-in runs a local Python source file without requiring a plugin. The optional
-`args` list is forwarded as the script's command-line arguments. The optional `input` value is
-sent as JSON on stdin. Parse JSON stdout as the result; empty stdout is `null`, and other stdout
-is returned as text. Keep logs on stderr.
+The `python` built-in runs a registered, SHA-256-pinned Python source file without requiring a
+plugin. Register either a root-confined local `path` or a provider `uri` (including `azblob://`)
+under `[python.scripts.<name>]`. The optional `args` list is forwarded as command-line arguments.
+The optional `input` value is sent as JSON on stdin. Parse JSON stdout as the result; empty stdout
+is `null`, and other stdout is returned as text. Keep logs on stderr.
 
 ```sclpll
 @step source
   let [{"id": 1, "amount": 12.5}]
 
 @step scored
-  python "examples/13-python-script.py" args=["--multiplier", "2"] input=@source
+  python "scorer" args=["--multiplier", "2"] input=@source
 
 @step verified
   assert_schema @scored {"id": "integer", "score": "number"}
 ```
 
-For a standalone invocation, use `sclpl python examples/13-python-script.py --multiplier 2`.
+For a standalone invocation, use `sclpl python scorer --multiplier 2` from the project holding
+that registration.
 The script runs in the active SCLPL Python environment and can therefore `import sclpl` if it
 needs supported library functionality. It is trusted local code, not a sandboxed extension. Use
 a plugin when the integration needs reusable packaging, discovery, or declared capabilities.

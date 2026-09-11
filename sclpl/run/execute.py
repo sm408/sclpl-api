@@ -16,6 +16,7 @@ from sclpl.errors import AssertionFailed, SclplError, StepFailed, ValidationErro
 from sclpl.expr import Context, evaluate, parse, parse_interpolated
 from sclpl.expr.eval import _truthy
 from sclpl.project import auth as auth_mod
+from sclpl.project import scripts as scripts_mod
 from sclpl.project.auth import Profile as AuthProfile
 from sclpl.render.events import StepProgress
 from sclpl.render.reporter import Reporter
@@ -135,6 +136,11 @@ class Runtime:
     #: G3: this run's own id, as it will appear in history -- what a checkpoint is
     #: filed under. Set together with `checkpoint_store`; one implies the other.
     run_id: str = ""
+    #: The project allowlist and resource-cache policy for trusted Python scripts.
+    script_project: Any = None
+    script_cache_read: bool = True
+    script_cache_write: bool = True
+    script_cache_require_hit: bool = False
 
     def metric(self, step_id: str) -> StepMetrics:
         return self.metrics.setdefault(step_id, StepMetrics())
@@ -648,6 +654,18 @@ async def _fn(step: Step, config: FnConfig, runtime: Runtime) -> Any:
 
     args = [await _resolve(arg, runtime) for arg in config.args]
     kwargs = {name: await _resolve(value, runtime) for name, value in config.kwargs.items()}
+    if config.name == "python":
+        if runtime.script_project is None or not args or not isinstance(args[0], str):
+            raise StepFailed(f"step {step.id!r} has no registered Python script")
+        args[0] = str(
+            scripts_mod.materialize(
+                runtime.script_project,
+                args[0],
+                cache_read=runtime.script_cache_read,
+                cache_write=runtime.script_cache_write,
+                cache_require_hit=runtime.script_cache_require_hit,
+            )
+        )
     if not dispatch.has(config.name):
         raise StepFailed(
             f"step {step.id!r} calls {config.name!r}, which is not registered",

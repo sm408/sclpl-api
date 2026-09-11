@@ -153,15 +153,17 @@ time with the fix named. → [[Modes and Ports]]
 
 ```
 @step scored
-  python "scripts/score.py" args=["--model", "v2"] input=@checked
+  python "score" args=["--model", "v2"] input=@checked
 ```
 
 `args` remains the script's normal command line. `input` is JSON on stdin, and JSON stdout is
-the `@scored` value. Put logging on stderr. The file can also run by itself with
-`sclpl python scripts/score.py --model v2`; it shares SCLPL's active Python environment.
+the `@scored` value. Put logging on stderr. Register `score` with a local `path` or provider
+`uri` plus SHA-256 in `sclpl.toml`; it can then run by itself with `sclpl python score --model v2`
+and shares SCLPL's active Python environment.
 
-The boundary is for trusted project-local code, not sandboxing. Package and declare a plugin
-when callers need discovery or capability policy.
+The boundary is for trusted code, not sandboxing. The alias and digest prevent arbitrary or
+silently changed scripts from running. Package and declare a plugin when callers need discovery
+or capability policy.
 
 ## Before you run it
 

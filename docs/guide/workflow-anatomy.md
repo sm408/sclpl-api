@@ -109,12 +109,18 @@ lists, numbers, booleans, `null`, quoted strings, and references are supported.
 
 ## Ordinary Python scripts
 
-Run a normal script directly, with its arguments unchanged. It runs with the same Python
-environment as SCLPL, so `import sclpl` works without packaging the script as a plugin:
+Register the script in the project manifest, pinning the exact source bytes. `path` is confined to
+the project root; `uri` may use an installed provider such as `azblob`:
 
-```bash
-sclpl python scripts/report.py --month 2026-09
+```toml
+[python.scripts.report]
+path = "scripts/report.py" # or uri = "azblob://account/container/report.py"
+sha256 = "<lowercase SHA-256 of the script bytes>"
 ```
+
+Run the alias with its arguments unchanged: `sclpl python report --month 2026-09`. It runs with
+the same Python environment as SCLPL, so `import sclpl` works without packaging the script as a
+plugin.
 
 Use the built-in `python` function when that script belongs in a workflow. Its usual command-line
 arguments stay ordinary arguments; `input=` sends a workflow value as JSON on standard input.
@@ -123,13 +129,13 @@ output becomes `null`; other text output becomes a string. Write logs and diagno
 
 ```sclpll
 @step scored
-  python "scripts/score.py" args=["--model", "v2"] input=@fetch.body
+  python "report" args=["--model", "v2"] input=@fetch.body
 
 @step checked
   assert_rowcount @scored min=1
 ```
 
-For example, `score.py` can remain a plain script:
+For example, `scripts/report.py` can remain a plain script:
 
 ```python
 import json

@@ -222,3 +222,20 @@ Troubleshooting: install `sclpl-azure-blob` in the same Python environment as
 `sclpl`, then confirm the identity has Storage Blob Data Reader for workflows/inputs
 and Storage Blob Data Contributor for outputs. `sclpl validate azblob://...` fetches
 the workflow but does not download inputs or publish outputs.
+
+## Registered Python scripts
+
+Python scripts are executable code, so workflows never receive an arbitrary `azblob://` URI.
+Register a script alias in `sclpl.toml` and pin the source bytes instead:
+
+```toml
+[python.scripts.score]
+uri = "azblob://account/container/scripts/score.py"
+sha256 = "<lowercase SHA-256 of the exact blob bytes>"
+```
+
+Use `python "score"` in the workflow or `sclpl python score` at the project root. SCLPL stages
+the blob through the resource cache and verifies the SHA-256 before launching it. Query strings,
+fragments, and embedded credentials are refused in registered script URIs; configure Azure
+authentication outside the manifest. This is an execution allowlist and integrity check, not a
+sandbox for the script's process authority.

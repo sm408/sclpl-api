@@ -25,6 +25,7 @@ from sclpl.project import auth as auth_mod
 from sclpl.project import context as project_context
 from sclpl.project import outputs as outputs_mod
 from sclpl.project import policy as policy_mod
+from sclpl.project import scripts as scripts_mod
 from sclpl.render.events import RunFinished, RunStarted
 from sclpl.render.reporter import Reporter
 from sclpl.run import checkpoints as checkpoints_mod
@@ -154,6 +155,21 @@ async def run_workflow(doc: WorkflowDoc, options: Options, reporter: Reporter) -
             )
         )
         return Result(report=report, exit_code=problem.exit_code)
+
+    try:
+        script_project = project_context.load(env=options.env)
+        scripts_mod.check_workflow(doc, script_project)
+    except ValidationError as script_error:
+        reporter.log("error", str(script_error))
+        reporter.emit(
+            RunFinished(
+                status="failed",
+                duration_ms=_ms(started),
+                counts={},
+                exit_code=script_error.exit_code,
+            )
+        )
+        return Result(report=report, exit_code=script_error.exit_code)
 
     if report.will_overwrite and not (options.overwrite or project_policy.overwrite):
         # Checked here rather than folded into `report.problems`: preflight itself
@@ -312,6 +328,10 @@ async def run_workflow(doc: WorkflowDoc, options: Options, reporter: Reporter) -
                 publication=ledger,
                 checkpoint_store=checkpoint_store,
                 run_id=options.run_id,
+                script_project=script_project,
+                script_cache_read=resource_policy.read,
+                script_cache_write=resource_policy.write,
+                script_cache_require_hit=resource_policy.require_hit,
             )
             runtime.completeness.extend(resume_completeness)
             for name, value in stubs.items():

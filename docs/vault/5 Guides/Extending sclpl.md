@@ -9,10 +9,10 @@ Four ways to add behaviour, in increasing order of ceremony.
 
 ## An ordinary script
 
-For a project-local task that does not need a reusable registered name. Call it with
-`sclpl python script.py [ARGS...]`, or use the `python` workflow function with `args` and JSON
-`input`. It runs in the active environment, can import `sclpl`, and is trusted code rather than
-a sandboxed extension.
+For a project-local task, register a name under `[python.scripts.NAME]` with a local `path` or
+provider `uri` and its SHA-256. Call it with `sclpl python NAME [ARGS...]`, or use the `python`
+workflow function with `args` and JSON `input`. It runs in the active environment, can import
+`sclpl`, and is trusted code rather than a sandboxed extension.
 
 ## An operator
 

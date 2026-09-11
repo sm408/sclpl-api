@@ -26,12 +26,28 @@ def run_python(
     input: Any = None,
     cwd: str | None = None,
 ) -> Any:
-    """Run a Python script; optional JSON stdin and JSON stdout connect workflow values."""
+    """Run a verified registered Python script; JSON stdin and stdout connect workflow values."""
+    return run_path(script, args=args, input=input, cwd=cwd)
+
+
+def run_path(
+    script: str,
+    *,
+    args: list[str] | None = None,
+    input: Any = None,
+    cwd: str | None = None,
+) -> Any:
+    """Run already-authorized local script bytes.
+
+    This is intentionally an internal execution primitive. The workflow runner and
+    `sclpl python` resolve a manifest registration and verify its digest before they
+    call it; accepting arbitrary paths at those public boundaries would be fail-open.
+    """
     path = Path(script)
     if not path.is_file():
         raise ValidationError(
             f"Python script {script!r} does not exist or is not a file",
-            remedies=["give a path relative to the directory where you run sclpl"],
+            remedies=["check the registered script source"],
         )
     if path.suffix.lower() != ".py":
         raise ValidationError(

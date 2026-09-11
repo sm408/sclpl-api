@@ -18,7 +18,8 @@ first time; use the reference pages later as a lookup.
 | [Workflow anatomy](workflow-anatomy.md) | What each section and line changes |
 | [SCLPLL reference](sclpll-reference.md) | Complete file syntax and supported clauses |
 | [Workflow catalog](workflow-catalog.md) | Copy-and-adapt catalog of directives, step forms, clauses, and plugins |
-| [Python scripts](workflow-anatomy.md#ordinary-python-scripts) | Run ordinary scripts directly or as JSON-connected workflow steps |
+| [Python scripts](workflow-anatomy.md#ordinary-python-scripts) | Register pinned scripts, then run them directly or as JSON-connected workflow steps |
+| [VS Code support](../editor-vscode.md) | Install and use the passive SCLPLL language server and extension |
 | [Glossary](glossary.md) | What workflow terms mean in plain language |
 | [Examples](../../examples/) | Runnable files, from one request to plugins |
 
@@ -45,7 +46,7 @@ python -m sclpl run workflow.sclpll output.csv
 python -m sclpl run workflow.sclpll --out report=output.csv
 python -m sclpl fmt workflow.sclpll
 python -m sclpl convert workflow.sclpll workflow.json
-python -m sclpl python scripts/report.py --month 2026-09
+python -m sclpl python report --month 2026-09
 ```
 
 `validate` is the safe first command: it does not call the network or write workflow outputs.

@@ -4,7 +4,7 @@
   let [{"id": 1, "amount": 12.5}, {"id": 2, "amount": 8.0}]
 
 @step scored
-  python "examples/13-python-script.py" args=["--multiplier", "2"] input=@source
+  python "scorer" args=["--multiplier", "2"] input=@source
 
 @step verified
   assert_schema @scored {"id": "integer", "score": "number"}

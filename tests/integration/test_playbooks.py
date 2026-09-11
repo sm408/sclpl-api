@@ -68,7 +68,8 @@ def test_the_example_a_playbook_names_exists(name: str) -> None:
 @pytest.mark.parametrize("path", sorted(EXAMPLES.glob("*.sclpll")), ids=lambda p: p.stem)
 def test_every_example_validates(path: Path, tmp_path: Path, home: Path) -> None:
     """Parses, resolves, and closes -- without a network or a file."""
-    result = run_cli("validate", str(path), cwd=tmp_path, home=home)
+    cwd = EXAMPLES if path.name == "13-python-script.sclpll" else tmp_path
+    result = run_cli("validate", str(path), cwd=cwd, home=home)
     assert result.returncode == 0, result.stderr
 
 
@@ -82,7 +83,7 @@ def test_python_script_example_runs(tmp_path: Path, home: Path) -> None:
         str(EXAMPLES / "13-python-script.sclpll"),
         "--no-record",
         "--no-cache",
-        cwd=EXAMPLES.parent,
+        cwd=EXAMPLES,
         home=home,
     )
     assert result.returncode == 0, result.stderr

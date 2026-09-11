@@ -155,6 +155,7 @@ def _validate(raw: dict[str, Any], path: Path) -> None:
         "outputs",
         "notifications",
         "plugins",
+        "python",
     }
     unknown = set(raw) - allowed
     if unknown:
@@ -179,6 +180,7 @@ def _validate(raw: dict[str, Any], path: Path) -> None:
         if not isinstance(name, str) or not isinstance(value, dict):
             raise ValidationError("plugins must map names to tables", where=str(path))
     _validate_plugin_tables(_table(raw, "plugins"), path)
+    _validate_python(_table(raw, "python"), path)
 
 
 def _table(value: dict[str, Any], name: str) -> dict[str, Any]:
@@ -220,3 +222,13 @@ def _validate_plugin_tables(plugins: dict[str, Any], path: Path) -> None:
             visit(child, name)
 
     visit(plugins)
+
+
+def _validate_python(python: dict[str, Any], path: Path) -> None:
+    """Keep executable-script registration explicit and fail closed on manifest typos."""
+    unknown = set(python) - {"scripts"}
+    if unknown:
+        raise ValidationError(f"unknown python key {sorted(unknown)[0]!r}", where=str(path))
+    scripts = python.get("scripts", {})
+    if not isinstance(scripts, dict):
+        raise ValidationError("python.scripts must be a table", where=str(path))

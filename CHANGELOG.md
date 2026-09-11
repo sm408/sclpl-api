@@ -5,7 +5,7 @@ once the public package API is declared stable.
 
 ## Unreleased
 
-- Added: ordinary Python scripts can run directly with `sclpl python SCRIPT.py [ARGS...]`, or
+- Added: registered, SHA-256-pinned ordinary Python scripts can run with `sclpl python NAME [ARGS...]`, or
   participate in a workflow through the built-in `python` function. Workflow values cross the
   script boundary as JSON on stdin/stdout; scripts run in the active SCLPL Python environment.
 - Fixed: raised the `pyarrow` dependency floor to `>=22,<26` so installation succeeds

@@ -133,19 +133,20 @@ compatible step. `assert` failures use exit code `4`.
 
 ## Python scripts
 
-The built-in `python` function runs a normal local `.py` file. Its `args` reach the script as
-ordinary command-line arguments. `input` is serialised as JSON to standard input; JSON printed
-to standard output becomes the step value. Empty output becomes `null`, while non-JSON output is
-kept as text. Put logs and diagnostics on standard error.
+The built-in `python` function runs a named manifest registration, never a workflow-supplied path
+or URI. Registrations pin a local project file or provider URI with SHA-256. Its `args` reach the
+script as ordinary command-line arguments. `input` is serialised as JSON to standard input; JSON
+printed to standard output becomes the step value. Empty output becomes `null`, while non-JSON
+output is kept as text. Put logs and diagnostics on standard error.
 
 ```sclpll
 @step scored
-  python "scripts/score.py" args=["--model", "v2"] input=@rows
+  python "score" args=["--model", "v2"] input=@rows
 ```
 
-Run a script outside a workflow with `sclpl python scripts/score.py --model v2`. Both paths use
-the active SCLPL Python environment, so the script may import `sclpl`. Scripts are trusted local
-code and are not sandboxed.
+Run a script outside a workflow with `sclpl python score --model v2`. Both paths use the active
+SCLPL Python environment, so the script may import `sclpl`. Scripts are trusted code and are not
+sandboxed; SCLPL nevertheless refuses unregistered aliases and digest mismatches.
 
 ## Expressions
 

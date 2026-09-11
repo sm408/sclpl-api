@@ -58,17 +58,20 @@ Use a plugin when the capability needs packaging, discovery, or an external depe
 
 ## Reuse an ordinary Python script
 
-For a project-local transformation, keep a normal script and connect it to the workflow instead
-of packaging a plugin. `input=` arrives as JSON on stdin; JSON stdout becomes the next value:
+For a project-local transformation, register and SHA-256-pin a normal script, then connect its
+alias to the workflow instead of packaging a plugin. `input=` arrives as JSON on stdin; JSON
+stdout becomes the next value:
 
 ```sclpll
 @step enriched
-  python "scripts/enrich.py" args=["--source", "crm"] input=@checked
+  python "enrich" args=["--source", "crm"] input=@checked
 ```
 
-Run the same script directly with `sclpl python scripts/enrich.py --source crm`. It uses the
-active SCLPL Python environment, so `import sclpl` is available when needed. Scripts are trusted
-local code; write diagnostics to stderr and reserve stdout for the workflow result.
+Run the same script directly with `sclpl python enrich --source crm`. Add
+`[python.scripts.enrich]`, a root-confined `path` (or provider `uri`), and its `sha256` to
+`sclpl.toml`. It uses the active SCLPL Python environment, so `import sclpl` is available when
+needed. Scripts are trusted code; write diagnostics to stderr and reserve stdout for the workflow
+result.
 
 ## Publish a remote workflow bundle
 

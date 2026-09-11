@@ -22,6 +22,7 @@ from sclpl.errors import EXIT_INTERRUPTED, EXIT_USAGE, EXIT_VALIDATION, SclplErr
 from sclpl.ext.resources import display_resource_uri, resource_provider, resource_scheme
 from sclpl.project import context as project_context
 from sclpl.project import identity, lock
+from sclpl.project import scripts as project_scripts
 from sclpl.render.reporter import build_reporter
 from sclpl.run import compile_json
 from sclpl.run.ir import WorkflowDoc
@@ -268,6 +269,7 @@ def validate(
     del ctx
 
     if report.ok:
+        _check_registered_scripts(doc)
         typer.echo(f"{doc.name}: ok — {report.summary()}", err=True)
         for note in report.notes:
             typer.echo(f"  note: {note}", err=True)
@@ -298,6 +300,7 @@ def explain(
         for problem in report.problems:
             typer.echo(str(problem), err=True)
         raise typer.Exit(report.problems[0].exit_code)
+    _check_registered_scripts(doc)
 
     plan = report.plan
     assert plan is not None and report.resolved is not None
@@ -354,6 +357,7 @@ def graph(
         for problem in report.problems:
             typer.echo(str(problem), err=True)
         raise typer.Exit(report.problems[0].exit_code)
+    _check_registered_scripts(doc)
     assert report.plan is not None
     typer.echo(_mermaid(report.plan))
 
@@ -366,6 +370,11 @@ def _mermaid(plan: Any) -> str:
         for need in sorted(plan.nodes[step_id].needs):
             lines.append(f"  {need} --> {step_id}")
     return "\n".join(lines)
+
+
+def _check_registered_scripts(doc: WorkflowDoc) -> None:
+    """Make inspection commands enforce the same executable-script allowlist as run."""
+    project_scripts.check_workflow(doc, project_context.load())
 
 
 def fmt(

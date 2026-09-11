@@ -6,6 +6,7 @@ import json
 import os
 import subprocess
 import sys
+from hashlib import sha256
 from pathlib import Path
 
 import pytest
@@ -58,13 +59,31 @@ def run_cli(
 
 def test_python_command_runs_a_normal_script_and_forwards_its_arguments(tmp_path: Path) -> None:
     script = tmp_path / "report.py"
-    script.write_text(
-        "import sys\nfrom sclpl import __version__\nprint(f'{__version__}:{sys.argv[2]}')\n",
+    source = "import sys\nfrom sclpl import __version__\nprint(f'{__version__}:{sys.argv[2]}')\n"
+    script.write_text(source, encoding="utf-8")
+    (tmp_path / "sclpl.toml").write_text(
+        "[project]\nname = 'scripts'\n[environments.default]\n\n"
+        "[python.scripts.report]\npath = 'report.py'\n"
+        f"sha256 = '{sha256(script.read_bytes()).hexdigest()}'\n",
         encoding="utf-8",
     )
-    result = run_cli("python", str(script), "--greeting", "hello")
+    result = run_cli("python", "report", "--greeting", "hello", cwd=tmp_path)
     assert result.returncode == 0, result.stderr
     assert result.stdout.strip() == "0.9.1:hello"
+
+
+def test_python_command_refuses_an_arbitrary_script_path(tmp_path: Path) -> None:
+    source = "print('not allowlisted')\n"
+    (tmp_path / "report.py").write_text(source, encoding="utf-8")
+    (tmp_path / "sclpl.toml").write_text(
+        "[project]\nname = 'scripts'\n[environments.default]\n\n"
+        "[python.scripts.report]\npath = 'report.py'\n"
+        f"sha256 = '{sha256((tmp_path / 'report.py').read_bytes()).hexdigest()}'\n",
+        encoding="utf-8",
+    )
+    result = run_cli("python", "report.py", cwd=tmp_path)
+    assert result.returncode == EXIT_VALIDATION
+    assert "unregistered python script" in result.stderr
 
 
 def test_python_step_passes_its_json_result_to_the_next_workflow_step(tmp_path: Path) -> None:
@@ -78,12 +97,19 @@ def test_python_step_passes_its_json_result_to_the_next_workflow_step(tmp_path: 
     workflow.write_text(
         "@workflow scripts\n\n"
         "@step doubled\n"
-        f'  python "{script}" input=[2, 3]\n\n'
+        '  python "double" input=[2, 3]\n\n'
         "@step total\n"
         "  let sum(@doubled)\n",
         encoding="utf-8",
     )
-    result = run_cli("run", str(workflow), "--no-record", home=tmp_path / "sclpl")
+    digest = sha256(script.read_bytes()).hexdigest()
+    (tmp_path / "sclpl.toml").write_text(
+        "[project]\nname = 'scripts'\n[environments.default]\n\n"
+        "[python.scripts.double]\npath = 'double.py'\n"
+        f"sha256 = '{digest}'\n",
+        encoding="utf-8",
+    )
+    result = run_cli("run", str(workflow), "--no-record", home=tmp_path / "sclpl", cwd=tmp_path)
     assert result.returncode == 0, result.stderr
 
 

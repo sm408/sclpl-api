@@ -34,14 +34,15 @@ invalidates results from the old one rather than silently mixing them.
 
 ## Ordinary Python scripts
 
-`python(script, *, args, input, cwd)` is the process boundary for project-local scripts. It runs
-the active Python interpreter in the thread lane, forwards `args` unchanged, writes `input` as
-JSON to stdin, and reads JSON stdout back as the step value. Blank stdout is `null`; non-JSON
-stdout is text. Tables cross the boundary as records.
+`python(name, *, args, input, cwd)` is the process boundary for registered scripts. The manifest
+maps `name` to a root-confined local `path` or provider `uri` and pins its SHA-256. It runs the
+active Python interpreter in the thread lane, forwards `args` unchanged, writes `input` as JSON
+to stdin, and reads JSON stdout back as the step value. Blank stdout is `null`; non-JSON stdout
+is text. Tables cross the boundary as records.
 
-The script is still an ordinary `.py` file: run it directly with `sclpl python script.py [ARGS]`
-or place it in a workflow. It is trusted local code, so stderr is the place for diagnostics and
-stdout should stay reserved for the result.
+The script is still an ordinary `.py` file: run its registered alias with `sclpl python NAME
+[ARGS]` or place it in a workflow. It is trusted code, so stderr is the place for diagnostics and
+stdout should stay reserved for the result; registration is an allowlist, not a sandbox.
 
 ## Writing
 

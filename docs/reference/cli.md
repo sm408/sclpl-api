@@ -18,7 +18,7 @@
 | `sclpl list` | List registered and local workflows. |
 | `sclpl show` | Show a workflow's ports, modes, and steps. |
 | `sclpl remove` | Unregister a workflow. |
-| `sclpl python` | Run a normal Python script. It can import sclpl from this environment. |
+| `sclpl python` | Run a registered Python script. It can import sclpl from this environment. |
 | `sclpl init` | Create a project without overwriting files. |
 | `sclpl doctor` | Check the installation and say what is missing. |
 | `sclpl completion` | Print a shell completion script. |

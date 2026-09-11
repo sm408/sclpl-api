@@ -61,10 +61,11 @@ security-sensitive path.
 
 ## Choose a script or a plugin
 
-Use the built-in `python` workflow function for a project-local `.py` script. It forwards
-`args` as command-line arguments and connects `input`/stdout with JSON. The standalone form is
-`sclpl python SCRIPT.py [ARGS...]`. Both deliberately run trusted local code in the active
-environment; neither is a sandbox.
+Use the built-in `python` workflow function for a registered project script. Register a local
+`path` or provider `uri` under `[python.scripts.NAME]` and pin its SHA-256; workflows and the
+standalone form (`sclpl python NAME [ARGS...]`) accept only that alias. It forwards `args` as
+command-line arguments and connects `input`/stdout with JSON. Registered scripts remain trusted
+code in the active environment; this is an execution allowlist, not a sandbox.
 
 Choose a plugin instead when callers need installation/discovery, a stable named connector, or
 capability declarations that users can deny before the plugin imports.

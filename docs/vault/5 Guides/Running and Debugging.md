@@ -15,7 +15,7 @@ tags:
 | `sclpl explain` | Show the execution plan |
 | `sclpl fmt` | Rewrite in canonical form |
 | `sclpl convert` | Between the JSON and SCLPLL surfaces |
-| `sclpl python SCRIPT.py [ARGS...]` | Run an ordinary script in the active SCLPL Python environment |
+| `sclpl python NAME [ARGS...]` | Run a registered, SHA-256-pinned script in the active SCLPL Python environment |
 | `sclpl import` / `list` / `show` / `remove` | The catalogue |
 
 Bare shorthand `sclpl <wf> [mode] [in…] [out…]` works for typing. **Scripts and CI use

@@ -186,7 +186,7 @@ An assertion failure exits **4**, not 1. Automation can tell "the API failed" ap
 | Area | Commands |
 |---|---|
 | Workflows | `sclpl run`, `validate`, `explain`, `fmt`, `convert` |
-| Python scripts | `sclpl python SCRIPT.py [ARGS...]`; `python` workflow steps |
+| Python scripts | `sclpl python NAME [ARGS...]`; registered `python` workflow steps |
 | One request | `sclpl call` |
 | Catalogue | `sclpl import`, `list`, `show`, `remove` |
 | History | `sclpl runs list`, `show`, `search`, `diff`, `replay`, `export`, `pin`, `prune` |
@@ -234,26 +234,30 @@ Start with:
 
 ## Extending
 
-Use an ordinary local script when you need one project-specific step, without creating a
-plugin package:
+Use an ordinary local or provider-backed script when you need one project-specific step, without
+creating a plugin package. Register an alias and pin the exact bytes first:
 
-```bash
-sclpl python scripts/report.py --month 2026-09
+```toml
+[python.scripts.report]
+path = "scripts/report.py" # or uri = "azblob://account/container/report.py"
+sha256 = "<lowercase SHA-256 of the script bytes>"
 ```
 
-The script uses the same Python environment as `sclpl`, so it can `import sclpl` when useful.
+Then run only the registered name: `sclpl python report --month 2026-09`. The script uses the
+same Python environment as `sclpl`, so it can `import sclpl` when useful.
 To place it in a workflow, call the built-in `python` function. `input=` is sent as JSON on
 standard input; JSON written to standard output becomes the next step's value:
 
 ```sclpll
 @step scored
-  python "scripts/score.py" args=["--model", "v2"] input=@fetch.body
+  python "report" args=["--model", "v2"] input=@fetch.body
 ```
 
 See the [Python script example](examples/13-python-script.sclpll) and the
 [workflow guide](docs/guide/workflow-anatomy.md#ordinary-python-scripts) for the complete
-contract. Scripts are trusted local code; use a plugin when the integration needs reusable
-distribution, discovery, or declared capabilities.
+contract. SCLPL refuses paths, URIs, dynamic names, and changed bytes; registered scripts are
+still trusted code, not a sandbox. Use a plugin when the integration needs reusable distribution,
+discovery, or declared capabilities.
 
 Scaffold a plugin:
 
