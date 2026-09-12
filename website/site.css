@@ -24,6 +24,25 @@
 
 *{box-sizing:border-box}
 html{scroll-behavior:smooth}
+@media (prefers-reduced-motion: no-preference){
+  .reveal{opacity:0;transform:translateY(18px);transition:opacity .7s ease,transform .7s ease;transition-delay:calc(var(--reveal-i,0) * 70ms)}
+  .reveal.in-view{opacity:1;transform:translateY(0)}
+}
+.ambient{position:relative;overflow:hidden}
+.ambient::before{
+  content:"";position:absolute;inset:-15% -10%;z-index:0;pointer-events:none;
+  background-image:
+    radial-gradient(circle at 18% 24%, color-mix(in srgb,var(--sea) 16%,transparent), transparent 52%),
+    radial-gradient(circle at 82% 68%, color-mix(in srgb,var(--coral) 11%,transparent), transparent 50%),
+    radial-gradient(color-mix(in srgb,var(--text) 7%,transparent) 1px, transparent 1px);
+  background-size:auto,auto,28px 28px;
+  background-repeat:no-repeat,no-repeat,repeat;
+}
+.ambient>*{position:relative;z-index:1}
+@media (prefers-reduced-motion: no-preference){
+  .ambient::before{animation:ambient-drift 30s ease-in-out infinite alternate}
+}
+@keyframes ambient-drift{from{transform:translate(0,0) scale(1)}to{transform:translate(-2.5%,2%) scale(1.04)}}
 body{margin:0;background:var(--bg);color:var(--text);font:16px/1.55 var(--sans)}
 a{color:inherit;text-decoration:none}
 a:focus-visible,button:focus-visible,input:focus-visible{outline:3px solid var(--coral);outline-offset:3px}
@@ -59,7 +78,9 @@ a:focus-visible,button:focus-visible,input:focus-visible{outline:3px solid var(-
 .signal{border:1px solid var(--ink-fixed);background:var(--ink-fixed);color:#e8efeb;box-shadow:10px 10px 0 var(--gold);margin-top:20px}
 .signal-head{display:flex;justify-content:space-between;padding:12px 16px;border-bottom:1px solid #55707b;font:11px var(--mono);letter-spacing:.08em}
 .run-dot{color:var(--sea)}
-pre{margin:0;padding:27px clamp(18px,5vw,68px);overflow:auto;font:14px/1.85 var(--mono)}
+pre{margin:0;padding:27px clamp(18px,5vw,68px);overflow:auto;font:14px/1.85 var(--mono);position:relative}
+.pre-copy{position:absolute;top:10px;right:10px;background:var(--surface);border:1px solid var(--border);color:var(--muted);font:11px var(--mono);padding:4px 9px;cursor:pointer;opacity:.6;transition:opacity .15s,color .15s,border-color .15s;z-index:2}
+.pre-copy:hover,.pre-copy:focus-visible{opacity:1;color:var(--text);border-color:var(--coral)}
 pre i{color:var(--gold);font-style:normal}
 pre b{color:var(--sea);font-weight:500}
 pre s{color:#8ea4a5;text-decoration:none}

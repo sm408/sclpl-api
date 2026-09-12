@@ -49,6 +49,33 @@
 
   document.querySelectorAll("[data-copy]").forEach((button) => button.addEventListener("click", async () => { await navigator.clipboard.writeText(button.dataset.copy); button.textContent = "Copied"; setTimeout(() => { button.textContent = "Copy"; }, 1600); }));
 
+  const addCopyButtons = (root) => {
+    root.querySelectorAll("pre").forEach((pre) => {
+      if (pre.dataset.copyReady) return;
+      pre.dataset.copyReady = "1";
+      const button = document.createElement("button");
+      button.type = "button"; button.className = "pre-copy"; button.textContent = "Copy"; button.setAttribute("aria-label", "Copy code");
+      button.addEventListener("click", async () => {
+        try { await navigator.clipboard.writeText(pre.textContent.replace(/\n+$/, "")); button.textContent = "Copied"; setTimeout(() => { button.textContent = "Copy"; }, 1600); } catch (e) {}
+      });
+      pre.appendChild(button);
+    });
+  };
+  addCopyButtons(document);
+
+  const revealTargets = [...document.querySelectorAll(".reveal")];
+  if (revealTargets.length) {
+    revealTargets.forEach((el, i) => el.style.setProperty("--reveal-i", i % 6));
+    if ("IntersectionObserver" in window) {
+      const io = new IntersectionObserver((entries) => {
+        entries.forEach((entry) => { if (entry.isIntersecting) { entry.target.classList.add("in-view"); io.unobserve(entry.target); } });
+      }, { threshold: 0.15, rootMargin: "0px 0px -40px 0px" });
+      revealTargets.forEach((el) => io.observe(el));
+    } else {
+      revealTargets.forEach((el) => el.classList.add("in-view"));
+    }
+  }
+
   const themeToggle = document.querySelector("#theme-toggle");
   if (themeToggle) {
     const syncToggle = () => {
@@ -84,12 +111,16 @@
     { test: (p) => p.startsWith("docs/playbooks/"), key: "playbooks", label: "Playbooks", order: 3 },
     { test: (p) => p.startsWith("docs/reference/"), key: "reference", label: "Reference", order: 4 },
     { test: (p) => p.startsWith("sclpll-extras/"), key: "extras", label: "SCLPLL extras", order: 5 },
-    { test: (p) => p.startsWith("docs/adr/"), key: "adr", label: "Architecture decisions", order: 6 },
-    { test: (p) => p.startsWith("docs/cli-rebuild/"), key: "cli-rebuild", label: "Internal planning", order: 7 },
-    { test: (p) => p.startsWith("docs/attic/"), key: "attic", label: "Attic (archived)", order: 8 },
-    { test: (p) => p.startsWith("docs/vault/"), key: "vault", label: "Vault (internal notes)", order: 9 },
   ];
-  const sectionOf = (path) => SECTIONS.find((s) => s.test(path)) || { key: "more", label: "More", order: 10 };
+  // docs/vault ships as its own numbered folders ("3 Concepts", "5 Guides", ...);
+  // mirror that structure instead of dumping every page into one bucket.
+  const vaultSection = (path) => {
+    if (path === "docs/vault/README.md") return { key: "vault-0", label: "Vault", order: 5.05 };
+    const m = /^docs\/vault\/(\d+)\s+([^/]+)\//.exec(path);
+    if (!m) return null;
+    return { key: `vault-${m[1]}`, label: `Vault · ${m[2]}`, order: 5 + Number(m[1]) / 10 };
+  };
+  const sectionOf = (path) => SECTIONS.find((s) => s.test(path)) || vaultSection(path) || { key: "more", label: "More", order: 20 };
 
   const renderNav = (query = "") => {
     const selected = requested(), q = query.toLowerCase();
@@ -111,7 +142,7 @@
   const open = async () => {
     const path = requested(); content.innerHTML = "<p class=loading>Opening field manual…</p>"; toc.innerHTML = ""; renderNav(search.value);
     try { const response = await fetch(`content/${path}`); if (!response.ok) throw new Error("not found"); const source = await response.text(); content.innerHTML = markdown(source, path); crumb.textContent = path.replace(/\.md$/, "").replaceAll("/", " / ").toUpperCase(); sourceLink.href = `https://github.com/sm408/sclpl-api/blob/main/${path}`;
-      toc.innerHTML = [...content.querySelectorAll("h2,h3")].map((heading) => `<a class="level-${heading.tagName.slice(1)}" href="#${heading.id}">${heading.textContent}</a>`).join(""); content.focus({ preventScroll: true });
+      toc.innerHTML = [...content.querySelectorAll("h2,h3")].map((heading) => `<a class="level-${heading.tagName.slice(1)}" href="#${heading.id}">${heading.textContent}</a>`).join(""); addCopyButtons(content); content.focus({ preventScroll: true });
     } catch { content.innerHTML = `<h1>Page not found</h1><p>This page is not part of the published documentation bundle. Return to the <a href="docs.html">documentation index</a>.</p>`; }
   };
   fetch("content/index.json").then((response) => response.json()).then((index) => { pages = index; renderNav(); open(); }).catch(() => { nav.innerHTML = "<p class=loading>Documentation index unavailable. Build the site before previewing it.</p>"; });

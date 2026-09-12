@@ -13,9 +13,40 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 SOURCE = ROOT / "website"
 OUTPUT = SOURCE / "dist"
+
+# Maintainer-facing material (decision logs, rebuild planning, archived drafts,
+# vault housekeeping) has no place in user-facing docs -- that's what the
+# GitHub repo is for. This site is for people using or evaluating sclpl, not
+# for people maintaining or contributing to it.
+INTERNAL_DOC_PREFIXES = (
+    "docs/adr/",
+    "docs/cli-rebuild/",
+    "docs/attic/",
+    "docs/vault/4 Packages/",
+    "docs/vault/6 Decisions/",
+    "docs/vault/7 Milestones/",
+    "docs/vault/8 Meta/",
+)
+INTERNAL_DOC_FILES = (
+    "docs/vault/2 Architecture/Architecture Measured.md",
+    "docs/vault/2 Architecture/Package Map.md",
+)
+
+
+def _is_public(relative: str) -> bool:
+    posix = relative.replace("\\", "/")
+    if posix in INTERNAL_DOC_FILES:
+        return False
+    return not posix.startswith(INTERNAL_DOC_PREFIXES)
+
+
 PUBLIC_DOCS = (
     "README.md",
-    *(str(path.relative_to(ROOT)) for path in (ROOT / "docs").rglob("*.md")),
+    *(
+        str(path.relative_to(ROOT))
+        for path in (ROOT / "docs").rglob("*.md")
+        if _is_public(str(path.relative_to(ROOT)))
+    ),
     "sclpll-extras/README.md",
     *(str(path.relative_to(ROOT)) for path in (ROOT / "sclpll-extras" / "docs").rglob("*.md")),
 )

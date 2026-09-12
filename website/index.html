@@ -19,7 +19,7 @@
 <i>@step</i> write
   <b>save_parquet</b> @fetch.body</code></pre><div class="compiler"><span>REFERENCES</span><b>→</b><span>DEPENDENCY GRAPH</span><b>→</b><span>READY STEPS</span><b>→</b><span>YOUR FILES</span></div></section>
 
-    <section class="position wrap">
+    <section class="position wrap reveal ambient">
       <p class="eyebrow">01 — POSITION</p>
       <h2>What sclpl is</h2>
       <p class="lede"><strong>Programmable API workflows, written as files and run locally.</strong> sclpl reads a workflow, infers the dependency graph from <code>@references</code>, runs each step the moment its inputs are ready, and writes CSV, JSON, NDJSON, Parquet, Excel, or SQLite. No server, no accounts, no web UI — just workflow files, typed Python values, and output files you own.</p>
@@ -33,26 +33,26 @@
       <p class="eyebrow">02 — WHAT SHIPS TODAY</p>
       <h2>Ten things it already does</h2>
       <div class="feature-grid">
-        <article class="feature-card"><span class="mark">01</span><div><h3>Continuous scheduler</h3><p>Writing <code>@accounts</code> inside a step is what makes it wait for <code>accounts</code> — there's no separate <code>needs:</code> list to maintain. A step starts the instant its own references land, so independent branches overlap automatically.</p></div></article>
-        <article class="feature-card"><span class="mark">02</span><div><h3>Built-in pagination</h3><p>Cursor, token, offset, and <code>Link:</code>-header pagination are one line (<code>paginate cursor cursor_path=... param=... max_pages=...</code>) — the usual first thing hand-rolled scripts get wrong.</p></div></article>
-        <article class="feature-card"><span class="mark">03</span><div><h3>Data workbench</h3><p>Flatten nested JSON, explode arrays into rows, join records against local sources (including SQLite), group/aggregate, profile a table, and export to CSV, JSON, NDJSON, Parquet, Excel, or SQLite.</p></div></article>
-        <article class="feature-card"><span class="mark">04</span><div><h3>Assertions with distinct exit codes</h3><p><code>assert_rowcount</code>, <code>assert_schema</code>, <code>assert_unique</code>, and <code>assert_no_nulls</code> fail with exit code <strong>4</strong>, not 1 — automation can tell "the API failed" apart from "the data was wrong."</p></div></article>
-        <article class="feature-card"><span class="mark">05</span><div><h3>Secrets that refuse to be sloppy</h3><p>Credentials go to the OS keyring (<code>sclpl[keyring]</code>) or an encrypted file (<code>sclpl[crypto]</code>). If neither safe backend is installed, secret storage fails loudly instead of falling back to plaintext.</p></div></article>
-        <article class="feature-card"><span class="mark">06</span><div><h3>Operational memory</h3><p>Every run keeps local history: <code>sclpl runs list</code>, <code>show</code>, <code>search</code>, <code>diff</code>, <code>replay</code>, <code>export</code>, <code>pin</code>, <code>prune</code> — an overnight job stays inspectable the next morning.</p></div></article>
-        <article class="feature-card"><span class="mark">07</span><div><h3>Modes and limits</h3><p><code>@mode partial</code> / <code>full</code> / <code>smoke</code> run a subset of a workflow for a fast local check; <code>@limits concurrency=8 host_concurrency=4 timeout=20</code> caps how hard a run leans on a target API.</p></div></article>
-        <article class="feature-card"><span class="mark">08</span><div><h3>Escape hatches, not lock-in</h3><p>Register a SHA-256-pinned Python script and call it with <code>sclpl python NAME</code> — no plugin packaging required. Need something reusable? Scaffold a plugin against the public <code>sclpl.ext.api</code>, the same surface the bundled plugins use.</p></div></article>
-        <article class="feature-card"><span class="mark">09</span><div><h3>Editor support, stays in sync</h3><p><code>sclpll-extras</code> carries the VS Code extension, the SCLPLL language server, an Azure Blob plugin, and a workflow library — all built on the installed <code>sclpl</code> package, so syntax can't drift between CLI and editor.</p></div></article>
-        <article class="feature-card"><span class="mark">10</span><div><h3>Degrades on purpose under load</h3><p>When memory pressure rises on a large run, intermediates spill to disk and concurrency backs off before the OS has to intervene — documented behavior, not a crash waiting to happen.</p></div></article>
+        <article class="feature-card reveal"><span class="mark">01</span><div><h3>Continuous scheduler</h3><p>Writing <code>@accounts</code> inside a step is what makes it wait for <code>accounts</code> — there's no separate <code>needs:</code> list to maintain. A step starts the instant its own references land, so independent branches overlap automatically.</p></div></article>
+        <article class="feature-card reveal"><span class="mark">02</span><div><h3>Built-in pagination</h3><p>Cursor, token, offset, and <code>Link:</code>-header pagination are one line (<code>paginate cursor cursor_path=... param=... max_pages=...</code>) — the usual first thing hand-rolled scripts get wrong.</p></div></article>
+        <article class="feature-card reveal"><span class="mark">03</span><div><h3>Data workbench</h3><p>Flatten nested JSON, explode arrays into rows, join records against local sources (including SQLite), group/aggregate, profile a table, and export to CSV, JSON, NDJSON, Parquet, Excel, or SQLite.</p></div></article>
+        <article class="feature-card reveal"><span class="mark">04</span><div><h3>Assertions with distinct exit codes</h3><p><code>assert_rowcount</code>, <code>assert_schema</code>, <code>assert_unique</code>, and <code>assert_no_nulls</code> fail with exit code <strong>4</strong>, not 1 — automation can tell "the API failed" apart from "the data was wrong."</p></div></article>
+        <article class="feature-card reveal"><span class="mark">05</span><div><h3>Secrets that refuse to be sloppy</h3><p>Credentials go to the OS keyring (<code>sclpl[keyring]</code>) or an encrypted file (<code>sclpl[crypto]</code>). If neither safe backend is installed, secret storage fails loudly instead of falling back to plaintext.</p></div></article>
+        <article class="feature-card reveal"><span class="mark">06</span><div><h3>Operational memory</h3><p>Every run keeps local history: <code>sclpl runs list</code>, <code>show</code>, <code>search</code>, <code>diff</code>, <code>replay</code>, <code>export</code>, <code>pin</code>, <code>prune</code> — an overnight job stays inspectable the next morning.</p></div></article>
+        <article class="feature-card reveal"><span class="mark">07</span><div><h3>Modes and limits</h3><p><code>@mode partial</code> / <code>full</code> / <code>smoke</code> run a subset of a workflow for a fast local check; <code>@limits concurrency=8 host_concurrency=4 timeout=20</code> caps how hard a run leans on a target API.</p></div></article>
+        <article class="feature-card reveal"><span class="mark">08</span><div><h3>Escape hatches, not lock-in</h3><p>Register a SHA-256-pinned Python script and call it with <code>sclpl python NAME</code> — no plugin packaging required. Need something reusable? Scaffold a plugin against the public <code>sclpl.ext.api</code>, the same surface the bundled plugins use.</p></div></article>
+        <article class="feature-card reveal"><span class="mark">09</span><div><h3>Editor support, stays in sync</h3><p><code>sclpll-extras</code> carries the VS Code extension, the SCLPLL language server, an Azure Blob plugin, and a workflow library — all built on the installed <code>sclpl</code> package, so syntax can't drift between CLI and editor.</p></div></article>
+        <article class="feature-card reveal"><span class="mark">10</span><div><h3>Degrades on purpose under load</h3><p>When memory pressure rises on a large run, intermediates spill to disk and concurrency backs off before the OS has to intervene — documented behavior, not a crash waiting to happen.</p></div></article>
       </div>
     </section>
 
-    <section class="codecmp-wrap wrap">
+    <section class="codecmp-wrap wrap ambient">
       <p class="eyebrow">03 — WHY NOT JUST SCRIPT IT</p>
       <h2>Same workflow, three ways</h2>
       <p class="lede">Fetch two independent resources, join them, publish a report — in hand-written Python, a YAML automation file, and <code>.sclpll</code>.</p>
       <p class="micro legend"><mark>flagged</mark> = the thing you'd only notice on a close read. <i>gold</i> = declaration. <b>sea</b> = action.</p>
       <div class="codecmp">
-        <div class="code-card win">
+        <div class="code-card win reveal">
           <div class="cc-head"><span>.sclpll</span><span class="lines">~20 lines</span></div>
           <pre><i>@workflow</i> account_price_report
   "Accounts + prices, merged and posted"
@@ -85,7 +85,7 @@
   <b>body</b> @merged</pre>
           <div class="cc-foot"><code>accounts</code> and <code>prices</code> reference nothing but their own inputs, so the scheduler runs them together — no <code>gather</code>, no <code>needs:</code>. <mark>secret()</mark> reads the keyring/encrypted store by default — nothing extra to write.</div>
         </div>
-        <div class="code-card">
+        <div class="code-card reveal">
           <div class="cc-head"><span>python — asyncio</span><span class="lines">~30 lines</span></div>
           <pre><i>import</i> asyncio, aiohttp, os
 
@@ -120,7 +120,7 @@ HEADERS = {"Authorization": f"Bearer {TOKEN}"}
 asyncio.<b>run</b>(run())</pre>
           <div class="cc-foot">Retry, join, and the parallel fetch are each hand-written — correct, but every one is a place to introduce a bug, and none of it is reusable in the next workflow.</div>
         </div>
-        <div class="code-card">
+        <div class="code-card reveal">
           <div class="cc-head"><span>yaml automation</span><span class="lines">~24 lines + a script</span></div>
           <pre>steps:
   - id: accounts
@@ -164,6 +164,6 @@ asyncio.<b>run</b>(run())</pre>
       <div class="speed-note"><b>On "speed":</b> a carefully hand-tuned <code>asyncio.gather</code> script can run just as fast as sclpl for this exact shape — we don't have head-to-head runtime benchmarks yet. The honest version: a plain script or a linear YAML runner is only as parallel as the author remembered to make it; a <code>.sclpll</code> workflow is parallel by default because the scheduler reads it straight off the dependency graph.</div>
     </section>
 
-    <section class="closing wrap"><p class="eyebrow">START WITH ONE FILE</p><h2>Make the next API job<br>something you can rerun.</h2><div class="terminal"><span>$</span> pip install ./sclpl-1.0.1-py3-none-any.whl <button data-copy="pip install ./sclpl-1.0.1-py3-none-any.whl">Copy</button></div><div class="actions"><a class="button primary" href="downloads.html">Get the release <b>→</b></a><a class="button quiet" href="docs.html?doc=docs/guide/workflow-anatomy.md">Try the 10-minute path</a></div></section>
-  </main><footer><span>Copyright (c) 2026 Shubham</span><span>Programmable API workflows, written as files.</span><a href="https://github.com/sm408/sclpl-api">Source code ↗</a></footer><script src="site.js"></script>
+    <section class="closing wrap reveal ambient"><p class="eyebrow">START WITH ONE FILE</p><h2>Make the next API job<br>something you can rerun.</h2><div class="terminal"><span>$</span> pip install ./sclpl-1.0.1-py3-none-any.whl <button data-copy="pip install ./sclpl-1.0.1-py3-none-any.whl">Copy</button></div><div class="actions"><a class="button primary" href="downloads.html">Get the release <b>→</b></a><a class="button quiet" href="docs.html?doc=docs/guide/workflow-anatomy.md">Try the 10-minute path</a></div></section>
+  </main><footer><span>Copyright (c) 2026 Shubham Maurya</span><span>Programmable API workflows, written as files.</span><a href="https://github.com/sm408/sclpl-api">Source code ↗</a></footer><script src="site.js"></script>
 </body></html>
