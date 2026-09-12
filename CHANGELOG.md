@@ -5,6 +5,14 @@ once the public package API is declared stable.
 
 ## Unreleased
 
+## 0.9.2
+
+- Added source metadata and passive registry introspection used by the separately released
+  SCLPLL language server and VS Code extension in `sm408/sclpll-extras`.
+- Added safe plugin-manifest callable signature and parameter metadata for editor help.
+- Clarified that editor tooling, plugins, and the public function catalogue are distributed
+  through `sclpll-extras`; built-in functions remain included in the core runtime.
+
 - Added: registered, SHA-256-pinned ordinary Python scripts can run with `sclpl python NAME [ARGS...]`, or
   participate in a workflow through the built-in `python` function. Workflow values cross the
   script boundary as JSON on stdin/stdout; scripts run in the active SCLPL Python environment.

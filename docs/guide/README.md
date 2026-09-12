@@ -19,7 +19,7 @@ first time; use the reference pages later as a lookup.
 | [SCLPLL reference](sclpll-reference.md) | Complete file syntax and supported clauses |
 | [Workflow catalog](workflow-catalog.md) | Copy-and-adapt catalog of directives, step forms, clauses, and plugins |
 | [Python scripts](workflow-anatomy.md#ordinary-python-scripts) | Register pinned scripts, then run them directly or as JSON-connected workflow steps |
-| [VS Code support](../editor-vscode.md) | Install and use the passive SCLPLL language server and extension |
+| [VS Code support](https://github.com/sm408/sclpll-extras) | Install the separately released passive SCLPLL language server and extension |
 | [Glossary](glossary.md) | What workflow terms mean in plain language |
 | [Examples](../../examples/) | Runnable files, from one request to plugins |
 

@@ -65,6 +65,11 @@ class Contribution:
     name: str
     lane: str | None = None
     summary: str = ""
+    #: Optional passive editor metadata.  This is deliberately manifest data,
+    #: not introspection of plugin code: opening a workflow must never import a
+    #: third-party module merely to render a completion or signature.
+    signature: str = ""
+    parameters: tuple[str, ...] = ()
 
 
 @dataclass(slots=True)
@@ -349,6 +354,12 @@ def _read_manifest(directory: Path, source: str) -> Plugin | None:
                         name=str(entry.get("name", "")),
                         lane=entry.get("lane"),
                         summary=str(entry.get("summary", "")),
+                        signature=str(entry.get("signature", "")),
+                        parameters=tuple(
+                            str(value) for value in entry.get("parameters", [])
+                        )
+                        if isinstance(entry.get("parameters", []), list)
+                        else (),
                     )
                 )
     return plugin

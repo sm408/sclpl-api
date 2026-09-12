@@ -109,7 +109,7 @@ class _Parser:
             match name:
                 case "workflow":
                     seen_workflow = True
-                    args = split_args(token.rest)
+                    args = self.args(token.rest, token)
                     if not args:
                         raise self.error("@workflow needs a name", token)
                     doc["name"] = unquote(args[0])
@@ -168,7 +168,7 @@ class _Parser:
 
     def port(self, token: Token) -> dict[str, Any]:
         """`@input orders:csv?` -- name, optional format, optional '?' for not-required."""
-        args = split_args(token.rest)
+        args = self.args(token.rest, token)
         if not args:
             raise self.error("a port needs a name", token)
         spec = args[0]
@@ -189,7 +189,7 @@ class _Parser:
 
     def limits(self, token: Token) -> dict[str, Any]:
         out: dict[str, Any] = {}
-        for item in split_args(token.rest):
+        for item in self.args(token.rest, token):
             key, separator, value = item.partition("=")
             if not separator:
                 raise self.error(f"@limits takes key=value pairs, found {item!r}", token)
@@ -197,7 +197,7 @@ class _Parser:
         return out
 
     def mode(self, token: Token) -> tuple[str, dict[str, Any]]:
-        args = split_args(token.rest)
+        args = self.args(token.rest, token)
         if not args:
             raise self.error("@mode needs a name", token)
         name = args[0]
@@ -233,7 +233,7 @@ class _Parser:
             spec["include"].append(item)
 
     def _mode_body_line(self, spec: dict[str, Any], line: Token) -> None:
-        args = split_args(line.rest)
+        args = self.args(line.rest, line)
         match line.head:
             case "include":
                 spec["include"].extend(args)
@@ -265,7 +265,7 @@ class _Parser:
         writes: str | None = None
         if "->" in header:
             header, _, target = header.partition("->")
-            names = split_args(target.strip())
+            names = self.args(target.strip(), token)
             if len(names) != 1:
                 raise self.error(
                     "`->` names exactly one output port",
@@ -277,8 +277,8 @@ class _Parser:
         needs: list[str] = []
         if "<-" in header:
             header, _, dependencies = header.partition("<-")
-            needs = split_args(dependencies.strip())
-        args = split_args(header.strip())
+            needs = self.args(dependencies.strip(), token)
+        args = self.args(header.strip(), token)
         if not args:
             raise self.error("@step needs a name", token)
         step_id = args[0]
@@ -361,7 +361,7 @@ class _Parser:
             self._common_body(step, body[1:])
         else:
             step["kind"] = "fn"
-            args = split_args(first.rest)
+            args = self.args(first.rest, first)
             config_fn: dict[str, Any] = {"name": first.head, "args": [], "kwargs": {}}
             for item in args:
                 key, separator, value = item.partition("=")
@@ -392,7 +392,7 @@ class _Parser:
                     name, _, value = line.rest.partition(":")
                     config.setdefault("headers", {})[name.strip()] = value.strip()
                 case "query":
-                    for item in split_args(line.rest):
+                    for item in self.args(line.rest, line):
                         key, _, value = item.partition("=")
                         config.setdefault("query", {})[key.strip()] = _literal(value.strip())
                 case "body":
@@ -413,7 +413,7 @@ class _Parser:
                     config["stream_to"] = unquote(line.rest)
 
     def _paginate(self, line: Token) -> dict[str, Any]:
-        args = split_args(line.rest)
+        args = self.args(line.rest, line)
         spec: dict[str, Any] = {}
         if args and "=" not in args[0]:
             spec["strategy"] = args[0]
@@ -433,7 +433,7 @@ class _Parser:
         accepted is a third shape: `foreach @rows row` would otherwise be read as the
         expression `@rows row`, bind `item`, and fail much later with `@row` unknown.
         """
-        args = split_args(first.rest)
+        args = self.args(first.rest, first)
         if not args:
             raise self.error("foreach needs a collection", first)
 
@@ -596,7 +596,7 @@ class _Parser:
                 break
             if line.head == "step":
                 close(line)
-                current_id = split_args(line.rest)[0] if line.rest else f"body{len(nested)}"
+                current_id = self.args(line.rest, line)[0] if line.rest else f"body{len(nested)}"
                 current = []
             elif current_id is None:
                 trailing.append(line)
@@ -614,7 +614,7 @@ class _Parser:
         verb = line.head.lower()
         match verb:
             case "tag":
-                step["tags"].extend(split_args(line.rest))
+                step["tags"].extend(self.args(line.rest, line))
             case "assert":
                 step["assert"] = line.rest.strip()
             case "when" | "skip_if":
@@ -626,7 +626,7 @@ class _Parser:
             case "keep":
                 step["keep"] = True
             case "retry":
-                args = split_args(line.rest)
+                args = self.args(line.rest, line)
                 spec: dict[str, Any] = {}
                 if args and "=" not in args[0]:
                     spec["max"] = int(args[0])
@@ -637,7 +637,7 @@ class _Parser:
                         spec[key.strip()] = _literal(value.strip())
                 step["retry"] = Retry.model_validate(spec).model_dump(exclude_defaults=True)
             case "cache":
-                args = split_args(line.rest)
+                args = self.args(line.rest, line)
                 if args and args[0] in ("off", "no", "false"):
                     step["cache"] = {"enabled": False}
                 else:
@@ -681,6 +681,13 @@ class _Parser:
             where=f"{self._origin}:{token.line}",
             remedies=(remedies or []) + ([f"  {token.raw.strip()}"] if token.raw else []),
         )
+
+    def args(self, text: str, token: Token) -> list[str]:
+        """Split a line while preserving its parser-owned source location."""
+        try:
+            return split_args(text)
+        except ValidationError as error:
+            raise self.error(error.diagnostic.message, token, error.diagnostic.remedies) from error
 
 
 def _binding(rest: str) -> str:

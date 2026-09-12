@@ -108,8 +108,13 @@ flowchart LR
 ## Install
 
 ```bash
-pip install sclpl
+pip install https://github.com/sm408/sclpl-api/releases/download/v0.9.2/sclpl-0.9.2-py3-none-any.whl
 ```
+
+For VS Code support, plugins, the SCLPLL language server, and the public function
+catalog, use the separately released [sclpll-extras](https://github.com/sm408/sclpll-extras)
+repository. The core package remains the parser, formatter, runtime, and bundled-function
+source of truth.
 
 Install extras for the parts you use:
 

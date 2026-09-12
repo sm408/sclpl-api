@@ -36,6 +36,16 @@ class Token:
     column: int = 0
     raw: str = ""
 
+    @property
+    def end_column(self) -> int:
+        """Exclusive zero-based end column of the meaningful source on this line.
+
+        The parser intentionally keeps a compact line token.  Editor consumers need
+        an end position as well, and deriving it here keeps the lexer the sole owner
+        of line/column accounting.
+        """
+        return len(self.raw.rstrip())
+
     def where(self, origin: str = "") -> str:
         prefix = f"{origin}:" if origin else "line "
         return f"{prefix}{self.line}"
