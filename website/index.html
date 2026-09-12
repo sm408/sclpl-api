@@ -6,7 +6,7 @@
   <meta name="description" content="SCLPL is a local-first workflow engine for reproducible API and data jobs.">
   <title>SCLPL — local-first API workflows</title><link rel="icon" href="favicon.svg"><link rel="stylesheet" href="site.css">
 </head>
-<body class="home">
+<body class="home"><div class="page-ambient" aria-hidden="true"></div>
   <header class="nav"><a class="wordmark" href="index.html" aria-label="SCLPL home">sclpl</a><nav aria-label="Primary"><a class="active" href="index.html">Home</a><a href="downloads.html">Downloads</a><a href="docs.html">Documentation</a><a href="links.html">Links</a><a href="https://github.com/sm408/sclpl-api" target="_blank" rel="noreferrer">GitHub ↗</a><button id="theme-toggle" class="theme-toggle" type="button" aria-pressed="false" aria-label="Toggle color theme"></button></nav></header>
   <main>
     <section class="hero wrap"><p class="eyebrow">LOCAL-FIRST WORKFLOW ENGINE <span>•</span> 1.0.1</p><h1>Make API work<br><em>repeatable.</em></h1><p class="lede">SCLPL turns workflow files into dependency-aware data jobs. Fetch, validate, transform, and keep the files—without growing another one-off script.</p><div class="actions"><a class="button primary" href="downloads.html">Download SCLPL <b>→</b></a><a class="button quiet" href="docs.html">Read the docs</a></div><p class="micro">Python 3.11+ · MIT licensed · runs on your machine</p></section>
@@ -19,7 +19,7 @@
 <i>@step</i> write
   <b>save_parquet</b> @fetch.body</code></pre><div class="compiler"><span>REFERENCES</span><b>→</b><span>DEPENDENCY GRAPH</span><b>→</b><span>READY STEPS</span><b>→</b><span>YOUR FILES</span></div></section>
 
-    <section class="position wrap reveal ambient">
+    <section class="position wrap reveal">
       <p class="eyebrow">01 — POSITION</p>
       <h2>What sclpl is</h2>
       <p class="lede"><strong>Programmable API workflows, written as files and run locally.</strong> sclpl reads a workflow, infers the dependency graph from <code>@references</code>, runs each step the moment its inputs are ready, and writes CSV, JSON, NDJSON, Parquet, Excel, or SQLite. No server, no accounts, no web UI — just workflow files, typed Python values, and output files you own.</p>
@@ -46,7 +46,7 @@
       </div>
     </section>
 
-    <section class="codecmp-wrap wrap ambient">
+    <section class="codecmp-wrap wrap">
       <p class="eyebrow">03 — WHY NOT JUST SCRIPT IT</p>
       <h2>Same workflow, three ways</h2>
       <p class="lede">Fetch two independent resources, join them, publish a report — in hand-written Python, a YAML automation file, and <code>.sclpll</code>.</p>
@@ -164,6 +164,6 @@ asyncio.<b>run</b>(run())</pre>
       <div class="speed-note"><b>On "speed":</b> a carefully hand-tuned <code>asyncio.gather</code> script can run just as fast as sclpl for this exact shape — we don't have head-to-head runtime benchmarks yet. The honest version: a plain script or a linear YAML runner is only as parallel as the author remembered to make it; a <code>.sclpll</code> workflow is parallel by default because the scheduler reads it straight off the dependency graph.</div>
     </section>
 
-    <section class="closing wrap reveal ambient"><p class="eyebrow">START WITH ONE FILE</p><h2>Make the next API job<br>something you can rerun.</h2><div class="terminal"><span>$</span> pip install ./sclpl-1.0.1-py3-none-any.whl <button data-copy="pip install ./sclpl-1.0.1-py3-none-any.whl">Copy</button></div><div class="actions"><a class="button primary" href="downloads.html">Get the release <b>→</b></a><a class="button quiet" href="docs.html?doc=docs/guide/workflow-anatomy.md">Try the 10-minute path</a></div></section>
+    <section class="closing wrap reveal"><p class="eyebrow">START WITH ONE FILE</p><h2>Make the next API job<br>something you can rerun.</h2><div class="terminal"><span>$</span> pip install ./sclpl-1.0.1-py3-none-any.whl <button data-copy="pip install ./sclpl-1.0.1-py3-none-any.whl">Copy</button></div><div class="actions"><a class="button primary" href="downloads.html">Get the release <b>→</b></a><a class="button quiet" href="docs.html?doc=docs/guide/workflow-anatomy.md">Try the 10-minute path</a></div></section>
   </main><footer><span>Copyright (c) 2026 Shubham Maurya</span><span>Programmable API workflows, written as files.</span><a href="https://github.com/sm408/sclpl-api">Source code ↗</a></footer><script src="site.js"></script>
 </body></html>

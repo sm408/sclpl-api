@@ -6,6 +6,7 @@ Run from the repository root with: C:\\Python312\\python.exe website\\build.py
 from __future__ import annotations
 
 import json
+import re
 import shutil
 from pathlib import Path
 
@@ -31,13 +32,44 @@ INTERNAL_DOC_FILES = (
     "docs/vault/2 Architecture/Architecture Measured.md",
     "docs/vault/2 Architecture/Package Map.md",
 )
+# Playbooks are curated to the three role-based ones; the generic task-based
+# drafts they grew out of stay in git history, not on the site.
+EXCLUDED_PLAYBOOKS = (
+    "docs/playbooks/01-paginated-api-to-csv.md",
+    "docs/playbooks/02-joining-sources.md",
+    "docs/playbooks/03-automating.md",
+    "docs/playbooks/04-debugging.md",
+)
+
+# Folder names get a proper display label instead of their raw slug -- used
+# both for section labels and for turning a bare "README.md" into something
+# a reader would actually recognize.
+FOLDER_LABELS = {
+    "guide": "Guide",
+    "vault": "Vault",
+    "sclpll-extras": "SCLPLL Extras",
+    "playbooks": "Playbooks",
+    "reference": "Reference",
+}
 
 
 def _is_public(relative: str) -> bool:
     posix = relative.replace("\\", "/")
-    if posix in INTERNAL_DOC_FILES:
+    if posix in INTERNAL_DOC_FILES or posix in EXCLUDED_PLAYBOOKS:
         return False
     return not posix.startswith(INTERNAL_DOC_PREFIXES)
+
+
+def _title_for(relative: str, source: Path) -> str:
+    if source.stem.lower() != "readme":
+        stem = re.sub(r"^\d+[-_.\s]+", "", source.stem)  # "05-analyst" -> "analyst"
+        return stem.replace("-", " ").replace("_", " ").title()
+    parent = Path(relative.replace("\\", "/")).parent
+    parent_str = str(parent).replace("\\", "/")
+    if parent_str in (".", ""):
+        return "SCLPL"
+    label = FOLDER_LABELS.get(parent.name.lower(), parent.name.replace("-", " ").replace("_", " ").title())
+    return f"{label} Overview"
 
 
 PUBLIC_DOCS = (
@@ -75,8 +107,7 @@ def main() -> None:
         records.append(
             {
                 "path": relative.replace("\\", "/"),
-                "title": source.stem.replace("-", " ").replace("_", " ").title(),
-                "section": relative.split("/", 2)[1] if "/" in relative else "start",
+                "title": _title_for(relative, source),
             }
         )
 
