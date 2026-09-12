@@ -80,9 +80,9 @@ a:focus-visible,button:focus-visible,input:focus-visible{outline:3px solid var(-
 .signal-head{display:flex;justify-content:space-between;padding:12px 16px;border-bottom:1px solid #55707b;font:11px var(--mono);letter-spacing:.08em}
 .run-dot{color:var(--sea)}
 pre{margin:0;padding:27px clamp(18px,5vw,68px);overflow:auto;font:14px/1.85 var(--mono);position:relative}
-.pre-copy{position:absolute;top:10px;right:10px;display:inline-flex;align-items:center;justify-content:center;background:var(--surface);border:1px solid var(--border);color:var(--muted);padding:6px;cursor:pointer;opacity:.6;transition:opacity .15s,color .15s,border-color .15s;z-index:2}
-.pre-copy:hover,.pre-copy:focus-visible{opacity:1;color:var(--text);border-color:var(--coral)}
-.pre-copy.copied{opacity:1;color:var(--sea);border-color:var(--sea)}
+.pre-copy{position:absolute;top:10px;right:10px;display:inline-flex;align-items:center;justify-content:center;background:var(--surface);border:none;color:var(--muted);padding:6px;cursor:pointer;opacity:.6;transition:opacity .15s,color .15s;z-index:2}
+.pre-copy:hover,.pre-copy:focus-visible{opacity:1;color:var(--coral)}
+.pre-copy.copied{opacity:1;color:var(--sea)}
 [data-copy]{display:inline-flex;align-items:center;justify-content:center}
 [data-copy].copied{color:var(--sea)}
 pre i{color:var(--gold);font-style:normal}
@@ -207,6 +207,7 @@ footer a{text-decoration:underline;color:var(--text)}
 .manual p,.manual li{color:var(--text-soft)}
 .manual a{color:var(--coral);text-decoration:underline;text-underline-offset:3px}
 .manual pre{background:var(--ink-fixed);color:#e8efeb;padding:18px;margin:18px 0;font-size:12px}
+.manual pre.mermaid{background:var(--surface);border:1px solid var(--border);color:var(--text);text-align:center;overflow-x:auto}
 .manual code{font:12px var(--mono);background:var(--chip);padding:2px 4px}
 .manual pre code{background:transparent;padding:0}
 .manual table{width:100%;border-collapse:collapse;margin:20px 0;font-size:14px}

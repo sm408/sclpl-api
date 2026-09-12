@@ -46,14 +46,32 @@
   const TABLE_GROUP_MIN_ROWS = 12;
   const TABLE_GROUP_MIN_LETTERS = 4;
 
+  // Obsidian/front-matter blocks ("---\ntags:\n  - foo\n---") sit at the very
+  // top of every vault note. Without this they get parsed as a <hr>, a
+  // paragraph, and a bullet list -- literally showing "tags" and its values
+  // as the first thing on the page.
+  const stripFrontmatter = (source) => {
+    const m = /^---[ \t]*\r?\n[\s\S]*?\r?\n---[ \t]*\r?\n?/.exec(source);
+    return m ? source.slice(m[0].length) : source;
+  };
+
   const markdown = (source, currentPath) => {
-    const lines = source.replace(/\r/g, "").split("\n");
-    let html = "", i = 0, inCode = false, code = [], paragraph = [], list = null, tableGroupCounter = 0;
+    const lines = stripFrontmatter(source).replace(/\r/g, "").split("\n");
+    let html = "", i = 0, inCode = false, codeLang = "", code = [], paragraph = [], list = null, tableGroupCounter = 0;
     const flushParagraph = () => { if (paragraph.length) { html += `<p>${inline(paragraph.join(" "), currentPath)}</p>`; paragraph.length = 0; } };
     const closeList = () => { if (list) { html += `</${list}>`; list = null; } };
     while (i < lines.length) {
       const rawLine = lines[i];
-      if (rawLine.startsWith("```")) { flushParagraph(); closeList(); if (inCode) { html += `<pre><code>${escapeHtml(code.join("\n"))}</code></pre>`; code = []; } inCode = !inCode; i++; continue; }
+      if (rawLine.startsWith("```")) {
+        flushParagraph(); closeList();
+        if (inCode) {
+          html += codeLang === "mermaid" ? `<pre class="mermaid">${escapeHtml(code.join("\n"))}</pre>` : `<pre><code>${escapeHtml(code.join("\n"))}</code></pre>`;
+          code = []; codeLang = "";
+        } else {
+          codeLang = rawLine.slice(3).trim().toLowerCase();
+        }
+        inCode = !inCode; i++; continue;
+      }
       if (inCode) { code.push(rawLine); i++; continue; }
       const line = stripEmbeddedHtml(rawLine);
       if (/^\s*\|.*\|\s*$/.test(line) && i + 1 < lines.length && /^\s*\|?\s*:?-{3,}/.test(stripEmbeddedHtml(lines[i + 1]))) {
@@ -109,7 +127,7 @@
 
   const addCopyButtons = (root) => {
     root.querySelectorAll("pre").forEach((pre) => {
-      if (pre.dataset.copyReady) return;
+      if (pre.dataset.copyReady || pre.classList.contains("mermaid")) return;
       pre.dataset.copyReady = "1";
       const button = document.createElement("button");
       button.type = "button"; button.className = "pre-copy"; button.innerHTML = ICON_COPY; button.setAttribute("aria-label", "Copy");
@@ -227,6 +245,16 @@
     else content.focus({ preventScroll: true });
   };
 
+  const renderMermaid = () => {
+    const nodes = [...content.querySelectorAll(".mermaid")];
+    if (!nodes.length || typeof mermaid === "undefined") return;
+    const isLight = document.documentElement.getAttribute("data-theme") === "light";
+    try {
+      mermaid.initialize({ startOnLoad: false, securityLevel: "strict", theme: isLight ? "default" : "dark", fontFamily: "DM Mono, monospace" });
+      mermaid.run({ nodes }).catch(() => {});
+    } catch (e) {}
+  };
+
   const open = async () => {
     const path = requested(); content.innerHTML = "<p class=loading>Opening field manual…</p>"; toc.innerHTML = ""; renderNav(search.value);
     try {
@@ -238,6 +266,7 @@
       sourceLink.href = `https://github.com/sm408/sclpl-api/blob/main/${path}`;
       toc.innerHTML = [...content.querySelectorAll("h2,h3")].map((heading) => `<a class="level-${heading.tagName.slice(1)}" href="#${heading.id}">${heading.textContent}</a>`).join("");
       addCopyButtons(content);
+      renderMermaid();
       scrollToHash();
     } catch { content.innerHTML = `<h1>Page not found</h1><p>This page is not part of the published documentation bundle. Return to the <a href="docs.html">documentation index</a>.</p>`; currentPath = path; }
   };
