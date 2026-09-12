@@ -1,11 +1,14 @@
 # Changelog
 
-This project follows a small, human-readable changelog. Releases will use semantic versioning
-once the public package API is declared stable.
+This project follows a small, human-readable changelog. The supported public
+release lineage begins at `v1.0.0`.
 
 ## Unreleased
 
-## 0.9.2
+## 1.0.1
+
+- Built on the retained `v1.0.0` TUI-only release lineage; this is the first
+  current CLI/runtime/editor-support release in that line.
 
 - Added source metadata and passive registry introspection used by the separately released
   SCLPLL language server and VS Code extension in `sm408/sclpll-extras`.
@@ -42,16 +45,6 @@ once the public package API is declared stable.
   the calling step's own progress -- every other step keeps running while it waits.
 - Continued documentation and repository maintenance.
 
-## 0.9.1
+## 1.0.0 — TUI-only release
 
-- Added provider-neutral remote workflow and port resource support.
-- Added controlled local staging and revision-aware provider publication.
-- Added the optional Azure Blob resource plugin (`azblob://`).
-
-## 0.1.0
-
-- CLI workflow runner for HTTP APIs with JSON and SCLPLL workflow surfaces.
-- Typed values, dependency-driven scheduling, retries, pagination, control flow, and caching.
-- Table transforms and exports for CSV, JSON, NDJSON, Parquet, Excel, and SQLite.
-- Python function extensions and capability-declared plugins.
-- Local run history, secret storage, redaction, generated references, and CI quality gates.
+- Retained as the foundation of the current public release lineage.

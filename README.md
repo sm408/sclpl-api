@@ -108,7 +108,7 @@ flowchart LR
 ## Install
 
 ```bash
-pip install https://github.com/sm408/sclpl-api/releases/download/v0.9.2/sclpl-0.9.2-py3-none-any.whl
+pip install https://github.com/sm408/sclpl-api/releases/download/v1.0.1/sclpl-1.0.1-py3-none-any.whl
 ```
 
 For VS Code support, plugins, the SCLPLL language server, and the public function
