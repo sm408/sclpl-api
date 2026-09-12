@@ -1,4 +1,9 @@
-"""Build the dependency-free static site from the repository documentation.
+"""Build the static site from the repository documentation.
+
+No build-time tooling (npm, bundlers) and no third-party script loads at
+runtime: docs.html renders Markdown with a small hand-written parser, and
+the one JS library the docs viewer needs (Mermaid, for flowchart rendering)
+ships vendored under website/vendor/ rather than pulled from a CDN.
 
 Run from the repository root with: C:\\Python312\\python.exe website\\build.py
 """
@@ -96,6 +101,8 @@ def main() -> None:
 
     for name in ("index.html", "downloads.html", "docs.html", "links.html", "site.css", "site.js", "favicon.svg"):
         copy_file(SOURCE / name, OUTPUT / name)
+    for vendor_file in (SOURCE / "vendor").glob("*"):
+        copy_file(vendor_file, OUTPUT / "vendor" / vendor_file.name)
 
     records: list[dict[str, str]] = []
     for relative in sorted(set(PUBLIC_DOCS)):

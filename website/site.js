@@ -9,6 +9,15 @@
     .replace(/<\/?(td|th)(?:\s[^>]*)?>/gi, " ")
     .replace(/<[^>]+>/g, "");
   const slug = (value) => value.toLowerCase().replace(/<[^>]*>/g, "").replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
+  // Content is rendered via innerHTML, so a markdown link's href needs the
+  // same scheme allowlist a sanitizer would apply -- otherwise a doc
+  // containing [text](javascript:...) would execute on click.
+  const isSafeHref = (href) => {
+    const trimmed = href.trim();
+    if (/^(https?:|mailto:)/i.test(trimmed)) return true;
+    if (/^[a-z][a-z0-9+.-]*:/i.test(trimmed)) return false;
+    return true;
+  };
 
   // Populated once the docs index loads; lets inline() resolve Obsidian-style
   // [[wikilinks]], which the vault content uses throughout.
@@ -34,6 +43,7 @@
         const resolved = new URL(href, `https://docs.local/${currentPath}`).pathname.slice(1);
         return `<a href="content/${resolved}" target="_blank" rel="noreferrer">${label}</a>`;
       }
+      if (!isSafeHref(href)) return label;
       const external = /^https?:/i.test(href);
       return `<a href="${href}"${external ? ' target="_blank" rel="noreferrer"' : ""}>${label}</a>`;
     });
