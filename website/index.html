@@ -50,40 +50,74 @@
       <p class="eyebrow">03 — WHY NOT JUST SCRIPT IT</p>
       <h2>Same workflow, three ways</h2>
       <p class="lede">Fetch two independent resources, join them, publish a report — in hand-written Python, a YAML automation file, and <code>.sclpll</code>.</p>
+      <p class="micro legend"><mark>flagged</mark> = the thing you'd only notice on a close read. <i>gold</i> = declaration. <b>sea</b> = action.</p>
       <div class="codecmp">
+        <div class="code-card win">
+          <div class="cc-head"><span>.sclpll</span><span class="lines">~20 lines</span></div>
+          <pre><i>@workflow</i> account_price_report
+  "Accounts + prices, merged and posted"
+
+<i>@var</i> base = "https://api.example.com"
+<i>@var</i> token = "{{<mark>secret('api_token')</mark>}}"
+
+<i>@step</i> accounts
+  <b>get</b> {{base}}/accounts
+  <b>header</b> Authorization: Bearer {{token}}
+  <b>retry</b> 3
+
+<i>@step</i> prices
+  <b>get</b> {{base}}/prices
+  <b>header</b> Authorization: Bearer {{token}}
+  <b>retry</b> 3
+
+<i>@step</i> shaped_accounts
+  <b>flatten</b> @accounts.body
+
+<i>@step</i> shaped_prices
+  <b>flatten</b> @prices.body
+
+<i>@step</i> merged
+  <b>join</b> @shaped_accounts @shaped_prices account_id how=left
+
+<i>@step</i> publish
+  <b>post</b> {{base}}/reports
+  <b>header</b> Authorization: Bearer {{token}}
+  <b>body</b> @merged</pre>
+          <div class="cc-foot"><code>accounts</code> and <code>prices</code> reference nothing but their own inputs, so the scheduler runs them together — no <code>gather</code>, no <code>needs:</code>. <mark>secret()</mark> reads the keyring/encrypted store by default — nothing extra to write.</div>
+        </div>
         <div class="code-card">
           <div class="cc-head"><span>python — asyncio</span><span class="lines">~30 lines</span></div>
-          <pre>import asyncio, aiohttp, os
+          <pre><i>import</i> asyncio, aiohttp, os
 
-TOKEN = os.environ["API_TOKEN"]  # secrets: your job
+TOKEN = os.environ["API_TOKEN"]  <mark># secrets: your job</mark>
 HEADERS = {"Authorization": f"Bearer {TOKEN}"}
 
-async def fetch(session, path):
-    for attempt in range(3):
-        async with session.get(path, headers=HEADERS) as r:
-            if r.status &lt; 500:
+<i>async def</i> <b>fetch</b>(session, path):
+    <i>for</i> attempt <i>in</i> range(3):
+        <i>async with</i> session.<b>get</b>(path, headers=HEADERS) <i>as</i> r:
+            <i>if</i> r.status &lt; 500:
                 r.raise_for_status()
-                return await r.json()
-    raise RuntimeError("retries exhausted")
+                <i>return await</i> r.json()
+    <i>raise</i> RuntimeError("retries exhausted")
 
-def join(accounts, prices):
-    by_id = {p["account_id"]: p for p in prices}
-    return [{**a, **by_id.get(a["account_id"], {})}
-            for a in accounts]
+<i>def</i> <b>join</b>(accounts, prices):
+    by_id = {p["account_id"]: p <i>for</i> p <i>in</i> prices}
+    <i>return</i> [{**a, **by_id.get(a["account_id"], {})}
+            <i>for</i> a <i>in</i> accounts]
 
-async def run():
-    async with aiohttp.ClientSession(BASE) as s:
-        # you write the parallelism yourself
-        accounts, prices = await asyncio.gather(
+<i>async def</i> <b>run</b>():
+    <i>async with</i> aiohttp.<b>ClientSession</b>(BASE) <i>as</i> s:
+        <mark># you write the parallelism yourself</mark>
+        accounts, prices = <i>await</i> asyncio.<b>gather</b>(
             fetch(s, "/accounts"),
             fetch(s, "/prices"),
         )
         merged = join(accounts, prices)
-        async with s.post("/reports", headers=HEADERS,
-                           json=merged) as r:
+        <i>async with</i> s.<b>post</b>("/reports", headers=HEADERS,
+                           json=merged) <i>as</i> r:
             r.raise_for_status()
 
-asyncio.run(run())</pre>
+asyncio.<b>run</b>(run())</pre>
           <div class="cc-foot">Retry, join, and the parallel fetch are each hand-written — correct, but every one is a place to introduce a bug, and none of it is reusable in the next workflow.</div>
         </div>
         <div class="code-card">
@@ -93,19 +127,19 @@ asyncio.run(run())</pre>
     run: |
       curl -sf --retry 3 "$BASE/accounts" \
         -H "Authorization: Bearer $API_TOKEN" \
-        > accounts.json
+        &gt; accounts.json
 
   - id: prices
     run: |
       curl -sf --retry 3 "$BASE/prices" \
         -H "Authorization: Bearer $API_TOKEN" \
-        > prices.json
+        &gt; prices.json
 
   - id: merged
     needs: [accounts, prices]
-    # join isn't a shell primitive - out to a script
-    run: python join.py accounts.json prices.json \
-      > merged.json
+    <mark># join isn't a shell primitive - out to a script</mark>
+    run: <mark>python join.py</mark> accounts.json prices.json \
+      &gt; merged.json
 
   - id: publish
     needs: [merged]
@@ -113,51 +147,18 @@ asyncio.run(run())</pre>
       curl -sf -X POST "$BASE/reports" \
         -H "Authorization: Bearer $API_TOKEN" \
         -d @merged.json</pre>
-          <div class="cc-foot">Reads clean until step 3 — real logic can't live in YAML, so it falls out into <code>join.py</code>. <code>accounts</code>/<code>prices</code> only run together if the runner honors <code>needs:</code> as a real DAG.</div>
-        </div>
-        <div class="code-card win">
-          <div class="cc-head"><span>.sclpll</span><span class="lines">~20 lines</span></div>
-          <pre>@workflow account_price_report
-  "Accounts + prices, merged and posted"
-
-@var base = "https://api.example.com"
-@var token = "{{secret('api_token')}}"
-
-@step accounts
-  get {{base}}/accounts
-  header Authorization: Bearer {{token}}
-  retry 3
-
-@step prices
-  get {{base}}/prices
-  header Authorization: Bearer {{token}}
-  retry 3
-
-@step shaped_accounts
-  flatten @accounts.body
-
-@step shaped_prices
-  flatten @prices.body
-
-@step merged
-  join @shaped_accounts @shaped_prices account_id how=left
-
-@step publish
-  post {{base}}/reports
-  header Authorization: Bearer {{token}}
-  body @merged</pre>
-          <div class="cc-foot"><code>accounts</code> and <code>prices</code> reference nothing but their own inputs, so the scheduler runs them together — no <code>gather</code>, no <code>needs:</code>. <code>secret()</code> reads the keyring/encrypted store by default.</div>
+          <div class="cc-foot">Reads clean until step 3 — real logic can't live in YAML, so it falls out into <mark>join.py</mark>. <code>accounts</code>/<code>prices</code> only run together if the runner honors <code>needs:</code> as a real DAG.</div>
         </div>
       </div>
       <div class="table-scroll">
         <table class="data-table">
-          <tr><th>Dimension</th><th>Python (asyncio)</th><th>YAML automation</th><th>.sclpll</th></tr>
-          <tr><td>To express this workflow</td><td>~30 lines, grows with every retry/config edge case</td><td>~24 lines of YAML + a separate <code>join.py</code></td><td>~20 lines, one file, one syntax</td></tr>
-          <tr><td>Parallel execution</td><td>Manual — decide what to <code>gather</code></td><td>Only if the runner treats <code>needs:</code> as a real DAG</td><td>Automatic — inferred from references</td></tr>
-          <tr><td>Where logic lives</td><td>Inline, same language</td><td>Escapes into shell + an ad hoc script</td><td>Inline, same step syntax as the HTTP calls</td></tr>
-          <tr><td>Secrets</td><td>Bare <code>os.environ</code> unless you add a library</td><td>Bare shell env var</td><td><code>secret()</code> — keyring/encrypted file, no plaintext fallback</td></tr>
-          <tr><td>Retries / pagination</td><td>Hand-rolled loop</td><td><code>curl --retry</code>; pagination is another loop</td><td>One line each: <code>retry 3</code>, <code>paginate cursor ...</code></td></tr>
-          <tr><td>Data vs HTTP failure</td><td>Whatever exception handling you wrote</td><td>Shell exit code only</td><td>Distinct exit code 4 from <code>assert_*</code></td></tr>
+          <tr><th>Dimension</th><th>.sclpll</th><th>Python (asyncio)</th><th>YAML automation</th></tr>
+          <tr><td>To express this workflow</td><td>~20 lines, one file, one syntax</td><td>~30 lines, grows with every retry/config edge case</td><td>~24 lines of YAML + a separate <code>join.py</code></td></tr>
+          <tr><td>Parallel execution</td><td>Automatic — inferred from references</td><td>Manual — decide what to <code>gather</code></td><td>Only if the runner treats <code>needs:</code> as a real DAG</td></tr>
+          <tr><td>Where logic lives</td><td>Inline, same step syntax as the HTTP calls</td><td>Inline, same language</td><td>Escapes into shell + an ad hoc script</td></tr>
+          <tr><td>Secrets</td><td><code>secret()</code> — keyring/encrypted file, no plaintext fallback</td><td>Bare <code>os.environ</code> unless you add a library</td><td>Bare shell env var</td></tr>
+          <tr><td>Retries / pagination</td><td>One line each: <code>retry 3</code>, <code>paginate cursor ...</code></td><td>Hand-rolled loop</td><td><code>curl --retry</code>; pagination is another loop</td></tr>
+          <tr><td>Data vs HTTP failure</td><td>Distinct exit code 4 from <code>assert_*</code></td><td>Whatever exception handling you wrote</td><td>Shell exit code only</td></tr>
         </table>
       </div>
       <div class="speed-note"><b>On "speed":</b> a carefully hand-tuned <code>asyncio.gather</code> script can run just as fast as sclpl for this exact shape — we don't have head-to-head runtime benchmarks yet. The honest version: a plain script or a linear YAML runner is only as parallel as the author remembered to make it; a <code>.sclpll</code> workflow is parallel by default because the scheduler reads it straight off the dependency graph.</div>

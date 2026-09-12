@@ -63,6 +63,11 @@ pre{margin:0;padding:27px clamp(18px,5vw,68px);overflow:auto;font:14px/1.85 var(
 pre i{color:var(--gold);font-style:normal}
 pre b{color:var(--sea);font-weight:500}
 pre s{color:#8ea4a5;text-decoration:none}
+pre mark{background:transparent;color:var(--coral);font-weight:700}
+.legend{margin-top:6px}
+.legend mark{background:transparent;color:var(--coral);font-weight:700;font-style:normal}
+.legend i{color:var(--gold);font-style:normal}
+.legend b{color:var(--sea)}
 .compiler{padding:13px 16px;background:#123448;display:flex;gap:12px;align-items:center;overflow:auto;white-space:nowrap;font:10px var(--mono);letter-spacing:.08em}
 .compiler b{color:var(--coral)}
 
@@ -144,13 +149,19 @@ footer a{text-decoration:underline;color:var(--text)}
 .docs-nav{padding:32px 21px;border-right:1px solid var(--border);position:sticky;top:0;align-self:start;max-height:calc(100vh - 76px);overflow:auto}
 .docs-start{font:600 13px var(--mono);display:block;margin-bottom:31px}
 .docs-nav label{font:10px var(--mono);letter-spacing:.11em;color:var(--muted);display:block;margin-bottom:7px}
-.docs-nav input{width:100%;padding:9px;border:1px solid var(--border);background:transparent;color:var(--text);font:12px var(--sans);margin-bottom:16px}
+.docs-nav input{width:100%;padding:9px;border:1px solid var(--border);border-radius:0;background:transparent;color:var(--text);font:12px var(--sans);margin-bottom:16px;-webkit-appearance:none;appearance:none}
+.docs-nav input::-webkit-search-decoration,.docs-nav input::-webkit-search-cancel-button{-webkit-appearance:none}
 .docs-group{margin:13px 0}
 .docs-group p{font:10px var(--mono);letter-spacing:.11em;color:var(--muted);text-transform:uppercase;margin:0 0 5px}
+.docs-highlights{padding-bottom:15px;margin-bottom:18px;border-bottom:1px solid var(--border)}
+.docs-highlights p{color:var(--coral)}
+.docs-highlights a{font-weight:600}
 .docs-group a{display:block;padding:5px 7px;font-size:13px;line-height:1.25;border-left:2px solid transparent}
 .docs-group a:hover,.docs-group a.selected{border-color:var(--coral);background:var(--hover)}
 .source-note{margin-top:35px;font-size:11px;color:var(--muted)}
 .manual{padding:43px clamp(24px,6vw,90px) 100px;max-width:900px}
+#doc-content{outline:none}
+#doc-content:focus{outline:none}
 .manual-top{display:flex;justify-content:space-between;font:10px var(--mono);letter-spacing:.1em;color:var(--muted);padding-bottom:25px;border-bottom:1px solid var(--border);margin-bottom:40px}
 .manual-top a{text-decoration:underline}
 .manual h1{font:700 52px/1 var(--display);letter-spacing:-.055em;margin:0 0 22px}

@@ -70,9 +70,43 @@
   const nav = document.querySelector("#doc-nav"), content = document.querySelector("#doc-content"), toc = document.querySelector("#toc"), search = document.querySelector("#doc-search"), crumb = document.querySelector("#crumb"), sourceLink = document.querySelector("#source-link");
   let pages = [];
   const requested = () => new URLSearchParams(location.search).get("doc") || "README.md";
+
+  const HIGHLIGHTS = {
+    "README.md": "Start here",
+    "docs/concepts.md": "Concepts",
+    "docs/guide/workflow-anatomy.md": "Workflow anatomy",
+    "docs/playbooks/01-paginated-api-to-csv.md": "First playbook",
+    "docs/reference/cli.md": "CLI reference",
+  };
+  const SECTIONS = [
+    { test: (p) => /^docs\/[^/]+\.md$/.test(p), key: "start", label: "Overview", order: 1 },
+    { test: (p) => p.startsWith("docs/guide/"), key: "guide", label: "Guide", order: 2 },
+    { test: (p) => p.startsWith("docs/playbooks/"), key: "playbooks", label: "Playbooks", order: 3 },
+    { test: (p) => p.startsWith("docs/reference/"), key: "reference", label: "Reference", order: 4 },
+    { test: (p) => p.startsWith("sclpll-extras/"), key: "extras", label: "SCLPLL extras", order: 5 },
+    { test: (p) => p.startsWith("docs/adr/"), key: "adr", label: "Architecture decisions", order: 6 },
+    { test: (p) => p.startsWith("docs/cli-rebuild/"), key: "cli-rebuild", label: "Internal planning", order: 7 },
+    { test: (p) => p.startsWith("docs/attic/"), key: "attic", label: "Attic (archived)", order: 8 },
+    { test: (p) => p.startsWith("docs/vault/"), key: "vault", label: "Vault (internal notes)", order: 9 },
+  ];
+  const sectionOf = (path) => SECTIONS.find((s) => s.test(path)) || { key: "more", label: "More", order: 10 };
+
   const renderNav = (query = "") => {
-    const selected = requested(), shown = pages.filter((page) => `${page.title} ${page.path}`.toLowerCase().includes(query.toLowerCase()));
-    nav.innerHTML = Object.entries(shown.reduce((groups, page) => { (groups[page.section] ||= []).push(page); return groups; }, {})).map(([section, group]) => `<section class="docs-group"><p>${section}</p>${group.map((page) => `<a class="${page.path === selected ? "selected" : ""}" href="docs.html?doc=${encodeURIComponent(page.path)}">${page.title}</a>`).join("")}</section>`).join("") || "<p class=loading>No pages match.</p>";
+    const selected = requested(), q = query.toLowerCase();
+    const matches = (page) => `${page.title} ${page.path}`.toLowerCase().includes(q);
+    const shown = pages.filter(matches);
+    const link = (page, label) => `<a class="${page.path === selected ? "selected" : ""}" href="docs.html?doc=${encodeURIComponent(page.path)}">${label || page.title}</a>`;
+
+    let html = "";
+    if (!query) {
+      const highlighted = Object.keys(HIGHLIGHTS).map((path) => pages.find((page) => page.path === path)).filter(Boolean);
+      if (highlighted.length) html += `<section class="docs-group docs-highlights"><p>Highlights</p>${highlighted.map((page) => link(page, HIGHLIGHTS[page.path])).join("")}</section>`;
+    }
+    const rest = shown.filter((page) => query || !(page.path in HIGHLIGHTS));
+    const groups = rest.reduce((acc, page) => { const s = sectionOf(page.path); (acc[s.key] ||= { label: s.label, order: s.order, pages: [] }).pages.push(page); return acc; }, {});
+    html += Object.values(groups).sort((a, b) => a.order - b.order)
+      .map((group) => `<section class="docs-group"><p>${group.label}</p>${group.pages.map((page) => link(page)).join("")}</section>`).join("");
+    nav.innerHTML = html || "<p class=loading>No pages match.</p>";
   };
   const open = async () => {
     const path = requested(); content.innerHTML = "<p class=loading>Opening field manual…</p>"; toc.innerHTML = ""; renderNav(search.value);
