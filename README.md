@@ -41,6 +41,8 @@
   <code>Plugin API</code>
 </p>
 
+<p><sub>Built and maintained under the <strong>SCALPL</strong> brand.</sub></p>
+
 </div>
 
 ---

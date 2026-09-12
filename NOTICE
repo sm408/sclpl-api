@@ -1,0 +1,10 @@
+sclpl
+Copyright (c) 2026 Shubham
+
+sclpl is built and maintained under the SCALPL brand. SCLPL is the product
+(this repository: the language authority — parser, runtime, and CLI);
+SCLPLL is the workflow file format it reads; sclpll-extras
+(github.com/sm408/sclpll-extras) is the companion tooling distribution —
+editor support, plugins, and workflow assets built on this package.
+
+Licensed under the MIT License. See LICENSE for details.

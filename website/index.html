@@ -1,0 +1,168 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <script>try{if(localStorage.getItem('sclpl-theme')==='light')document.documentElement.setAttribute('data-theme','light')}catch(e){}</script>
+  <meta name="description" content="SCLPL is a local-first workflow engine for reproducible API and data jobs.">
+  <title>SCLPL — local-first API workflows</title><link rel="icon" href="favicon.svg"><link rel="stylesheet" href="site.css">
+</head>
+<body class="home">
+  <header class="nav"><a class="wordmark" href="index.html" aria-label="SCLPL home">sclpl</a><nav aria-label="Primary"><a class="active" href="index.html">Home</a><a href="downloads.html">Downloads</a><a href="docs.html">Documentation</a><a href="links.html">Links</a><a href="https://github.com/sm408/sclpl-api" target="_blank" rel="noreferrer">GitHub ↗</a><button id="theme-toggle" class="theme-toggle" type="button" aria-pressed="false" aria-label="Toggle color theme"></button></nav></header>
+  <main>
+    <section class="hero wrap"><p class="eyebrow">LOCAL-FIRST WORKFLOW ENGINE <span>•</span> 1.0.1</p><h1>Make API work<br><em>repeatable.</em></h1><p class="lede">SCLPL turns workflow files into dependency-aware data jobs. Fetch, validate, transform, and keep the files—without growing another one-off script.</p><div class="actions"><a class="button primary" href="downloads.html">Download SCLPL <b>→</b></a><a class="button quiet" href="docs.html">Read the docs</a></div><p class="micro">Python 3.11+ · MIT licensed · runs on your machine</p></section>
+    <section class="signal wrap" aria-label="Workflow example"><div class="signal-head"><span>orders.sclpll</span><span class="run-dot">● READY TO RUN</span></div><pre><code><i>@workflow</i> orders <s>"API → clean data"</s>
+
+<i>@step</i> fetch
+  <b>get</b> https://api.example.com/orders
+  <b>paginate</b> cursor cursor_path=next_cursor
+
+<i>@step</i> write
+  <b>save_parquet</b> @fetch.body</code></pre><div class="compiler"><span>REFERENCES</span><b>→</b><span>DEPENDENCY GRAPH</span><b>→</b><span>READY STEPS</span><b>→</b><span>YOUR FILES</span></div></section>
+
+    <section class="position wrap">
+      <p class="eyebrow">01 — POSITION</p>
+      <h2>What sclpl is</h2>
+      <p class="lede"><strong>Programmable API workflows, written as files and run locally.</strong> sclpl reads a workflow, infers the dependency graph from <code>@references</code>, runs each step the moment its inputs are ready, and writes CSV, JSON, NDJSON, Parquet, Excel, or SQLite. No server, no accounts, no web UI — just workflow files, typed Python values, and output files you own.</p>
+      <p class="lede">The problem it targets: most API jobs start as one request and end as a brittle one-off script. sclpl gives that middle ground a shape — pagination, validation, joins with local data, transforms, run history, and export — without turning every job into a bespoke Python program.</p>
+      <div class="chips">
+        <span class="chip">Typer CLI</span><span class="chip">Pydantic models</span><span class="chip">httpx transport</span><span class="chip">SQLite history &amp; plugins</span><span class="chip">PyArrow columnar</span><span class="chip">pandas tables</span><span class="chip">Python 3.11 / 3.13</span><span class="chip">MIT licensed</span><span class="chip">local-first, no server</span>
+      </div>
+    </section>
+
+    <section class="wrap">
+      <p class="eyebrow">02 — WHAT SHIPS TODAY</p>
+      <h2>Ten things it already does</h2>
+      <div class="feature-grid">
+        <article class="feature-card"><span class="mark">01</span><div><h3>Continuous scheduler</h3><p>Writing <code>@accounts</code> inside a step is what makes it wait for <code>accounts</code> — there's no separate <code>needs:</code> list to maintain. A step starts the instant its own references land, so independent branches overlap automatically.</p></div></article>
+        <article class="feature-card"><span class="mark">02</span><div><h3>Built-in pagination</h3><p>Cursor, token, offset, and <code>Link:</code>-header pagination are one line (<code>paginate cursor cursor_path=... param=... max_pages=...</code>) — the usual first thing hand-rolled scripts get wrong.</p></div></article>
+        <article class="feature-card"><span class="mark">03</span><div><h3>Data workbench</h3><p>Flatten nested JSON, explode arrays into rows, join records against local sources (including SQLite), group/aggregate, profile a table, and export to CSV, JSON, NDJSON, Parquet, Excel, or SQLite.</p></div></article>
+        <article class="feature-card"><span class="mark">04</span><div><h3>Assertions with distinct exit codes</h3><p><code>assert_rowcount</code>, <code>assert_schema</code>, <code>assert_unique</code>, and <code>assert_no_nulls</code> fail with exit code <strong>4</strong>, not 1 — automation can tell "the API failed" apart from "the data was wrong."</p></div></article>
+        <article class="feature-card"><span class="mark">05</span><div><h3>Secrets that refuse to be sloppy</h3><p>Credentials go to the OS keyring (<code>sclpl[keyring]</code>) or an encrypted file (<code>sclpl[crypto]</code>). If neither safe backend is installed, secret storage fails loudly instead of falling back to plaintext.</p></div></article>
+        <article class="feature-card"><span class="mark">06</span><div><h3>Operational memory</h3><p>Every run keeps local history: <code>sclpl runs list</code>, <code>show</code>, <code>search</code>, <code>diff</code>, <code>replay</code>, <code>export</code>, <code>pin</code>, <code>prune</code> — an overnight job stays inspectable the next morning.</p></div></article>
+        <article class="feature-card"><span class="mark">07</span><div><h3>Modes and limits</h3><p><code>@mode partial</code> / <code>full</code> / <code>smoke</code> run a subset of a workflow for a fast local check; <code>@limits concurrency=8 host_concurrency=4 timeout=20</code> caps how hard a run leans on a target API.</p></div></article>
+        <article class="feature-card"><span class="mark">08</span><div><h3>Escape hatches, not lock-in</h3><p>Register a SHA-256-pinned Python script and call it with <code>sclpl python NAME</code> — no plugin packaging required. Need something reusable? Scaffold a plugin against the public <code>sclpl.ext.api</code>, the same surface the bundled plugins use.</p></div></article>
+        <article class="feature-card"><span class="mark">09</span><div><h3>Editor support, stays in sync</h3><p><code>sclpll-extras</code> carries the VS Code extension, the SCLPLL language server, an Azure Blob plugin, and a workflow library — all built on the installed <code>sclpl</code> package, so syntax can't drift between CLI and editor.</p></div></article>
+        <article class="feature-card"><span class="mark">10</span><div><h3>Degrades on purpose under load</h3><p>When memory pressure rises on a large run, intermediates spill to disk and concurrency backs off before the OS has to intervene — documented behavior, not a crash waiting to happen.</p></div></article>
+      </div>
+    </section>
+
+    <section class="codecmp-wrap wrap">
+      <p class="eyebrow">03 — WHY NOT JUST SCRIPT IT</p>
+      <h2>Same workflow, three ways</h2>
+      <p class="lede">Fetch two independent resources, join them, publish a report — in hand-written Python, a YAML automation file, and <code>.sclpll</code>.</p>
+      <div class="codecmp">
+        <div class="code-card">
+          <div class="cc-head"><span>python — asyncio</span><span class="lines">~30 lines</span></div>
+          <pre>import asyncio, aiohttp, os
+
+TOKEN = os.environ["API_TOKEN"]  # secrets: your job
+HEADERS = {"Authorization": f"Bearer {TOKEN}"}
+
+async def fetch(session, path):
+    for attempt in range(3):
+        async with session.get(path, headers=HEADERS) as r:
+            if r.status &lt; 500:
+                r.raise_for_status()
+                return await r.json()
+    raise RuntimeError("retries exhausted")
+
+def join(accounts, prices):
+    by_id = {p["account_id"]: p for p in prices}
+    return [{**a, **by_id.get(a["account_id"], {})}
+            for a in accounts]
+
+async def run():
+    async with aiohttp.ClientSession(BASE) as s:
+        # you write the parallelism yourself
+        accounts, prices = await asyncio.gather(
+            fetch(s, "/accounts"),
+            fetch(s, "/prices"),
+        )
+        merged = join(accounts, prices)
+        async with s.post("/reports", headers=HEADERS,
+                           json=merged) as r:
+            r.raise_for_status()
+
+asyncio.run(run())</pre>
+          <div class="cc-foot">Retry, join, and the parallel fetch are each hand-written — correct, but every one is a place to introduce a bug, and none of it is reusable in the next workflow.</div>
+        </div>
+        <div class="code-card">
+          <div class="cc-head"><span>yaml automation</span><span class="lines">~24 lines + a script</span></div>
+          <pre>steps:
+  - id: accounts
+    run: |
+      curl -sf --retry 3 "$BASE/accounts" \
+        -H "Authorization: Bearer $API_TOKEN" \
+        > accounts.json
+
+  - id: prices
+    run: |
+      curl -sf --retry 3 "$BASE/prices" \
+        -H "Authorization: Bearer $API_TOKEN" \
+        > prices.json
+
+  - id: merged
+    needs: [accounts, prices]
+    # join isn't a shell primitive - out to a script
+    run: python join.py accounts.json prices.json \
+      > merged.json
+
+  - id: publish
+    needs: [merged]
+    run: |
+      curl -sf -X POST "$BASE/reports" \
+        -H "Authorization: Bearer $API_TOKEN" \
+        -d @merged.json</pre>
+          <div class="cc-foot">Reads clean until step 3 — real logic can't live in YAML, so it falls out into <code>join.py</code>. <code>accounts</code>/<code>prices</code> only run together if the runner honors <code>needs:</code> as a real DAG.</div>
+        </div>
+        <div class="code-card win">
+          <div class="cc-head"><span>.sclpll</span><span class="lines">~20 lines</span></div>
+          <pre>@workflow account_price_report
+  "Accounts + prices, merged and posted"
+
+@var base = "https://api.example.com"
+@var token = "{{secret('api_token')}}"
+
+@step accounts
+  get {{base}}/accounts
+  header Authorization: Bearer {{token}}
+  retry 3
+
+@step prices
+  get {{base}}/prices
+  header Authorization: Bearer {{token}}
+  retry 3
+
+@step shaped_accounts
+  flatten @accounts.body
+
+@step shaped_prices
+  flatten @prices.body
+
+@step merged
+  join @shaped_accounts @shaped_prices account_id how=left
+
+@step publish
+  post {{base}}/reports
+  header Authorization: Bearer {{token}}
+  body @merged</pre>
+          <div class="cc-foot"><code>accounts</code> and <code>prices</code> reference nothing but their own inputs, so the scheduler runs them together — no <code>gather</code>, no <code>needs:</code>. <code>secret()</code> reads the keyring/encrypted store by default.</div>
+        </div>
+      </div>
+      <div class="table-scroll">
+        <table class="data-table">
+          <tr><th>Dimension</th><th>Python (asyncio)</th><th>YAML automation</th><th>.sclpll</th></tr>
+          <tr><td>To express this workflow</td><td>~30 lines, grows with every retry/config edge case</td><td>~24 lines of YAML + a separate <code>join.py</code></td><td>~20 lines, one file, one syntax</td></tr>
+          <tr><td>Parallel execution</td><td>Manual — decide what to <code>gather</code></td><td>Only if the runner treats <code>needs:</code> as a real DAG</td><td>Automatic — inferred from references</td></tr>
+          <tr><td>Where logic lives</td><td>Inline, same language</td><td>Escapes into shell + an ad hoc script</td><td>Inline, same step syntax as the HTTP calls</td></tr>
+          <tr><td>Secrets</td><td>Bare <code>os.environ</code> unless you add a library</td><td>Bare shell env var</td><td><code>secret()</code> — keyring/encrypted file, no plaintext fallback</td></tr>
+          <tr><td>Retries / pagination</td><td>Hand-rolled loop</td><td><code>curl --retry</code>; pagination is another loop</td><td>One line each: <code>retry 3</code>, <code>paginate cursor ...</code></td></tr>
+          <tr><td>Data vs HTTP failure</td><td>Whatever exception handling you wrote</td><td>Shell exit code only</td><td>Distinct exit code 4 from <code>assert_*</code></td></tr>
+        </table>
+      </div>
+      <div class="speed-note"><b>On "speed":</b> a carefully hand-tuned <code>asyncio.gather</code> script can run just as fast as sclpl for this exact shape — we don't have head-to-head runtime benchmarks yet. The honest version: a plain script or a linear YAML runner is only as parallel as the author remembered to make it; a <code>.sclpll</code> workflow is parallel by default because the scheduler reads it straight off the dependency graph.</div>
+    </section>
+
+    <section class="closing wrap"><p class="eyebrow">START WITH ONE FILE</p><h2>Make the next API job<br>something you can rerun.</h2><div class="terminal"><span>$</span> pip install ./sclpl-1.0.1-py3-none-any.whl <button data-copy="pip install ./sclpl-1.0.1-py3-none-any.whl">Copy</button></div><div class="actions"><a class="button primary" href="downloads.html">Get the release <b>→</b></a><a class="button quiet" href="docs.html?doc=docs/guide/workflow-anatomy.md">Try the 10-minute path</a></div></section>
+  </main><footer><span>Copyright (c) 2026 Shubham</span><span>Programmable API workflows, written as files.</span><a href="https://github.com/sm408/sclpl-api">Source code ↗</a></footer><script src="site.js"></script>
+</body></html>

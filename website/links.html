@@ -1,0 +1,38 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<script>try{if(localStorage.getItem('sclpl-theme')==='light')document.documentElement.setAttribute('data-theme','light')}catch(e){}</script>
+<meta name="description" content="Repos, releases, and docs for SCLPL and SCLPLL extras."><title>Links — SCLPL</title><link rel="icon" href="favicon.svg"><link rel="stylesheet" href="site.css"></head>
+<body><header class="nav"><a class="wordmark" href="index.html">sclpl</a><nav aria-label="Primary"><a href="index.html">Home</a><a href="downloads.html">Downloads</a><a href="docs.html">Documentation</a><a class="active" href="links.html">Links</a><a href="https://github.com/sm408/sclpl-api" target="_blank" rel="noreferrer">GitHub ↗</a><button id="theme-toggle" class="theme-toggle" type="button" aria-pressed="false" aria-label="Toggle color theme"></button></nav></header>
+<main class="inner wrap">
+  <p class="eyebrow">GET IT</p>
+  <h1>Where the code<br><em>actually lives.</em></h1>
+  <p class="lede">Two repositories, one language authority. sclpl-api owns the parser, runtime, and CLI; sclpll-extras builds editor and plugin tooling on top of it — nothing here is a "coming soon."</p>
+
+  <section style="margin-top:60px">
+    <p class="eyebrow">REPOSITORIES</p>
+    <div class="table-scroll">
+      <table class="data-table">
+        <tr><th>Repo</th><th>What's in it</th></tr>
+        <tr><td class="file"><a href="https://github.com/sm408/sclpl-api" target="_blank" rel="noopener">sm408/sclpl-api</a></td><td>The language authority: parser, formatter, runtime, CLI, bundled functions. MIT licensed, current release v1.0.1.</td></tr>
+        <tr><td class="file"><a href="https://github.com/sm408/sclpll-extras" target="_blank" rel="noopener">sm408/sclpll-extras</a></td><td>Companion distribution: VS Code extension, SCLPLL language server, plugin packages (<code>azure_blob</code>), the bundled-function catalogue, and a workflow library. No second parser — it runs on the installed <code>sclpl</code> package.</td></tr>
+      </table>
+    </div>
+  </section>
+
+  <section class="install-guide" style="margin-top:60px">
+    <div>
+      <p class="eyebrow">DOCS WORTH LINKING DIRECTLY</p>
+      <h2>Skip the repo browse.</h2>
+    </div>
+    <div>
+      <ul class="link-list">
+        <li><a href="docs.html?doc=docs/playbooks/01-paginated-api-to-csv.md">Playbooks →</a><p>Worked, end-to-end tasks — pagination to CSV, joining sources, automating, debugging, and role-specific paths.</p></li>
+        <li><a href="docs.html?doc=docs/concepts.md">Concepts →</a><p>The vocabulary — workflows, steps, references, the scheduler — in the order you actually need it.</p></li>
+        <li><a href="docs.html?doc=docs/reference/cli.md">Generated reference →</a><p>Commands, functions, expressions, and plugins, generated straight from the source.</p></li>
+        <li><a href="https://github.com/sm408/sclpl-api/tree/main/examples" target="_blank" rel="noopener">examples/ ↗</a><p>Runnable <code>.sclpll</code> files, validated in CI — nothing here links to something that doesn't run.</p></li>
+      </ul>
+    </div>
+  </section>
+
+  <p class="integrity" style="margin-top:60px">Prefer to install directly? The <a href="downloads.html">downloads page</a> has the wheel, the VS Code extension, and the exact <code>pip install</code> commands.</p>
+</main>
+<footer><span>Copyright (c) 2026 Shubham</span><span>Two repos, one language authority.</span><a href="https://github.com/sm408/sclpl-api">Source code ↗</a></footer><script src="site.js"></script></body></html>
