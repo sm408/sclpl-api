@@ -72,6 +72,8 @@ a:focus-visible,button:focus-visible,input:focus-visible{outline:3px solid var(-
 .primary:hover{box-shadow:4px 4px 0 var(--ink-fixed)}
 .quiet{background:transparent}
 .micro,.fine{font-size:13px;color:var(--muted)}
+.hero-tryline{display:inline-block;margin-top:10px;font:13px var(--mono);color:var(--muted);border-bottom:1px solid transparent}
+.hero-tryline:hover{color:var(--coral);border-color:var(--coral)}
 
 /* Fixed-dark console chrome: unaffected by theme */
 .signal{border:1px solid var(--ink-fixed);background:var(--ink-fixed);color:#e8efeb;box-shadow:10px 10px 0 var(--gold);margin-top:20px}
