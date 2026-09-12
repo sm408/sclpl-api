@@ -355,9 +355,7 @@ def _read_manifest(directory: Path, source: str) -> Plugin | None:
                         lane=entry.get("lane"),
                         summary=str(entry.get("summary", "")),
                         signature=str(entry.get("signature", "")),
-                        parameters=tuple(
-                            str(value) for value in entry.get("parameters", [])
-                        )
+                        parameters=tuple(str(value) for value in entry.get("parameters", []))
                         if isinstance(entry.get("parameters", []), list)
                         else (),
                     )
