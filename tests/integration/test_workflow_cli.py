@@ -12,6 +12,7 @@ from pathlib import Path
 import pytest
 
 from sclpl.errors import EXIT_USAGE, EXIT_VALIDATION
+from sclpl import __version__
 
 WORKFLOW = """
 @workflow probe "A workflow that talks to the mock server"
@@ -69,7 +70,7 @@ def test_python_command_runs_a_normal_script_and_forwards_its_arguments(tmp_path
     )
     result = run_cli("python", "report", "--greeting", "hello", cwd=tmp_path)
     assert result.returncode == 0, result.stderr
-    assert result.stdout.strip() == "0.9.1:hello"
+    assert result.stdout.strip() == f"{__version__}:hello"
 
 
 def test_python_command_refuses_an_arbitrary_script_path(tmp_path: Path) -> None:
