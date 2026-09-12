@@ -125,6 +125,20 @@ def test_resource_cache_detects_corruption_and_repairs_it_online(tmp_path: Path)
     assert info.checksum is not None and info.checksum.startswith("sha256:")
 
 
+def test_resource_cache_rejects_a_provider_checksum_mismatch(tmp_path: Path) -> None:
+    class ChecksummedMemory(MemoryProvider):
+        def download(self, uri: str, target: BinaryIO) -> ResourceInfo:
+            target.write(self.data)
+            return ResourceInfo(uri=uri, revision=self.revision, checksum="sha256:deadbeef")
+
+    target = tmp_path / "input"
+    with pytest.raises(ResourceUnavailable, match="checksum"):
+        ResourceCache(tmp_path / "cache").materialize(
+            ChecksummedMemory(b"actual"), "memory://account/c/input.csv", target
+        )
+    assert not target.exists()
+
+
 def test_resource_cache_resumes_a_revision_pinned_partial_download(tmp_path: Path) -> None:
     class ResumableMemory(MemoryProvider):
         def __init__(self) -> None:
@@ -162,3 +176,51 @@ def test_resource_cache_resumes_a_revision_pinned_partial_download(tmp_path: Pat
     cache.materialize(provider, uri, completed)
     assert completed.read_bytes() == b"abcdefgh"
     assert provider.offsets == [0, 3]
+
+
+def test_resource_cache_discards_a_corrupt_partial_after_checksum_mismatch(
+    tmp_path: Path,
+) -> None:
+    class BadThenGoodResumable(MemoryProvider):
+        def __init__(self) -> None:
+            super().__init__(b"abcdefgh", "v1")
+            self.offsets: list[int] = []
+            self.fail_once = True
+
+        def capabilities(self) -> ResourceCapabilities:
+            return ResourceCapabilities(revisions=True, resumable_downloads=True)
+
+        def download_range(
+            self,
+            uri: str,
+            target: BinaryIO,
+            *,
+            offset: int,
+            expected_revision: str,
+        ) -> ResourceInfo:
+            assert expected_revision == self.revision
+            self.offsets.append(offset)
+            target.write(self.data[offset:])
+            if self.fail_once:
+                self.fail_once = False
+                return ResourceInfo(
+                    uri=uri,
+                    size=len(self.data),
+                    revision=self.revision,
+                    checksum="sha256:deadbeef",
+                )
+            return ResourceInfo(uri=uri, size=len(self.data), revision=self.revision)
+
+    cache = ResourceCache(tmp_path / "cache")
+    provider = BadThenGoodResumable()
+    uri = "memory://account/c/large.csv"
+
+    with pytest.raises(ResourceUnavailable, match="checksum"):
+        cache.materialize(provider, uri, tmp_path / "first")
+
+    completed = tmp_path / "completed"
+    cache.materialize(provider, uri, completed)
+    assert completed.read_bytes() == b"abcdefgh"
+    # A poisoned partial that keeps its offset would retry from len(data) forever and
+    # never repair; the corrupt partial must be discarded so the retry restarts at 0.
+    assert provider.offsets == [0, 0]

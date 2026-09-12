@@ -11,7 +11,12 @@ from typing import cast
 from uuid import uuid4
 
 from sclpl.errors import CacheMiss
-from sclpl.ext.resources import ResourceInfo, ResourceProvider, ResumableResourceProvider
+from sclpl.ext.resources import (
+    ResourceInfo,
+    ResourceProvider,
+    ResourceUnavailable,
+    ResumableResourceProvider,
+)
 from sclpl.state.db import default_root
 
 
@@ -68,6 +73,12 @@ class ResourceCache:
             expected = provider.stat(uri)
             if expected.revision is not None:
                 cached = self.get(uri, expected.revision)
+                if (
+                    cached is not None
+                    and expected.checksum is not None
+                    and not self._matches_checksum(cached.path, expected.checksum)
+                ):
+                    cached = None
                 if cached is not None:
                     self._copy(cached.path, target)
                     return ResourceInfo(
@@ -77,7 +88,7 @@ class ResourceCache:
                         revision=expected.revision,
                         content_type=expected.content_type,
                         metadata=expected.metadata,
-                        checksum=cached.checksum,
+                        checksum=expected.checksum or cached.checksum,
                     )
 
         if (
@@ -95,12 +106,13 @@ class ResourceCache:
         try:
             with target.open("wb") as handle:
                 info = provider.download(uri, handle)
+            self._verify_checksum(target, info.checksum)
         except Exception:
             target.unlink(missing_ok=True)
             raise
         if write:
             cached = self.put(uri, target, info.revision)
-            return replace(info, checksum=cached.checksum)
+            return replace(info, checksum=info.checksum or cached.checksum)
         return info
 
     def _resume_download(
@@ -122,10 +134,15 @@ class ResourceCache:
                 offset=offset,
                 expected_revision=expected.revision,
             )
+        try:
+            self._verify_checksum(partial, info.checksum)
+        except Exception:
+            partial.unlink(missing_ok=True)
+            raise
         cached = self.put(uri, partial, info.revision)
         partial.unlink(missing_ok=True)
         self._copy(cached.path, target)
-        return replace(info, checksum=cached.checksum)
+        return replace(info, checksum=info.checksum or cached.checksum)
 
     def get(self, uri: str, revision: str | None = None) -> CachedResource | None:
         entry = self._index().get(self._key(uri))
@@ -218,12 +235,29 @@ class ResourceCache:
         shutil.copyfile(source, target)
 
     @staticmethod
-    def _digest(path: Path) -> str:
-        digest = hashlib.sha256()
+    def _hash_file(path: Path, algorithm: str) -> str:
+        digest = hashlib.new(algorithm)
         with path.open("rb") as reader:
             for chunk in iter(lambda: reader.read(65536), b""):
                 digest.update(chunk)
         return digest.hexdigest()
+
+    @classmethod
+    def _digest(cls, path: Path) -> str:
+        return cls._hash_file(path, "sha256")
+
+    @classmethod
+    def _matches_checksum(cls, path: Path, checksum: str) -> bool:
+        algorithm, separator, expected = checksum.partition(":")
+        if not separator or algorithm not in hashlib.algorithms_available:
+            return True
+        return cls._hash_file(path, algorithm) == expected.lower()
+
+    def _verify_checksum(self, path: Path, checksum: str | None) -> None:
+        if checksum is not None and not self._matches_checksum(path, checksum):
+            raise ResourceUnavailable(
+                "remote resource content checksum does not match materialized bytes"
+            )
 
     @staticmethod
     def _miss(uri: str) -> CacheMiss:

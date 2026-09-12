@@ -33,13 +33,13 @@ WRITER = """
 """
 
 
-def run_cli(*args: str) -> subprocess.CompletedProcess[str]:
+def run_cli(*args: str, cache_dir: Path) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
         [sys.executable, "-m", "sclpl", *args],
         capture_output=True,
         text=True,
         timeout=120,
-        env={**os.environ, "PYTHONPATH": os.getcwd()},
+        env={**os.environ, "PYTHONPATH": os.getcwd(), "SCLPL_CACHE_DIR": str(cache_dir)},
     )
 
 
@@ -68,7 +68,7 @@ def test_a_run_waits_for_a_locked_output_held_by_another_process(
     holder = _hold_lock(out, seconds=1.5)
     try:
         started = time.monotonic()
-        result = run_cli("run", str(writer), str(out), "--no-record")
+        result = run_cli("run", str(writer), str(out), "--no-record", cache_dir=tmp_path / "cache")
         elapsed = time.monotonic() - started
     finally:
         holder.wait(timeout=5)
@@ -81,14 +81,16 @@ def test_a_run_waits_for_a_locked_output_held_by_another_process(
 def test_a_run_is_not_slowed_by_a_lock_on_a_different_output(writer: Path, tmp_path: Path) -> None:
     out = tmp_path / "out.csv"
     unrelated = tmp_path / "unrelated.csv"
-    holder = _hold_lock(unrelated, seconds=5.0)
+    # Leave a comfortable gap over normal CLI startup on a loaded Windows runner.
+    # A run that incorrectly waits for this unrelated lock will still exceed 6 seconds.
+    holder = _hold_lock(unrelated, seconds=8.0)
     try:
         started = time.monotonic()
-        result = run_cli("run", str(writer), str(out), "--no-record")
+        result = run_cli("run", str(writer), str(out), "--no-record", cache_dir=tmp_path / "cache")
         elapsed = time.monotonic() - started
     finally:
         holder.kill()
         holder.wait(timeout=5)
     assert result.returncode == 0, result.stderr
     assert out.exists()
-    assert elapsed < 4.0
+    assert elapsed < 6.0

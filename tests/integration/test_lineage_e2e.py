@@ -27,7 +27,12 @@ def run_cli(*args: str, cwd: Path, home: Path) -> subprocess.CompletedProcess[st
         text=True,
         timeout=60,
         cwd=cwd,
-        env={**os.environ, "PYTHONPATH": os.getcwd(), "SCLPL_HOME": str(home)},
+        env={
+            **os.environ,
+            "PYTHONPATH": os.getcwd(),
+            "SCLPL_HOME": str(home),
+            "SCLPL_CACHE_DIR": str(home / "cache"),
+        },
     )
 
 
