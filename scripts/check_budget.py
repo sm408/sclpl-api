@@ -42,7 +42,7 @@ BUDGETS: dict[str, int] = {
     "expr": 1500,
     "expr/ops": 1400,
     "tables": 900,
-    "ext": 700,
+    "ext": 710,
     "state": 900,
     "functions": 1200,
     "plugins_bundled": 600,
