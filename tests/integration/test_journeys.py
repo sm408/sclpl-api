@@ -95,9 +95,7 @@ def test_api_to_csv_reporting_fails_closed_when_a_required_field_disappears(
 JOURNEY_2 = JOURNEYS / "02-api-reconciliation"
 
 
-def _run_reconciliation(
-    ledger: str, out: Path, *, home: Path
-) -> subprocess.CompletedProcess[str]:
+def _run_reconciliation(ledger: str, out: Path, *, home: Path) -> subprocess.CompletedProcess[str]:
     return run_cli(
         "run",
         str(JOURNEY_2 / "workflows" / "reconciliation.sclpll"),

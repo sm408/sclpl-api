@@ -133,8 +133,6 @@ def test_deny_capabilities_accepts_a_known_name(tmp_path: Path) -> None:
         pytest.param("overwrite = 'yes'", "policy.overwrite", id="overwrite-not-a-boolean"),
     ],
 )
-def test_a_malformed_policy_table_is_rejected(
-    tmp_path: Path, policy_toml: str, match: str
-) -> None:
+def test_a_malformed_policy_table_is_rejected(tmp_path: Path, policy_toml: str, match: str) -> None:
     with pytest.raises(ValidationError, match=match):
         policy.parse(_project(tmp_path, f"[policy]\n{policy_toml}\n"))

@@ -112,9 +112,9 @@ def init(
 
 @project_app.command("ci-template")
 def ci_template(
-    out: Annotated[
-        Path, typer.Option("--out", help="Where to write it.")
-    ] = Path(".github/workflows/sclpl-ci.yml"),
+    out: Annotated[Path, typer.Option("--out", help="Where to write it.")] = Path(
+        ".github/workflows/sclpl-ci.yml"
+    ),
     overwrite: Annotated[
         bool, typer.Option("--overwrite", help="Replace an existing file.")
     ] = False,
