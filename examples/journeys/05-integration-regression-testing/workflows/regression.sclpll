@@ -1,0 +1,18 @@
+@workflow regression "Authenticated, paginated fetch with retry, for offline regression replay"
+
+@var base = "https://api.example.invalid"
+
+@output rows:csv
+
+@step fetch
+  get {{base}}/orders
+  header Authorization: Bearer {{secret('demo_token')}}
+  retry 3 on=[503]
+  paginate cursor cursor_path=next_cursor param=cursor max_pages=10
+  assert @fetch.status == 200
+
+@step shape
+  normalize @fetch.body
+
+@step write -> rows
+  save_csv @shape

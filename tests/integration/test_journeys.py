@@ -282,3 +282,98 @@ def test_lightweight_ingestion_never_lets_an_incomplete_run_masquerade_as_comple
     # The destination is exactly what the last good run left -- not touched,
     # not truncated, not silently replaced with the two-row attempt.
     assert _parquet_row_count(out) == 3
+
+
+# -- Journey 5: Integration regression testing ---------------------------------------
+
+JOURNEY_5 = JOURNEYS / "05-integration-regression-testing"
+
+
+@pytest.fixture
+def installed_journey_5(tmp_path: Path, home: Path) -> Path:
+    """A real `package build` + `package install` round trip, not a shortcut."""
+    archive = tmp_path / "pkg.sclplpkg"
+    build = run_cli(
+        "package",
+        "build",
+        "--project",
+        str(JOURNEY_5),
+        "--out",
+        str(archive),
+        cwd=JOURNEY_5,
+        home=home,
+    )
+    assert build.returncode == 0, build.stderr
+
+    deployed = tmp_path / "deployed"
+    install = run_cli(
+        "package", "install", str(archive), "--into", str(deployed), cwd=JOURNEY_5, home=home
+    )
+    assert install.returncode == 0, install.stderr
+
+    return deployed / "integration-regression-testing" / "1.0.0"
+
+
+def _run_installed_regression(
+    project: Path, out: Path, *, home: Path, fixture_dir: str = "fixtures/orders"
+) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "sclpl",
+            "run",
+            "workflows/regression.sclpll",
+            "--var",
+            "base=http://127.0.0.1:8906",
+            "--out",
+            f"rows={out}",
+            "--replay",
+            fixture_dir,
+            "--strict-replay",
+            "--no-record",
+            "--no-cache",
+        ],
+        capture_output=True,
+        text=True,
+        timeout=120,
+        cwd=project,
+        env={
+            **os.environ,
+            "SCLPL_SECRET_DEMO_TOKEN": "secret-token-xyz",
+            "PYTHONPATH": str(Path(__file__).resolve().parents[2]),
+            "SCLPL_RENDER": "plain",
+            "SCLPL_HOME": str(home),
+            "SCLPL_CACHE_DIR": str(home / "cache"),
+        },
+    )
+
+
+def test_installed_package_replays_auth_retry_and_pagination_offline(
+    tmp_path: Path, home: Path, installed_journey_5: Path
+) -> None:
+    """SPEC 7: "Installed package replays pagination, errors, auth references,
+    and output snapshots offline"."""
+    out = tmp_path / "rows.csv"
+    result = _run_installed_regression(installed_journey_5, out, home=home)
+    assert result.returncode == 0, result.stderr
+    rows = list(csv.DictReader(io.StringIO(out.read_text(encoding="utf-8"))))
+    assert rows == [
+        {"id": "1", "total": "100"},
+        {"id": "2", "total": "200"},
+        {"id": "3", "total": "300"},
+    ]
+
+
+def test_installed_package_fails_before_side_effects_on_a_missing_fixture(
+    tmp_path: Path, home: Path, installed_journey_5: Path
+) -> None:
+    """SPEC 7: "Missing fixture ... fails before side effects"."""
+    (installed_journey_5 / "fixtures" / "orders").rename(
+        installed_journey_5 / "fixtures" / "orders_hidden"
+    )
+    out = tmp_path / "rows.csv"
+    result = _run_installed_regression(installed_journey_5, out, home=home)
+    assert result.returncode != 0, result.stdout + result.stderr
+    assert "fixture mismatch" in result.stdout + result.stderr
+    assert not out.exists()
