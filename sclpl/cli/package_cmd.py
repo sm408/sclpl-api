@@ -11,8 +11,13 @@ import typer
 from sclpl.errors import ValidationError
 from sclpl.packages import build as build_mod
 from sclpl.packages import install as install_mod
+from sclpl.packages import lifecycle
 from sclpl.project import context
 from sclpl.state.db import default_root
+
+IntoOption = Annotated[
+    Path | None, typer.Option("--into", help="Install root (default: ~/.sclpl/packages).")
+]
 
 app = typer.Typer(no_args_is_help=True, help="Build and inspect distributable SCLPL packages.")
 
@@ -81,10 +86,7 @@ def validate(
 @app.command("install")
 def install(
     archive: Annotated[Path, typer.Argument(help="A .sclplpkg archive.")],
-    into: Annotated[
-        Path | None,
-        typer.Option("--into", help="Install root (default: ~/.sclpl/packages)."),
-    ] = None,
+    into: IntoOption = None,
     json_mode: Annotated[bool, typer.Option("--json", help="Emit the result as JSON.")] = False,
 ) -> None:
     """Validate, then atomically install a package into `<into>/<name>/<version>`.
@@ -110,6 +112,113 @@ def install(
     typer.echo(f"installed {result.name} {result.version}")
     typer.echo(f"  {result.path}")
     typer.echo(f"  digest sha256:{result.digest}")
+
+
+@app.command("list")
+def list_command(into: IntoOption = None) -> None:
+    """Every installed package under the install root."""
+    root = into or default_root() / "packages"
+    installed = lifecycle.list_installed(root)
+    if not installed:
+        typer.echo("no packages installed", err=True)
+        return
+    width = max(len(item.name) for item in installed)
+    for item in installed:
+        typer.echo(f"{item.name:<{width}} {item.version:<12} sha256:{item.digest}")
+
+
+@app.command("show")
+def show(
+    name: Annotated[str, typer.Argument()],
+    version: Annotated[str, typer.Argument()],
+    into: IntoOption = None,
+) -> None:
+    """Everything recorded about one installed package at install time."""
+    root = into or default_root() / "packages"
+    manifest = lifecycle.describe(root, name, version)
+    typer.echo(json.dumps(manifest, indent=2, sort_keys=True))
+
+
+@app.command("verify")
+def verify(
+    name: Annotated[str, typer.Argument()],
+    version: Annotated[str, typer.Argument()],
+    into: IntoOption = None,
+) -> None:
+    """Re-hash an installed package's files against its own recorded manifest.
+
+    Unlike `package validate` (an archive, before installing), this checks the
+    files actually on disk today -- it catches drift after installation, not
+    just a corrupt or tampered archive before it.
+    """
+    root = into or default_root() / "packages"
+    lifecycle.verify(root, name, version)
+    typer.echo(f"{name} {version}: ok")
+
+
+@app.command("remove")
+def remove(
+    name: Annotated[str, typer.Argument()],
+    version: Annotated[str, typer.Argument()],
+    into: IntoOption = None,
+    force: Annotated[
+        bool, typer.Option("--force", help="Remove even if the current project pins it.")
+    ] = False,
+    project: Annotated[
+        Path | None, typer.Option("--project", help="Project root or manifest.")
+    ] = None,
+) -> None:
+    """Remove one installed package version.
+
+    Refused, without --force, while the current project's [package.requires]
+    pins this exact name and version -- a referenced version cannot silently
+    disappear.
+    """
+    root = into or default_root() / "packages"
+    lifecycle.remove(root, name, version, required_by=_requires(project), force=force)
+    typer.echo(f"removed {name} {version}")
+
+
+@app.command("update")
+def update(
+    archive: Annotated[Path, typer.Argument(help="A .sclplpkg archive.")],
+    into: IntoOption = None,
+) -> None:
+    """Install a new version alongside any existing ones, and show what changed.
+
+    Never removes or silently replaces a previously installed version -- a run
+    that referenced the old version keeps working until something explicitly
+    removes it (`package remove`) or changes what it references.
+    """
+    root = into or default_root() / "packages"
+    result = install_mod.install(archive, into=root)
+    previous = sorted(
+        item.version
+        for item in lifecycle.list_installed(root)
+        if item.name == result.name and item.version != result.version
+    )
+    if not previous:
+        typer.echo(f"installed {result.name} {result.version} (first install)")
+        return
+    changes = lifecycle.diff(root, result.name, previous[-1], result.version)
+    typer.echo(f"installed {result.name} {result.version} (previously {previous[-1]})")
+    if changes.is_empty:
+        typer.echo("  no file differences")
+        return
+    for name in changes.added:
+        typer.echo(f"  + {name}")
+    for name in changes.removed:
+        typer.echo(f"  - {name}")
+    for name in changes.changed:
+        typer.echo(f"  ~ {name}")
+
+
+def _requires(project: Path | None) -> dict[str, str] | None:
+    loaded = context.load(project=project)
+    if loaded is None:
+        return None
+    requires = loaded.package.get("requires", {})
+    return requires if isinstance(requires, dict) else None
 
 
 def _current(project: Path | None) -> context.ProjectContext:

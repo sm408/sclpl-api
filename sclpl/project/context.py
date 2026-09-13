@@ -235,7 +235,7 @@ def _validate_package(package: dict[str, Any], path: Path) -> None:
     """Keep package-build declarations optional but well-shaped when present."""
     if not package:
         return
-    allowed = {"name", "version", "include"}
+    allowed = {"name", "version", "include", "requires"}
     unknown = set(package) - allowed
     if unknown:
         raise ValidationError(f"unknown package key {sorted(unknown)[0]!r}", where=str(path))
@@ -246,6 +246,14 @@ def _validate_package(package: dict[str, Any], path: Path) -> None:
     include = package.get("include", [])
     if not isinstance(include, list) or not all(isinstance(item, str) for item in include):
         raise ValidationError("package.include must be an array of paths", where=str(path))
+    requires = package.get("requires", {})
+    if not isinstance(requires, dict) or not all(
+        isinstance(k, str) and isinstance(v, str) for k, v in requires.items()
+    ):
+        raise ValidationError(
+            "package.requires must map installed package names to pinned versions",
+            where=str(path),
+        )
 
 
 def _validate_python(python: dict[str, Any], path: Path) -> None:

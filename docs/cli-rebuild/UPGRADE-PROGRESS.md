@@ -497,6 +497,21 @@ See [the decision log](DECISION-LOG.md) for implementation tradeoffs and evidenc
   `sclpl package install` CLI commands. Compatibility (declared `sclpl` version
   constraints) and capability-policy comparison against a prior install are H3's
   concern, deferred until there is a "prior install" to compare against.
-- [ ] H3 plugin lifecycle (inspect/verify/update/remove): not started.
+- [x] H3 plugin lifecycle (inspect/verify/update/remove): new
+  `sclpl/packages/lifecycle.py` operates on the locked inventory H2's
+  `install()` built (`~/.sclpl/packages/<name>/<version>`). `list_installed`/
+  `describe` inspect it; `verify` re-hashes every installed file against its
+  own recorded manifest today, catching drift that happened *after*
+  installation (a corrupt/tampered install-time archive is H2's `validate`'s
+  job, not this). `diff` compares two installed versions' file listings
+  (added/removed/changed) for an explicit update diff. `remove` is
+  dependency-aware against a new `[package.requires]` project-manifest table
+  (name -> pinned version): removing a version currently pinned by the loaded
+  project is refused unless `--force`, so "no silent plugin upgrade during
+  run" and "a referenced version cannot disappear without a clear refusal"
+  both hold. New `sclpl package list/show/verify/remove/update` commands;
+  `update` installs a new version *alongside* any existing ones (never
+  removes or replaces silently) and prints the file diff against the
+  previously installed version. ADR 0012 budgets `cli` at 2,450 lines.
 - [ ] H4 shared distribution (registry client): not started.
 - [ ] H5 registry release workflow: not started.
