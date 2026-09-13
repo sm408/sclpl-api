@@ -583,7 +583,33 @@ release-index`).
   command was exercised end to end against a real scratch project (import,
   inspect the generated file, `sclpl validate` it). ADR 0013 budgets
   `sclpl/importers` at 2,600 lines.
-- [ ] I2 OpenAPI import: not started.
+- [x] I2 OpenAPI import: new `sclpl/importers/openapi.py`. Supports OpenAPI 3.x
+  JSON documents (YAML is a documented scope boundary, not silently missing --
+  it would need a new dependency); loads every path/method operation, resolves
+  `#/...` local `$ref`s, and refuses a non-local one outright (a remote URL or
+  sibling file) rather than fetching it -- disabling exactly the implicit-fetch
+  behavior this batch exists to prevent. `render()` renders one selected
+  operation (by `operationId`) as a complete `.sclpll` workflow: a required
+  path parameter becomes a `@var` the workflow documents as required via
+  `--var name=...`; a required query parameter with no schema default becomes
+  the same; a query/header parameter with a schema default is rendered as a
+  literal; a `requestBody`'s `application/json` schema becomes a `body` literal
+  built from its `example` or its properties' examples (recursively resolving
+  nested local `$ref`s); a `security` requirement becomes an `auth <scheme
+  name>` reference (no credential exists in a spec to extract, unlike I1).
+  Callbacks, links, non-JSON request bodies, and non-path/query/header
+  parameter locations are reported as diagnostics, never silently dropped.
+  New `--from openapi --operation OPERATION_ID` on the existing `sclpl import`
+  command. Imported schemas are used only to shape the generated request/body,
+  never fed into the E-series contract-snapshot system -- an unverified spec
+  claim is not a verified contract. Two real bugs (the request body's own
+  `$ref` was never resolved at all, so neither the local-ref-to-example path
+  nor the remote-ref refusal were ever reachable for a request body) were
+  caught by tests and fixed before merge. Accept criterion verified for real:
+  3 representative operations (path+query params, JSON body via a resolved
+  `$ref`, a bare required query param) are rendered and run through
+  `sclpl.run.preflight.preflight` in the test suite, and the CLI command was
+  exercised end to end against a real scratch project.
 - [ ] I3 Postman import: not started.
 - [ ] I4 notification hooks: not started.
 - [ ] I5 CI output and templates: not started.

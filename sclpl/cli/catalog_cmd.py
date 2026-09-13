@@ -12,6 +12,7 @@ from sclpl.catalog import resolve as resolver
 from sclpl.catalog import store
 from sclpl.errors import SclplError, ValidationError
 from sclpl.importers import curl as curl_importer
+from sclpl.importers import openapi as openapi_importer
 from sclpl.run.preflight import preflight
 
 app = typer.Typer(help="Register and inspect workflows.", no_args_is_help=True)
@@ -41,20 +42,34 @@ def import_workflow(
         str | None,
         typer.Option(
             "--from",
-            help="Source format: a plain workflow file is registered as-is; 'curl' parses"
-            " and converts a saved curl command instead.",
+            help="Source format: a plain workflow file is registered as-is; 'curl' parses a"
+            " saved curl command; 'openapi' parses one operation from a local JSON OpenAPI"
+            " 3.x document (see --operation).",
         ),
+    ] = None,
+    operation: Annotated[
+        str | None,
+        typer.Option("--operation", help="OpenAPI operationId to import (with --from openapi)."),
     ] = None,
 ) -> None:
     if scope not in ("project", "user"):
         typer.echo(f"unknown scope {scope!r}: expected 'project' or 'user'", err=True)
         raise typer.Exit(2)
-    if from_format not in (None, "curl"):
-        raise ValidationError(f"unknown --from format {from_format!r}", remedies=["expected: curl"])
+    if from_format not in (None, "curl", "openapi"):
+        raise ValidationError(
+            f"unknown --from format {from_format!r}", remedies=["expected: curl, openapi"]
+        )
 
     try:
         if from_format == "curl":
             entry = _import_curl(source, name=name, scope=scope, overwrite=overwrite)
+        elif from_format == "openapi":
+            if not operation:
+                raise ValidationError(
+                    "--operation is required with --from openapi",
+                    remedies=["pass the OpenAPI operationId to import"],
+                )
+            entry = _import_openapi(source, operation, name=name, scope=scope, overwrite=overwrite)
         else:
             entry = store.import_workflow(source, scope=scope, name=name, overwrite=overwrite)
     except SclplError as error:
@@ -88,6 +103,28 @@ def _import_curl(source: Path, *, name: str | None, scope: str, overwrite: bool)
             f"command yourself and run: sclpl secret set {secret_name}",
             err=True,
         )
+
+    with tempfile.TemporaryDirectory() as scratch:
+        rendered = Path(scratch) / f"{workflow_name}.sclpll"
+        rendered.write_text(result.workflow, encoding="utf-8")
+        return store.import_workflow(rendered, scope=scope, name=name, overwrite=overwrite)
+
+
+def _import_openapi(
+    source: Path, operation_id: str, *, name: str | None, scope: str, overwrite: bool
+) -> store.Entry:
+    """Convert one operation of a local JSON OpenAPI 3.x document into a workflow.
+
+    Never fetches anything: only `#/...` references within the same document
+    are resolved. A required path/query parameter with no default becomes a
+    `@var` the generated workflow documents as required via `--var`.
+    """
+    document = openapi_importer.load(source)
+    workflow_name = name or operation_id
+    result = openapi_importer.render(document, operation_id, name=workflow_name)
+
+    for warning in result.warnings:
+        typer.echo(f"warning: {warning}", err=True)
 
     with tempfile.TemporaryDirectory() as scratch:
         rendered = Path(scratch) / f"{workflow_name}.sclpll"
