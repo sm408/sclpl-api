@@ -683,3 +683,114 @@ release-index`).
 **Batch I complete** (I1-I5): curl/OpenAPI/Postman import, opt-in webhook/
 Slack/SMTP notifications, and JUnit/JSON/HTML test reporting plus an offline
 CI template are all real, tested, and wired end to end through the CLI.
+
+- [x] J1 Business acceptance examples: all five journeys from section 7, each
+  under `examples/journeys/NN-name/`, each with a recorded offline fixture
+  for the happy path, a second fixture for its required negative case, a
+  README, and automated coverage in `tests/integration/test_journeys.py`
+  (11 tests). 1. API-to-CSV reporting: fetch, `assert_schema` +
+  `assert_no_nulls`, `save_csv`; negative case is a field silently dropped
+  from the API response, caught before the CSV is written. 2. API
+  reconciliation: API orders joined against a local ledger CSV by a
+  registered Python script (`reconcile.py`, hash-pinned via
+  `[python.scripts.reconcile]`), producing a lineage column
+  (`matched`/`mismatch`/`api_only`/`ledger_only`); negative case is a
+  duplicate ledger key, caught by `assert_unique` before either side is
+  joined. 3. API quality monitoring: `assert_schema` wired to a
+  `step_failed` webhook notifier; negative case is a breaking rename
+  (`total` -> `amount`), and the notification is exercised both delivered
+  and undeliverable to prove delivery status never changes the run's exit
+  code. Building this journey led to adding CLI-level logging of every
+  notification delivery receipt (`sclpl/cli/workflow_cmd.py` -- an `info`/
+  `warning` log line per receipt after a run finishes), which previously
+  went nowhere once `notification_sink.wait()` returned; see
+  `tests/integration/test_notifications_cli.py`. 4. Lightweight ingestion:
+  `[outputs] publish = "validated"` (SPEC 3.5) staging a Parquet write
+  behind a later `assert_rowcount` gate; negative case proves the stronger
+  property directly -- a previously-published three-row file is left
+  byte-for-byte untouched by a later run that only produced two rows, not
+  merely "no file appears the first time." 5. Integration regression
+  testing: a workflow combining `secret()`, `retry`, and `paginate cursor`,
+  packaged with `sclpl package build`, installed elsewhere with `sclpl
+  package install`, and replayed from the installed copy against its
+  bundled fixture -- proving the package/install/replay pipeline holds
+  together end to end, not just each piece in isolation; negative case is
+  the installed fixture directory renamed away, failing the first request
+  before pagination, shaping, or the writer step ever run.
+  Two real, previously-uncaught bugs surfaced while wiring these up and
+  were fixed: (a) `examples/13-python-script.py`'s pinned SHA-256 broke on
+  every Windows checkout because git's default `core.autocrlf` silently
+  rewrote its LF line endings to CRLF; fixed with a root `.gitattributes`
+  (`*.py text eol=lf`) rather than touching the hash or the check. (b)
+  `@var token = "{{secret('x')}}"` (used in
+  `examples/11-cache-retry-and-secret.sclpll`) never actually resolves --
+  `{{...}}` expands once, so storing template syntax in a `@var` just
+  substitutes it back out as literal text later, confirmed by a live
+  request that received the literal string `Bearer {{secret('api_token')}}`
+  as its header. No test had ever run that example against a live or
+  replayed server. Fixed by calling `secret()` at the point of use instead
+  of through a `@var` indirection, in both that example and Journey 5's own
+  workflow.
+- [x] J2 Cross-platform and security matrix: CI (`.github/workflows/ci.yml`)
+  now runs the full suite on `ubuntu-latest`/`windows-latest`/`macos-latest`
+  x Python 3.11/3.13 (previously ubuntu-only), plus a `bare-install` job
+  that installs with no optional extra at all and checks the CLI still
+  starts and a small sentinel suite still passes. Lint/type/budget stay one
+  ubuntu job since neither is platform-dependent. New
+  `tests/unit/test_state_secrets.py` covers `sclpl/state/secrets.py`'s
+  three-backend selection (keyring present-and-working, present-but-
+  unusable/no-daemon, absent; encrypted-file when keyring is absent;
+  `NoSecureStorage` when neither is available) via `monkeypatch`-simulated
+  imports rather than whatever happens to be installed on the machine
+  running the tests -- this file had no test coverage at all before, despite
+  the module's own docstring calling its fail-closed behavior "the whole
+  point." Same gap, same fix, for the pandas-optional table backend
+  (`tests/unit/test_tables.py`, one new test for `MissingExtra`). Both were
+  verified against a real simulated bare environment (pandas/keyring/
+  cryptography/openpyxl blocked in-process) in addition to the normal one,
+  confirming the CLI starts and the sentinels still pass either way. Cross-
+  platform PTY handling was already correct: `tests/pty/test_terminal_
+  restore.py` already skips on a platform with no `pty` module, and
+  `tests/pty/test_live_region.py` already exercises the same code paths
+  against a captured stream instead -- nothing to fix there.
+- [x] J3 Performance and fault validation: three of the four fault scenarios
+  named in the plan already had substantial, passing coverage from earlier
+  batches and needed no new work -- verified rather than assumed by actually
+  running them: two-process destination races (`tests/integration/test_
+  output_locking.py`, `tests/unit/test_locking.py`), late-validation
+  publication withholding (`tests/integration/test_publication_e2e.py`,
+  `tests/unit/test_publication.py`), all-format fidelity fixtures (`tests/
+  unit/test_format_fidelity.py`), and partial-result/completeness policy
+  (`tests/{unit,integration}/test_completeness.py`, `test_require_complete_
+  e2e.py`) -- 67 tests, all green. New: `scripts/benchmark.py`, a runnable
+  (not CI-gating, per the plan's own "these are proposed engineering gates,
+  not measured performance claims") harness for the five budgets in section
+  8: a synthetic N-step workflow, paginated-throughput, streaming peak
+  memory (via `tracemalloc`, so it runs the same on every OS), 10,000
+  retained run-record query latency, and replay dispatch cost. `--quick`
+  for a fast sanity check, `--out` to record a JSON result (workload,
+  Python/platform, five numbers) to compare a later run against, matching
+  the plan's own "store workload, hardware, library versions, and results."
+  Full run took ~1m40s locally; not wired into default CI for the same
+  reason the plan puts the "expensive... performance matrix" only "at
+  integration gates and on release candidates," not every push.
+  Investigated real process-level cancellation (a Ctrl-C reaching a running
+  `sclpl run`) and did not ship a claimed fix: on Windows, `CTRL_C_EVENT`
+  cannot be delivered to a process outside the sender's own console process
+  group at all (confirmed empirically -- a `Popen.send_signal` to an
+  isolated child is silently a no-op), and `CTRL_BREAK_EVENT` -- the one
+  event that *can* target a separate group -- maps to `SIGBREAK`, which
+  Python does not auto-convert to `KeyboardInterrupt` the way it does
+  `SIGINT`, so an unhandled one is an immediate `STATUS_CONTROL_C_EXIT` with
+  no cleanup and no `EXIT_INTERRUPTED`. Registering a `SIGBREAK` handler
+  (`signal.signal(signal.SIGBREAK, signal.default_int_handler)`) did not
+  reliably fix this in testing against a real running workflow either --
+  the interaction with a blocked `ProactorEventLoop` wait needs more
+  investigation than fit this pass, so the attempted fix was backed out
+  rather than shipped half-verified. This is a real, currently-open platform
+  gap, not merely an untested one: a supervisor sending CTRL_BREAK for a
+  graceful shutdown on Windows today gets a hard, unrecorded kill instead
+  of sclpl's normal interrupted-with-cleanup path. `tests/unit/test_
+  completeness.py` already covers what a cancelled outcome *means*
+  (`Outcome(status="cancelled")` -> completeness `"unknown"`); what remains
+  unverified is the OS-signal-to-that-outcome path on Windows specifically.
