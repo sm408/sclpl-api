@@ -1,0 +1,8 @@
+[project]
+name = "api-reconciliation"
+
+[environments.default]
+
+[python.scripts.reconcile]
+path = "reconcile.py"
+sha256 = "a40bc1b6656c58f64b733d439ef64644137e8654e9bd7be6ce41d45c4b992f68"

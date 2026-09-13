@@ -1,0 +1,8 @@
+[project]
+name = "integration-regression-testing"
+
+[environments.default]
+
+[package]
+name = "integration-regression-testing"
+version = "1.0.0"

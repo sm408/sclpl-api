@@ -463,3 +463,378 @@ See [the decision log](DECISION-LOG.md) for implementation tradeoffs and evidenc
   planning, resume execution, and publication crash-recovery are all real,
   tested, and wired end to end through the CLI (`sclpl run --resume-from`,
   `sclpl runs resume-plan`, `sclpl runs recover-publication`).
+
+## Batch H
+
+- [x] H1 package manifest/build: new `sclpl/packages/build.py` bundles a project's
+  declared workflow/test directories, conventional `docs`/`schemas`/`fixtures`/
+  `plugins` directories, `[package.include]` globs, and locally-registered Python
+  scripts into one `.sclplpkg` zip archive. New `sclpl package build` CLI command
+  (`cli/package_cmd.py`). Accept criteria verified: two builds of unchanged content
+  are byte-identical (fixed ZIP timestamps, fixed `create_system`, sorted entries,
+  fixed compresslevel -- `test_build_is_byte_identical_across_repeated_builds`);
+  secrets (`.env*`, `*.pem`, `*.key`), hidden files/dirs, `__pycache__`, and
+  declared `[policy] output_roots` are excluded even when an `[package.include]`
+  glob would otherwise sweep them up (`test_build_excludes_*`). The archive embeds
+  a `PACKAGE.json` manifest listing every entry's own SHA-256 plus one aggregate
+  digest, so "did the content change" never requires re-downloading the archive to
+  check. ADR 0011 budgets `sclpl/packages` at 1,600 lines.
+- [x] H2 validation/install: new `sclpl/packages/install.py`. `validate()` checks a
+  package archive without extracting or executing anything from it: unsupported
+  schema, an undeclared or missing archive entry, a per-file digest mismatch
+  against the manifest (tamper/corruption detection), path traversal (`../`,
+  absolute, or drive-letter entry names), a symlink/device/FIFO/socket entry
+  (refused by its Unix mode bits; a mode with no type bits set -- the common case
+  for a plain `zipfile.writestr` -- is treated as an ordinary file, not refused),
+  a case-insensitive filename collision, and archive-bomb ceilings (entry count,
+  total uncompressed size, per-entry compression ratio). `install()` validates
+  first, extracts into a fresh staging directory, and only does one atomic
+  `Path.replace` into `<into>/<name>/<version>` -- a validation failure never
+  creates a staging directory at all, and any failure during extraction is
+  cleaned up before the exception propagates, so an existing good install (or no
+  install at all) is always what remains. Reinstalling the same name/version is
+  refused rather than silently overwritten. New `sclpl package validate` and
+  `sclpl package install` CLI commands. Compatibility (declared `sclpl` version
+  constraints) and capability-policy comparison against a prior install are H3's
+  concern, deferred until there is a "prior install" to compare against.
+- [x] H3 plugin lifecycle (inspect/verify/update/remove): new
+  `sclpl/packages/lifecycle.py` operates on the locked inventory H2's
+  `install()` built (`~/.sclpl/packages/<name>/<version>`). `list_installed`/
+  `describe` inspect it; `verify` re-hashes every installed file against its
+  own recorded manifest today, catching drift that happened *after*
+  installation (a corrupt/tampered install-time archive is H2's `validate`'s
+  job, not this). `diff` compares two installed versions' file listings
+  (added/removed/changed) for an explicit update diff. `remove` is
+  dependency-aware against a new `[package.requires]` project-manifest table
+  (name -> pinned version): removing a version currently pinned by the loaded
+  project is refused unless `--force`, so "no silent plugin upgrade during
+  run" and "a referenced version cannot disappear without a clear refusal"
+  both hold. New `sclpl package list/show/verify/remove/update` commands;
+  `update` installs a new version *alongside* any existing ones (never
+  removes or replaces silently) and prints the file diff against the
+  previously installed version. ADR 0012 budgets `cli` at 2,450 lines.
+- [x] H4 shared distribution (registry client): new `sclpl/packages/registry.py`.
+  A registry is one static `index.json` (schema, `packages.<name>.<version> ->
+  {digest, url}`) served from a local directory or an `https://` base -- a
+  client and documented hosting layout, not a new registry server. `fetch()`
+  downloads (or copies, for a local-directory base) the declared artifact into
+  a `~/.sclpl/registry-cache`, then hashes the downloaded bytes and compares
+  them against the index's declared digest before returning -- a registry
+  serving something other than what it advertised is refused, not trusted on
+  the strength of a successful download. `--offline` never contacts the
+  registry at all; a cache miss offline is a `CacheMiss` (exit 5), same as the
+  resource cache's own offline contract. A private HTTPS registry
+  authenticates with a bearer token read from `SCLPL_REGISTRY_TOKEN` --
+  credentials never enter the index, the cache, or a log line. New
+  `sclpl package pull NAME VERSION --registry BASE` CLI command (fetch, then
+  H2's `install`). Client-side trust-on-first-use pinning across registry
+  updates (detecting an index that changed what a name/version *used* to
+  point to) is out of scope for this pass -- "two clean workspaces install the
+  same pinned digest" is satisfied by good-faith fetch from one index, not by
+  a separate pinning ledger.
+- [x] H5 registry release workflow: new `sclpl/packages/release.py`. `build_index`
+  re-validates a directory of already-built `.sclplpkg` archives (H2's full
+  archive-safety check, so a malicious archive can never enter a published
+  index), stages them plus a generated `index.json` into an output directory,
+  and refuses two archives claiming the same name/version with different file
+  bytes rather than silently keeping whichever was scanned last (a rebuild with
+  identical bytes is fine and deduplicates). New `sclpl package release-index
+  SOURCE_DIR --out DIR` CLI command. Never uploads or publishes anything --
+  that stays an existing team CI/storage tool's job, kept explicit and separate
+  from build/install/pull. Bug caught by a round-trip test (stage an index,
+  then fetch it back through H4's client) and fixed before merge: the index's
+  digest field must be the archive *file's* bytes (what a client downloads and
+  `registry.fetch` verifies), not H1's internal per-file content digest used
+  for build determinism and update diffing -- the two are different notions
+  that happened to share a name. Verified end to end with the real CLI: staged
+  two real versions, then pulled one back through `sclpl package pull` against
+  the freshly staged directory.
+
+**Batch H complete** (H1-H5): package build, validated atomic install, lifecycle
+(list/show/verify/remove/update), a registry client, and a release/staging
+workflow are all real, tested, and wired end to end through the CLI (`sclpl
+package build/validate/install/list/show/verify/remove/update/pull/
+release-index`).
+
+## Batch I
+
+- [x] I1 cURL import: new `sclpl/importers/shell.py` tokenizes a copied `curl`
+  command into argv without ever invoking a shell -- POSIX (`shlex`-based,
+  handling `\`-continuation and both quote styles) and Windows (both `cmd`'s
+  `^`-continuation/`\"`-escaping and PowerShell's backtick-continuation/`` `" ``-
+  escaping normalize to one Windows-C-runtime argv parser). New
+  `sclpl/importers/curl.py` parses the resulting argv into data (method, URL,
+  headers, query, JSON/form body, file-upload fields as data) and renders one
+  complete, runnable `.sclpll` workflow. An `Authorization` header or `-u
+  user:pass` is extracted into a named `[auth.imported]` profile reference --
+  the credential value is returned once, in memory, for the CLI to tell the
+  operator to register themselves (`sclpl secret set NAME`); it is never
+  printed again, and never written into the generated workflow or manifest
+  text (verified by a dedicated test asserting the secret value is absent from
+  both). An unsupported curl option (`-o`, `-k`, `-x`, an unrecognized `-X`
+  method, ...) is reported as a diagnostic, never raised -- a partially
+  supported command still produces a working, if incomplete, import. New
+  `--from curl` option on the existing `sclpl import` command (additive, not a
+  new top-level command, since `import` already exists for registering plain
+  workflow files). Accept criterion verified for real, not just asserted:
+  every one of 6 representative curl shapes (GET, POST+JSON body, query
+  string, bearer auth, basic auth, multipart form) is rendered and then run
+  through `sclpl.run.preflight.preflight` in the test suite, and the CLI
+  command was exercised end to end against a real scratch project (import,
+  inspect the generated file, `sclpl validate` it). ADR 0013 budgets
+  `sclpl/importers` at 2,600 lines.
+- [x] I2 OpenAPI import: new `sclpl/importers/openapi.py`. Supports OpenAPI 3.x
+  JSON documents (YAML is a documented scope boundary, not silently missing --
+  it would need a new dependency); loads every path/method operation, resolves
+  `#/...` local `$ref`s, and refuses a non-local one outright (a remote URL or
+  sibling file) rather than fetching it -- disabling exactly the implicit-fetch
+  behavior this batch exists to prevent. `render()` renders one selected
+  operation (by `operationId`) as a complete `.sclpll` workflow: a required
+  path parameter becomes a `@var` the workflow documents as required via
+  `--var name=...`; a required query parameter with no schema default becomes
+  the same; a query/header parameter with a schema default is rendered as a
+  literal; a `requestBody`'s `application/json` schema becomes a `body` literal
+  built from its `example` or its properties' examples (recursively resolving
+  nested local `$ref`s); a `security` requirement becomes an `auth <scheme
+  name>` reference (no credential exists in a spec to extract, unlike I1).
+  Callbacks, links, non-JSON request bodies, and non-path/query/header
+  parameter locations are reported as diagnostics, never silently dropped.
+  New `--from openapi --operation OPERATION_ID` on the existing `sclpl import`
+  command. Imported schemas are used only to shape the generated request/body,
+  never fed into the E-series contract-snapshot system -- an unverified spec
+  claim is not a verified contract. Two real bugs (the request body's own
+  `$ref` was never resolved at all, so neither the local-ref-to-example path
+  nor the remote-ref refusal were ever reachable for a request body) were
+  caught by tests and fixed before merge. Accept criterion verified for real:
+  3 representative operations (path+query params, JSON body via a resolved
+  `$ref`, a bare required query param) are rendered and run through
+  `sclpl.run.preflight.preflight` in the test suite, and the CLI command was
+  exercised end to end against a real scratch project.
+- [x] I3 Postman import: new `sclpl/importers/postman.py`. Supports collection
+  format v2.1 (schema URL checked): recursively walks nested folders into
+  `"Folder/Subfolder/Request Name"`-named requests, so a request can be
+  selected unambiguously by `--request`. Postman's `{{variable}}` templating
+  is textually identical to SCLPLL's own interpolation, so a collection or
+  merged-in environment variable becomes a `@var` declaration and every
+  reference to it passes through unchanged -- no rewriting needed. A
+  pre-request or test script (`event`) is data here, never code: reported as
+  a diagnostic ("never executed"), never parsed as JavaScript or run --
+  verified by a test collection whose scripts would visibly misbehave if ever
+  evaluated. An environment variable marked `"type": "secret"` is never read
+  into the merged variable map at all (the dict comprehension's value
+  expression is never evaluated for a filtered-out entry, not merely
+  discarded after reading) -- only its name is reported as a diagnostic.
+  `request.auth` (bearer/basic/apikey) is extracted exactly as I1 extracts a
+  curl credential: a named `[auth.imported]` profile reference in the
+  workflow, the actual value returned once for the CLI to tell the operator
+  to register themselves. New `--from postman --request NAME [--environment
+  FILE]` on the existing `sclpl import` command; the near-identical
+  credential-reporting CLI logic across I1/I2/I3 was factored into one
+  `_report_import` helper rather than copied a third time. Accept criterion
+  verified for real: 4 representative requests (plain GET, JSON body, basic
+  auth, api-key auth) are rendered and run through
+  `sclpl.run.preflight.preflight` in the test suite, and the CLI command was
+  exercised end to end against a real scratch project (import, inspect the
+  generated file for the absence of the secret, `sclpl validate` it).
+- [x] I4 notification hooks: new `sclpl/notifications/` (config.py, delivery.py,
+  sink.py). `[notifications.<name>]` project manifest tables (kind =
+  webhook/slack/smtp, `on` = event names, `enabled`) are opt-in -- nothing
+  sends unless `enabled = true`. `NotificationSink` implements
+  `sclpl.render.reporter`'s `Sink` protocol and is appended via a new
+  `build_reporter(extra_sinks=...)` parameter, so it receives the exact same
+  already-redacted event stream every other sink does -- a notification
+  payload is `RunStarted`/`RunFinished`/failed-`StepFinished` event data
+  (status, counts, timings), never a raw response body. Delivery
+  (`deliver()`) retries up to 3 times with jittered backoff (reusing
+  `run/retry.py`'s `Clock` for a deterministic test clock) and never raises:
+  a `DeliveryReceipt` with `status="failed"` is the worst case, so a broken
+  notifier cannot rewrite the run's own exit code. Each attempt carries a
+  deterministic `Idempotency-Key` (hash of run id + notifier + event) a
+  receiver can use to dedupe a resend. Delivery is scheduled from `handle()`
+  (never blocking the reporter's pump) and awaited once, explicitly, by the
+  `run` command itself via `reporter.drain()` then `notification_sink.wait()`
+  -- `Sink.close()` is synchronous and cannot safely await anything, so it is
+  only a last-resort cancellation net. Verified for real: a local
+  `ThreadingHTTPServer` receiver (retry-until-success, and exhaustion-without-
+  raising), a monkeypatched `smtplib.SMTP` (connection-failure-then-recovery),
+  and a full `sclpl run` against a real scratch project with a live local
+  receiver confirming the exact JSON payload and idempotency key delivered.
+  Delivery is explicitly best effort -- nothing here retries across process
+  restarts; durable post-process delivery needs the deferred operations layer
+  this batch does not build. ADR 0014 budgets `notifications` at 500 lines.
+- [x] I5 CI output and templates: new `sclpl/testing/report.py` renders already-
+  computed `sclpl test run` outcomes (never re-running anything) as JUnit XML,
+  a stable schema-versioned JSON summary, and a self-contained HTML report (no
+  external assets). New `--junit`/`--json`/`--html` options on `sclpl test
+  run`. A real XML-escaping bug was caught by a test and fixed before merge:
+  `xml.sax.saxutils.escape`'s defaults don't escape `"`, which corrupted any
+  double-quoted XML *attribute* whose content itself contained a quote. New
+  `sclpl project ci-template` command (under the existing `project` app)
+  writes a ready-to-use, offline GitHub Actions workflow: checkout, install,
+  `workflow lock --check` (stale lock -> `EXIT_VALIDATION`), `project check`,
+  `test run --junit/--json/--html` (fixture/contract drift -> `EXIT_STEP_
+  FAILED`), then uploads the three reports as build artifacts. Verified the
+  template contains no credential-shaped text and no live network address.
+  Verified for real: the full CLI pipeline (`sclpl test run --junit ... --json
+  ... --html ...` via a real subprocess against a scratch project) for both a
+  passing and a genuinely failing test, and the generated CI YAML inspected
+  for structural correctness. ADR 0015 budgets `cli` at 2,700 lines.
+
+**Batch I complete** (I1-I5): curl/OpenAPI/Postman import, opt-in webhook/
+Slack/SMTP notifications, and JUnit/JSON/HTML test reporting plus an offline
+CI template are all real, tested, and wired end to end through the CLI.
+
+- [x] J1 Business acceptance examples: all five journeys from section 7, each
+  under `examples/journeys/NN-name/`, each with a recorded offline fixture
+  for the happy path, a second fixture for its required negative case, a
+  README, and automated coverage in `tests/integration/test_journeys.py`
+  (11 tests). 1. API-to-CSV reporting: fetch, `assert_schema` +
+  `assert_no_nulls`, `save_csv`; negative case is a field silently dropped
+  from the API response, caught before the CSV is written. 2. API
+  reconciliation: API orders joined against a local ledger CSV by a
+  registered Python script (`reconcile.py`, hash-pinned via
+  `[python.scripts.reconcile]`), producing a lineage column
+  (`matched`/`mismatch`/`api_only`/`ledger_only`); negative case is a
+  duplicate ledger key, caught by `assert_unique` before either side is
+  joined. 3. API quality monitoring: `assert_schema` wired to a
+  `step_failed` webhook notifier; negative case is a breaking rename
+  (`total` -> `amount`), and the notification is exercised both delivered
+  and undeliverable to prove delivery status never changes the run's exit
+  code. Building this journey led to adding CLI-level logging of every
+  notification delivery receipt (`sclpl/cli/workflow_cmd.py` -- an `info`/
+  `warning` log line per receipt after a run finishes), which previously
+  went nowhere once `notification_sink.wait()` returned; see
+  `tests/integration/test_notifications_cli.py`. 4. Lightweight ingestion:
+  `[outputs] publish = "validated"` (SPEC 3.5) staging a Parquet write
+  behind a later `assert_rowcount` gate; negative case proves the stronger
+  property directly -- a previously-published three-row file is left
+  byte-for-byte untouched by a later run that only produced two rows, not
+  merely "no file appears the first time." 5. Integration regression
+  testing: a workflow combining `secret()`, `retry`, and `paginate cursor`,
+  packaged with `sclpl package build`, installed elsewhere with `sclpl
+  package install`, and replayed from the installed copy against its
+  bundled fixture -- proving the package/install/replay pipeline holds
+  together end to end, not just each piece in isolation; negative case is
+  the installed fixture directory renamed away, failing the first request
+  before pagination, shaping, or the writer step ever run.
+  Two real, previously-uncaught bugs surfaced while wiring these up and
+  were fixed: (a) `examples/13-python-script.py`'s pinned SHA-256 broke on
+  every Windows checkout because git's default `core.autocrlf` silently
+  rewrote its LF line endings to CRLF; fixed with a root `.gitattributes`
+  (`*.py text eol=lf`) rather than touching the hash or the check. (b)
+  `@var token = "{{secret('x')}}"` (used in
+  `examples/11-cache-retry-and-secret.sclpll`) never actually resolves --
+  `{{...}}` expands once, so storing template syntax in a `@var` just
+  substitutes it back out as literal text later, confirmed by a live
+  request that received the literal string `Bearer {{secret('api_token')}}`
+  as its header. No test had ever run that example against a live or
+  replayed server. Fixed by calling `secret()` at the point of use instead
+  of through a `@var` indirection, in both that example and Journey 5's own
+  workflow.
+- [x] J2 Cross-platform and security matrix: CI (`.github/workflows/ci.yml`)
+  now runs the full suite on `ubuntu-latest`/`windows-latest`/`macos-latest`
+  x Python 3.11/3.13 (previously ubuntu-only), plus a `bare-install` job
+  that installs with no optional extra at all and checks the CLI still
+  starts and a small sentinel suite still passes. Lint/type/budget stay one
+  ubuntu job since neither is platform-dependent. New
+  `tests/unit/test_state_secrets.py` covers `sclpl/state/secrets.py`'s
+  three-backend selection (keyring present-and-working, present-but-
+  unusable/no-daemon, absent; encrypted-file when keyring is absent;
+  `NoSecureStorage` when neither is available) via `monkeypatch`-simulated
+  imports rather than whatever happens to be installed on the machine
+  running the tests -- this file had no test coverage at all before, despite
+  the module's own docstring calling its fail-closed behavior "the whole
+  point." Same gap, same fix, for the pandas-optional table backend
+  (`tests/unit/test_tables.py`, one new test for `MissingExtra`). Both were
+  verified against a real simulated bare environment (pandas/keyring/
+  cryptography/openpyxl blocked in-process) in addition to the normal one,
+  confirming the CLI starts and the sentinels still pass either way. Cross-
+  platform PTY handling was already correct: `tests/pty/test_terminal_
+  restore.py` already skips on a platform with no `pty` module, and
+  `tests/pty/test_live_region.py` already exercises the same code paths
+  against a captured stream instead -- nothing to fix there.
+- [x] J3 Performance and fault validation: three of the four fault scenarios
+  named in the plan already had substantial, passing coverage from earlier
+  batches and needed no new work -- verified rather than assumed by actually
+  running them: two-process destination races (`tests/integration/test_
+  output_locking.py`, `tests/unit/test_locking.py`), late-validation
+  publication withholding (`tests/integration/test_publication_e2e.py`,
+  `tests/unit/test_publication.py`), all-format fidelity fixtures (`tests/
+  unit/test_format_fidelity.py`), and partial-result/completeness policy
+  (`tests/{unit,integration}/test_completeness.py`, `test_require_complete_
+  e2e.py`) -- 67 tests, all green. New: `scripts/benchmark.py`, a runnable
+  (not CI-gating, per the plan's own "these are proposed engineering gates,
+  not measured performance claims") harness for the five budgets in section
+  8: a synthetic N-step workflow, paginated-throughput, streaming peak
+  memory (via `tracemalloc`, so it runs the same on every OS), 10,000
+  retained run-record query latency, and replay dispatch cost. `--quick`
+  for a fast sanity check, `--out` to record a JSON result (workload,
+  Python/platform, five numbers) to compare a later run against, matching
+  the plan's own "store workload, hardware, library versions, and results."
+  Full run took ~1m40s locally; not wired into default CI for the same
+  reason the plan puts the "expensive... performance matrix" only "at
+  integration gates and on release candidates," not every push.
+  Investigated real process-level cancellation (a Ctrl-C reaching a running
+  `sclpl run`) and did not ship a claimed fix: on Windows, `CTRL_C_EVENT`
+  cannot be delivered to a process outside the sender's own console process
+  group at all (confirmed empirically -- a `Popen.send_signal` to an
+  isolated child is silently a no-op), and `CTRL_BREAK_EVENT` -- the one
+  event that *can* target a separate group -- maps to `SIGBREAK`, which
+  Python does not auto-convert to `KeyboardInterrupt` the way it does
+  `SIGINT`, so an unhandled one is an immediate `STATUS_CONTROL_C_EXIT` with
+  no cleanup and no `EXIT_INTERRUPTED`. Registering a `SIGBREAK` handler
+  (`signal.signal(signal.SIGBREAK, signal.default_int_handler)`) did not
+  reliably fix this in testing against a real running workflow either --
+  the interaction with a blocked `ProactorEventLoop` wait needs more
+  investigation than fit this pass, so the attempted fix was backed out
+  rather than shipped half-verified. This is a real, currently-open platform
+  gap, not merely an untested one: a supervisor sending CTRL_BREAK for a
+  graceful shutdown on Windows today gets a hard, unrecorded kill instead
+  of sclpl's normal interrupted-with-cleanup path. `tests/unit/test_
+  completeness.py` already covers what a cancelled outcome *means*
+  (`Outcome(status="cancelled")` -> completeness `"unknown"`); what remains
+  unverified is the OS-signal-to-that-outcome path on Windows specifically.
+- [x] J4 Documentation and migration: `python -m sclpl docs build --check` was
+  already correct (no expression/function drift from Batches H/I -- they
+  added CLI surface and Python modules, not new `@function`-registered
+  operators) but was not actually gated in CI; added as a `static`-job step.
+  README's Command Surface table predated `sclpl package`, `sclpl test`,
+  `sclpl project`, and `[notifications.*]` entirely -- verified against a
+  real `sclpl --help`/subcommand `--help` rather than guessed, then updated,
+  plus a new Examples entry for all five `examples/journeys/`. `docs/
+  limitations.md` gained the J3 Windows CTRL_BREAK/SIGBREAK finding, in the
+  same voice as its existing "explicit follow-up areas, not silent stubs"
+  entries. `SPEC.md` (whose own Milestones section ends at M9, predating
+  the unified upgrade plan entirely) gained a short "After M9" pointer to
+  `UNIFIED-UPGRADE-PLAN.md`/this file rather than a line-by-line rewrite of
+  a 699-line planning document whose command list was already stale before
+  this session for reasons unrelated to Batches H-J. Migration and format-
+  rejection requirements ("old history upgrades", "new formats reject older
+  incompatible readers clearly") were verified rather than assumed: all 6
+  of `tests/unit/test_migrations.py` pass, covering exactly those two
+  properties. "Verify examples execute as well as parse": the full example
+  and journey suite (`test_playbooks.py` + `test_journeys.py`, 43 tests)
+  reran clean after every doc edit above. ADRs needed no update -- nothing
+  in J1-J4 added `sclpl/` package code, so no budget moved.
+- [x] J5 Release artifact verification: version set once, at the user's
+  direction, to `1.0.2` (`pyproject.toml`, `sclpl/__init__.py`; the README
+  install URL and a new `CHANGELOG.md` entry updated to match). `build`
+  was not a declared dev dependency (the plan's own callout: "not currently
+  a declared development dependency") -- added, then used for real: built
+  both `sclpl-1.0.2-py3-none-any.whl` and `sclpl-1.0.2.tar.gz` via `python
+  -m build`. Verified the wheel contains all four bundled plugin manifests
+  (`sclpl/plugins_bundled/*/plugin.toml`) rather than assuming hatchling's
+  default inclusion covers them. Installed the wheel into a genuinely
+  clean, from-scratch venv (not this dev environment, which already has
+  every optional extra) and, from a directory with no relationship to the
+  checkout: confirmed `sclpl --version` reports 1.0.2, `sclpl plugin list`
+  loads all four bundled plugins from the installed package, `sclpl doctor`
+  correctly reports the optional extras as absent, `sclpl init` scaffolds a
+  project, a representative workflow (`validate` then `run`) executes and
+  writes its output, and a full `package build` -> `install` -> `verify`
+  round trip succeeds against the newly-scaffolded project. Repeated the
+  install-and-smoke-test from the sdist in a second clean venv (`sclpl
+  --version`, `plugin list`) to confirm it is not wheel-only. Full unit
+  suite (1055 tests), lint, and the line budget all rerun green after the
+  version bump. Squashing this branch's history and merging it to `main`
+  is a separate, explicit decision left to the user -- not taken here.

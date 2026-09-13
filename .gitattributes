@@ -1,0 +1,6 @@
+# Python scripts can be pinned by content hash (see `[python.scripts.*]` in a
+# project manifest, sclpl/project/scripts.py). A hash pinned against LF content
+# must not silently become CRLF on a Windows checkout, or every such script
+# fails its own tamper check for no reason. Force LF for the files that are
+# ever hashed this way.
+*.py text eol=lf

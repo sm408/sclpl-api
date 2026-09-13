@@ -69,3 +69,39 @@ def test_changed_without_a_git_repository_still_runs_everything(tmp_path: Path) 
     result = run_cli("test", "run", "--changed", cwd=tmp_path)
     assert result.returncode == 0, result.stderr
     assert "passed" in result.stderr
+
+
+def test_junit_json_and_html_reports_are_written_for_a_passing_run(tmp_path: Path) -> None:
+    _project(tmp_path)
+    result = run_cli(
+        "test",
+        "run",
+        "--junit",
+        "report.xml",
+        "--json",
+        "report.json",
+        "--html",
+        "report.html",
+        cwd=tmp_path,
+    )
+    assert result.returncode == 0, result.stderr
+
+    payload = json.loads((tmp_path / "report.json").read_text(encoding="utf-8"))
+    assert payload["summary"] == {"total": 1, "passed": 1, "failed": 0}
+
+    junit = (tmp_path / "report.xml").read_text(encoding="utf-8")
+    assert 'tests="1" failures="0"' in junit
+
+    report_html = (tmp_path / "report.html").read_text(encoding="utf-8")
+    assert "1/1 passed" in report_html
+
+
+def test_reports_record_a_real_failure(tmp_path: Path) -> None:
+    snapshot = _project(tmp_path)
+    snapshot.write_text("999", encoding="utf-8")
+    result = run_cli("test", "run", "--json", "report.json", cwd=tmp_path)
+    assert result.returncode != 0
+
+    payload = json.loads((tmp_path / "report.json").read_text(encoding="utf-8"))
+    assert payload["summary"]["failed"] == 1
+    assert payload["cases"][0]["passed"] is False

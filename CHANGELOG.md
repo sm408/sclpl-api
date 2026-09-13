@@ -5,6 +5,58 @@ release lineage begins at `v1.0.0`.
 
 ## Unreleased
 
+## 1.0.2
+
+- Added: `sclpl package build|validate|install|list|show|verify|remove|update|
+  pull|release-index` -- a content-addressed, deterministic package format
+  (fixed timestamps, sorted entries, a manifest of per-file and aggregate
+  SHA-256 digests) for bundling a project's workflows, tests, fixtures,
+  schemas, docs, and plugins into one archive, installing it elsewhere, and
+  verifying it later.
+- Added: `sclpl import --from curl|openapi|postman` renders a saved curl
+  command, one operation from a local OpenAPI 3.x document, or one request
+  from a local Postman v2.1 collection into a workflow. Extracted
+  credentials become named `[auth.*]` references, never literal values in
+  the generated workflow.
+- Added: `[notifications.<name>]` -- opt-in webhook, Slack webhook, or SMTP
+  notifications on `run_started`, `run_finished`, or `step_failed`, with
+  bounded retries and a delivery receipt logged after every run
+  (`info`/`warning`) that never changes the run's own exit code.
+- Added: `sclpl test list|validate|run` (project `*.test.toml` manifests,
+  executed offline against a fixture) gained `--junit`/`--json`/`--html`
+  report output, and `sclpl project ci-template` writes a ready-to-use,
+  offline GitHub Actions workflow for a generated project.
+- Added: five complete, runnable business-acceptance examples under
+  `examples/journeys/`, each with a recorded offline fixture, a required
+  failure case, and automated test coverage -- API-to-CSV reporting, API
+  reconciliation, API quality monitoring, lightweight ingestion under
+  validated publish, and package/install/replay integration regression
+  testing.
+- Fixed: `examples/13-python-script.py`'s pinned SHA-256 broke on every
+  Windows checkout, because git's default `core.autocrlf` silently rewrote
+  its LF line endings to CRLF before the digest was ever checked. Added a
+  root `.gitattributes` (`*.py text eol=lf`) instead of touching the hash.
+- Fixed: `@var name = "{{secret('x')}}"` never actually resolves --
+  `{{...}}` expands once, so a `@var` holding template syntax is substituted
+  back out as literal text rather than re-evaluated. `examples/11-cache-
+  retry-and-secret.sclpll` used exactly this pattern and had never been run
+  against a live or replayed server; fixed by calling `secret()` at the
+  point of use instead.
+- Changed: CI now runs the full suite on Linux, Windows, and macOS (was
+  Linux-only), plus a bare-install job with no optional extra at all, and
+  gates on the generated reference documentation staying current.
+- Added: `scripts/benchmark.py`, a runnable (not CI-gating) harness for the
+  performance budgets proposed alongside the packaging/import/notification
+  work -- synthetic workflow throughput, paginated-fetch throughput,
+  streaming peak memory, retained run-history query latency, and replay
+  dispatch cost.
+- Known limitation: on Windows, `CTRL_BREAK_EVENT` -- the only console
+  control event that can reach a process outside the sender's own console
+  group -- maps to `SIGBREAK`, which Python does not auto-raise as
+  `KeyboardInterrupt`. A supervisor using it for a graceful shutdown
+  currently gets a hard, unrecorded process kill rather than sclpl's normal
+  interrupted-with-cleanup exit path. A local Ctrl-C is unaffected.
+
 ## 1.0.1
 
 - Built on the retained `v1.0.0` TUI-only release lineage; this is the first

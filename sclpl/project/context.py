@@ -52,6 +52,11 @@ class ProjectContext:
         return [self.resolve_path(item) for item in paths]
 
     @property
+    def package(self) -> dict[str, Any]:
+        """The optional `[package]` table, declaring how `package build` bundles this project."""
+        return _table(self.manifest, "package")
+
+    @property
     def test_dirs(self) -> list[Path]:
         """Directories containing versioned project test manifests."""
         paths = _table(self.manifest, "tests").get("paths", ["tests"])
@@ -156,6 +161,7 @@ def _validate(raw: dict[str, Any], path: Path) -> None:
         "notifications",
         "plugins",
         "python",
+        "package",
     }
     unknown = set(raw) - allowed
     if unknown:
@@ -181,6 +187,7 @@ def _validate(raw: dict[str, Any], path: Path) -> None:
             raise ValidationError("plugins must map names to tables", where=str(path))
     _validate_plugin_tables(_table(raw, "plugins"), path)
     _validate_python(_table(raw, "python"), path)
+    _validate_package(_table(raw, "package"), path)
 
 
 def _table(value: dict[str, Any], name: str) -> dict[str, Any]:
@@ -222,6 +229,31 @@ def _validate_plugin_tables(plugins: dict[str, Any], path: Path) -> None:
             visit(child, name)
 
     visit(plugins)
+
+
+def _validate_package(package: dict[str, Any], path: Path) -> None:
+    """Keep package-build declarations optional but well-shaped when present."""
+    if not package:
+        return
+    allowed = {"name", "version", "include", "requires"}
+    unknown = set(package) - allowed
+    if unknown:
+        raise ValidationError(f"unknown package key {sorted(unknown)[0]!r}", where=str(path))
+    if "name" in package and not isinstance(package["name"], str):
+        raise ValidationError("package.name must be a string", where=str(path))
+    if "version" in package and not isinstance(package["version"], str):
+        raise ValidationError("package.version must be a string", where=str(path))
+    include = package.get("include", [])
+    if not isinstance(include, list) or not all(isinstance(item, str) for item in include):
+        raise ValidationError("package.include must be an array of paths", where=str(path))
+    requires = package.get("requires", {})
+    if not isinstance(requires, dict) or not all(
+        isinstance(k, str) and isinstance(v, str) for k, v in requires.items()
+    ):
+        raise ValidationError(
+            "package.requires must map installed package names to pinned versions",
+            where=str(path),
+        )
 
 
 def _validate_python(python: dict[str, Any], path: Path) -> None:

@@ -1,0 +1,14 @@
+{
+  "body_digest": "5e66de29d2d3974b3c513a7aeb4f1c254d7e68a07c3b7f7a3d0059497c497319",
+  "headers": {
+    "content-length": "75",
+    "content-type": "application/json",
+    "date": "Sun, 13 Sep 2026 12:34:04 GMT",
+    "server": "BaseHTTP/0.6 Python/3.11.5"
+  },
+  "method": "GET",
+  "occurrence": 0,
+  "schema": 1,
+  "status": 200,
+  "url": "http://127.0.0.1:8905/records"
+}

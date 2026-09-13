@@ -384,35 +384,36 @@ def test_writing_to_a_port_that_is_not_declared_is_caught_before_the_run(
     assert "report" in result.stderr
 
 
+@pytest.mark.parametrize(
+    ("name", "paginate_clause", "expected"),
+    [
+        pytest.param(
+            "paged",
+            "paginate offset param=offset",
+            ("page size", "size="),
+            id="offset-with-no-page-size",
+        ),
+        pytest.param(
+            "nocursor",
+            "paginate cursor param=cursor",
+            ("cursor_path", "link_header"),
+            id="cursor-with-no-path",
+        ),
+    ],
+)
 def test_a_paginator_missing_what_it_needs_is_caught_before_running(
-    tmp_path: Path, server_url: str
+    name: str, paginate_clause: str, expected: tuple[str, str], tmp_path: Path, server_url: str
 ) -> None:
     """Offset paging with no page size cannot advance, and fails like a short source."""
-    path = tmp_path / "paged.sclpll"
+    path = tmp_path / f"{name}.sclpll"
     path.write_text(
-        f"@workflow paged\n\n@step fetch\n  get {server_url}/json\n"
-        "  paginate offset param=offset\n",
+        f"@workflow {name}\n\n@step fetch\n  get {server_url}/json\n  {paginate_clause}\n",
         encoding="utf-8",
     )
     result = run_cli("validate", str(path))
     assert result.returncode == EXIT_VALIDATION
-    assert "page size" in result.stderr
-    assert "size=" in result.stderr
-
-
-def test_a_cursor_paginator_with_no_path_is_caught_before_running(
-    tmp_path: Path, server_url: str
-) -> None:
-    path = tmp_path / "nocursor.sclpll"
-    path.write_text(
-        f"@workflow nocursor\n\n@step fetch\n  get {server_url}/json\n"
-        "  paginate cursor param=cursor\n",
-        encoding="utf-8",
-    )
-    result = run_cli("validate", str(path))
-    assert result.returncode == EXIT_VALIDATION
-    assert "cursor_path" in result.stderr
-    assert "link_header" in result.stderr
+    for substring in expected:
+        assert substring in result.stderr
 
 
 # -- M6: a paginated source fanning out into a bounded loop ------------------------

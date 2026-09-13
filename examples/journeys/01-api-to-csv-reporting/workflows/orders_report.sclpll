@@ -1,0 +1,15 @@
+@workflow orders_report "Fetch orders, validate their shape, and publish a CSV report"
+
+@var base = "https://api.example.invalid"
+
+@output report:csv
+
+@step fetch_orders
+  get {{base}}/orders
+  assert @fetch_orders.status == 200
+
+@step validated
+  let assert_no_nulls(assert_schema(@fetch_orders.body, {"id": "integer", "customer": "string", "total": "integer"}), "total")
+
+@step write_report -> report
+  save_csv @validated

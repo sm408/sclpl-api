@@ -640,6 +640,20 @@ Do these in order. Each is independently demonstrable.
 - [x] `doctor`, completions, `docs build --check` drift gate, four playbooks with runnable examples, `concepts.md`
 - **Exit:** met — `test_a_new_user_gets_from_the_readme_to_a_csv` types every command the README gives, in order, and ends with 30 rows across three pages
 
+### After M9 — the unified upgrade plan
+
+M9 was this document's last planned milestone; everything since is tracked as
+Batches A-J in `UNIFIED-UPGRADE-PLAN.md`, with what actually shipped (including
+real bugs caught and fixed along the way) recorded in `UPGRADE-PROGRESS.md` in
+this same directory. In command-surface terms, that added `sclpl package`
+(build/validate/install/list/show/verify/remove/update/pull/release-index),
+`sclpl import --from curl|openapi|postman`, `[notifications.*]` (webhook/Slack/
+SMTP, wired to `run_started`/`run_finished`/`step_failed`), `sclpl test`
+(list/validate/run, with `--junit`/`--json`/`--html`), and `sclpl project
+ci-template` -- the Commands block above predates all of it and should not be
+read as the current surface; `sclpl --help` and the README's Command Surface
+table are.
+
 ---
 
 ## 18. Testing requirements

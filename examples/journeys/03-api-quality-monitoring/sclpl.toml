@@ -1,0 +1,10 @@
+[project]
+name = "api-quality-monitoring"
+
+[environments.default]
+
+[notifications.quality_alert]
+kind = "webhook"
+enabled = true
+on = ["step_failed"]
+url = "http://127.0.0.1:8903/notify"

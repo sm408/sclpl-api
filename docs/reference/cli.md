@@ -24,6 +24,7 @@
 | `sclpl completion` | Print a shell completion script. |
 | `sclpl contract` |  |
 | `sclpl plugin` |  |
+| `sclpl package` |  |
 | `sclpl project` |  |
 | `sclpl env` |  |
 | `sclpl resource` |  |

@@ -1,0 +1,7 @@
+[project]
+name = "lightweight-ingestion"
+
+[environments.default]
+
+[outputs]
+publish = "validated"
