@@ -1,0 +1,18 @@
+@workflow quality_check "Monitor the orders API for a breaking schema change"
+
+@var base = "https://api.example.invalid"
+
+@output report:json
+
+@step fetch_orders
+  get {{base}}/orders
+  assert @fetch_orders.status == 200
+
+@step contract_check
+  let assert_schema(@fetch_orders.body, {"id": "integer", "customer": "string", "total": "integer"})
+
+@step summary
+  let {"checked_rows": count(@contract_check), "status": "ok"}
+
+@step write_report -> report
+  save_json @summary

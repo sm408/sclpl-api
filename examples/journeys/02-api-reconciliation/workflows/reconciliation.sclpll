@@ -1,0 +1,28 @@
+@workflow reconciliation "Reconcile API orders against the accounting ledger"
+
+@var base = "https://api.example.invalid"
+@var ledger_path = "fixtures/ledger.csv"
+
+@output report:json
+
+@step api_orders
+  get {{base}}/orders
+  assert @api_orders.status == 200
+
+@step api_checked
+  let assert_unique(@api_orders.body, "id")
+
+@step ledger
+  read_csv {{ledger_path}}
+
+@step ledger_checked
+  let assert_unique(@ledger, "id")
+
+@step reconcile_input
+  let {"api": @api_checked, "ledger": @ledger_checked}
+
+@step reconciled
+  python "reconcile" input=@reconcile_input
+
+@step write_report -> report
+  save_json @reconciled

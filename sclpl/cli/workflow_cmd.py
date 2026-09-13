@@ -20,9 +20,12 @@ from sclpl.catalog import resolve as catalog
 from sclpl.cli.options import options_of
 from sclpl.errors import EXIT_INTERRUPTED, EXIT_USAGE, EXIT_VALIDATION, SclplError
 from sclpl.ext.resources import display_resource_uri, resource_provider, resource_scheme
+from sclpl.notifications import config as notification_config
+from sclpl.notifications.sink import NotificationSink
 from sclpl.project import context as project_context
 from sclpl.project import identity, lock
 from sclpl.project import scripts as project_scripts
+from sclpl.render.events import LogRecord
 from sclpl.render.reporter import build_reporter
 from sclpl.run import compile_json
 from sclpl.run.ir import WorkflowDoc
@@ -174,8 +177,8 @@ def run(
         resource_cache_require_hit=resource_policy.require_hit,
     )
     doc = located.doc
+    resolved_project = project_context.load()
     if locked:
-        resolved_project = project_context.load()
         if resolved_project is None:
             typer.echo("--locked requires a project; run sclpl init first", err=True)
             raise typer.Exit(EXIT_VALIDATION)
@@ -230,6 +233,9 @@ def run(
         resource_base=located.origin_uri,
     )
     globals_ = options_of(ctx)
+    notification_sink = _notification_sink(
+        resolved_project, run_id=options.run_id, workflow=doc.name
+    )
     reporter = build_reporter(
         verbosity=globals_.verbosity,
         json_mode=globals_.json_mode,
@@ -240,11 +246,36 @@ def run(
         log_path=db.default_root() / "logs" / f"{options.run_id}.ndjson"
         if options.record
         else None,
+        extra_sinks=(notification_sink,) if notification_sink is not None else (),
     )
 
     async def go() -> int:
         async with reporter:
             result = await run_workflow(doc, options, reporter)
+            # I4: every event through RunFinished has reached notification_sink's
+            # handle() (which only schedules delivery) before we await it here --
+            # Sink.close(), called synchronously by Reporter.aclose(), cannot
+            # safely await anything itself.
+            await reporter.drain()
+            if notification_sink is not None:
+                receipts = await notification_sink.wait()
+                # Delivery is best effort and never rewrites `result.exit_code` (I4):
+                # a webhook nobody can reach must not turn a passing run into a
+                # failing one, or a failing run into a silently passing one. It is
+                # still recorded, not merely swallowed, so an operator watching this
+                # run's log can see a notification never went out.
+                for receipt in receipts:
+                    detail = f": {receipt.error}" if receipt.error else ""
+                    reporter.emit(
+                        LogRecord(
+                            level="info" if receipt.status == "delivered" else "warning",
+                            message=(
+                                f"notification {receipt.name}: {receipt.status} "
+                                f"in {receipt.attempts} attempt(s){detail}"
+                            ),
+                        )
+                    )
+                await reporter.drain()
             return result.exit_code
 
     try:
@@ -472,6 +503,25 @@ def _new_run_id() -> str:
     import time
 
     return db.run_id("run", time.perf_counter())
+
+
+def _notification_sink(
+    resolved_project: project_context.ProjectContext | None, *, run_id: str, workflow: str
+) -> NotificationSink | None:
+    """Build I4's sink from `[notifications.*]`, or None with nothing configured.
+
+    A malformed `[notifications.*]` table fails the run at startup, the same
+    way a malformed `[policy]` or `[auth]` table does elsewhere -- silently
+    ignoring a typo'd notification config would look like sending worked.
+    """
+    if resolved_project is None:
+        return None
+    configs = notification_config.parse(
+        resolved_project.manifest, where=str(resolved_project.manifest_path)
+    )
+    if not any(config.enabled for config in configs):
+        return None
+    return NotificationSink(configs, run_id=run_id, workflow=workflow)
 
 
 def _load(target: str) -> WorkflowDoc:

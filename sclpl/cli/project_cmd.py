@@ -28,6 +28,56 @@ paths = ["workflows"]
 base_url = "https://example.invalid"
 """
 
+#: I5: an offline CI template. Every step here runs without network access or a
+#: credential -- `sclpl test run` executes fixtures, never a live request, and
+#: `workflow lock --check`/`project check` are pure local reads. Fixture/contract
+#: drift (a real response no longer matching what a test expects) fails the test
+#: step with EXIT_STEP_FAILED; a stale lock fails the lock step with
+#: EXIT_VALIDATION -- both meaningful, distinct exit codes rather than one
+#: generic failure.
+_CI_TEMPLATE = """name: sclpl checks
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install
+        run: python -m pip install sclpl
+
+      - name: Verify workflow locks are current
+        run: sclpl workflow lock --check
+
+      - name: Verify project configuration
+        run: sclpl project check
+
+      - name: Run project tests (offline, fixture-based)
+        run: >
+          sclpl test run
+          --junit test-results.xml
+          --json test-results.json
+          --html test-results.html
+
+      - name: Upload test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sclpl-test-reports
+          path: |
+            test-results.xml
+            test-results.json
+            test-results.html
+"""
+
 
 def register(root: typer.Typer) -> None:
     root.command("init", help="Create a project without overwriting files.")(init)
@@ -58,6 +108,30 @@ def init(
             encoding="utf-8",
         )
     typer.echo(f"initialized {root}")
+
+
+@project_app.command("ci-template")
+def ci_template(
+    out: Annotated[
+        Path, typer.Option("--out", help="Where to write it.")
+    ] = Path(".github/workflows/sclpl-ci.yml"),
+    overwrite: Annotated[
+        bool, typer.Option("--overwrite", help="Replace an existing file.")
+    ] = False,
+) -> None:
+    """Write a ready-to-use, offline GitHub Actions workflow for this project.
+
+    Every step runs without network access or a credential: `sclpl test run`
+    executes fixtures rather than a live request, and `workflow lock --check`/
+    `project check` are pure local reads. Fixture/contract drift fails with
+    `EXIT_STEP_FAILED`; a stale lock fails with `EXIT_VALIDATION` -- distinct,
+    meaningful exit codes rather than one generic failure.
+    """
+    if out.exists() and not overwrite:
+        raise ValidationError(f"{out} already exists", remedies=["pass --overwrite to replace it"])
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(_CI_TEMPLATE, encoding="utf-8")
+    typer.echo(f"wrote {out}", err=True)
 
 
 @project_app.command("check")
