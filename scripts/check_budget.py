@@ -31,7 +31,7 @@ PACKAGE = ROOT / "sclpl"
 # which grows with the language surface, while `expr` proper is the machinery that
 # reads it. Holding them to one number would let either hide growth in the other.
 BUDGETS: dict[str, int] = {
-    "cli": 2600,
+    "cli": 2700,
     "render": 1300,
     "catalog": 500,
     "contracts": 700,
@@ -52,7 +52,7 @@ BUDGETS: dict[str, int] = {
     "notifications": 500,
 }
 
-TOTAL_BUDGET = 26620
+TOTAL_BUDGET = 26720
 
 _HAS_DOCSTRING = (ast.Module, ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef)
 

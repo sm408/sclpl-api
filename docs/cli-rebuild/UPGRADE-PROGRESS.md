@@ -662,4 +662,24 @@ release-index`).
   Delivery is explicitly best effort -- nothing here retries across process
   restarts; durable post-process delivery needs the deferred operations layer
   this batch does not build. ADR 0014 budgets `notifications` at 500 lines.
-- [ ] I5 CI output and templates: not started.
+- [x] I5 CI output and templates: new `sclpl/testing/report.py` renders already-
+  computed `sclpl test run` outcomes (never re-running anything) as JUnit XML,
+  a stable schema-versioned JSON summary, and a self-contained HTML report (no
+  external assets). New `--junit`/`--json`/`--html` options on `sclpl test
+  run`. A real XML-escaping bug was caught by a test and fixed before merge:
+  `xml.sax.saxutils.escape`'s defaults don't escape `"`, which corrupted any
+  double-quoted XML *attribute* whose content itself contained a quote. New
+  `sclpl project ci-template` command (under the existing `project` app)
+  writes a ready-to-use, offline GitHub Actions workflow: checkout, install,
+  `workflow lock --check` (stale lock -> `EXIT_VALIDATION`), `project check`,
+  `test run --junit/--json/--html` (fixture/contract drift -> `EXIT_STEP_
+  FAILED`), then uploads the three reports as build artifacts. Verified the
+  template contains no credential-shaped text and no live network address.
+  Verified for real: the full CLI pipeline (`sclpl test run --junit ... --json
+  ... --html ...` via a real subprocess against a scratch project) for both a
+  passing and a genuinely failing test, and the generated CI YAML inspected
+  for structural correctness. ADR 0015 budgets `cli` at 2,700 lines.
+
+**Batch I complete** (I1-I5): curl/OpenAPI/Postman import, opt-in webhook/
+Slack/SMTP notifications, and JUnit/JSON/HTML test reporting plus an offline
+CI template are all real, tested, and wired end to end through the CLI.
