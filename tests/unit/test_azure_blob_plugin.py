@@ -294,11 +294,14 @@ def test_azure_resource_info_preserves_provider_metadata() -> None:
         size = 1
         last_modified = None
         etag = "revision"
-        content_settings = None
+        content_settings = type(
+            "Settings", (), {"content_md5": bytearray.fromhex("d41d8cd98f00b204e9800998ecf8427e")}
+        )()
         metadata = {"owner": "analytics"}
 
     info = AzureBlobProvider()._info("azblob://account/container/object.csv", Properties())
     assert info.metadata == {"owner": "analytics"}
+    assert info.checksum == "md5:d41d8cd98f00b204e9800998ecf8427e"
 
 
 def test_azure_blob_client_preserves_version_or_snapshot_identity(

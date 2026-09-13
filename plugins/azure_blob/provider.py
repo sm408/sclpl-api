@@ -407,6 +407,7 @@ class AzureBlobProvider:
         )
 
     def _info(self, uri: str, props: Any) -> ResourceInfo:
+        content_md5 = getattr(getattr(props, "content_settings", None), "content_md5", None)
         return ResourceInfo(
             uri=self.normalize(uri),
             size=getattr(props, "size", None),
@@ -414,6 +415,11 @@ class AzureBlobProvider:
             revision=getattr(props, "etag", None),
             content_type=getattr(getattr(props, "content_settings", None), "content_type", None),
             metadata=dict(getattr(props, "metadata", None) or {}),
+            checksum=(
+                f"md5:{content_md5.hex()}"
+                if isinstance(content_md5, (bytes, bytearray))
+                else None
+            ),
         )
 
     def _translate(self, error: Exception, uri: str) -> SclplError:

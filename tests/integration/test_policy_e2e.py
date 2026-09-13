@@ -116,7 +116,11 @@ def run_cli(*args: str, cwd: Path) -> subprocess.CompletedProcess[str]:
         text=True,
         timeout=60,
         cwd=cwd,
-        env={**os.environ, "PYTHONPATH": os.getcwd()},
+        env={
+            **os.environ,
+            "PYTHONPATH": os.getcwd(),
+            "SCLPL_CACHE_DIR": str(cwd / ".sclpl-test-cache"),
+        },
     )
 
 
