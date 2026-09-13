@@ -9,9 +9,13 @@ from __future__ import annotations
 
 import csv
 import io
+import json
 import os
 import subprocess
 import sys
+import threading
+from collections.abc import Iterator
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 import pytest
@@ -83,4 +87,137 @@ def test_api_to_csv_reporting_fails_closed_when_a_required_field_disappears(
     result = _run_orders_report("orders_missing_field", out, home=home)
     assert result.returncode == 4, result.stdout + result.stderr
     assert "null values in: total" in result.stdout + result.stderr
+    assert not out.exists()
+
+
+# -- Journey 2: API reconciliation ---------------------------------------------------
+
+JOURNEY_2 = JOURNEYS / "02-api-reconciliation"
+
+
+def _run_reconciliation(
+    ledger: str, out: Path, *, home: Path
+) -> subprocess.CompletedProcess[str]:
+    return run_cli(
+        "run",
+        str(JOURNEY_2 / "workflows" / "reconciliation.sclpll"),
+        "--var",
+        "base=http://127.0.0.1:8902",
+        "--var",
+        f"ledger_path=fixtures/{ledger}",
+        "--out",
+        f"report={out}",
+        "--replay",
+        str(JOURNEY_2 / "fixtures" / "api"),
+        "--strict-replay",
+        "--no-record",
+        "--no-cache",
+        cwd=JOURNEY_2,
+        home=home,
+    )
+
+
+def test_api_reconciliation_reports_lineage_for_every_row(tmp_path: Path, home: Path) -> None:
+    out = tmp_path / "report.json"
+    result = _run_reconciliation("ledger.csv", out, home=home)
+    assert result.returncode == 0, result.stderr
+    report = json.loads(out.read_text(encoding="utf-8"))
+    assert report == [
+        {"id": 1, "api_total": 100, "ledger_total": 100, "origin": "matched"},
+        {"id": 2, "api_total": 200, "ledger_total": 205, "origin": "mismatch"},
+        {"id": 3, "api_total": None, "ledger_total": 50, "origin": "ledger_only"},
+        {"id": 4, "api_total": 75, "ledger_total": None, "origin": "api_only"},
+    ]
+
+
+def test_api_reconciliation_fails_closed_on_a_duplicate_join_key(
+    tmp_path: Path, home: Path
+) -> None:
+    """SPEC 7: "Duplicate/missing join keys trigger explicit validation"."""
+    out = tmp_path / "report.json"
+    result = _run_reconciliation("ledger_duplicate.csv", out, home=home)
+    assert result.returncode == 4, result.stdout + result.stderr
+    assert "id is not unique" in result.stdout + result.stderr
+    assert not out.exists()
+
+
+# -- Journey 3: API quality monitoring -----------------------------------------------
+
+JOURNEY_3 = JOURNEYS / "03-api-quality-monitoring"
+
+
+class _NotifyHandler(BaseHTTPRequestHandler):
+    def do_POST(self) -> None:  # noqa: N802 - name fixed by BaseHTTPRequestHandler
+        length = int(self.headers.get("Content-Length", "0"))
+        self.rfile.read(length) if length else b""
+        self.send_response(200)
+        self.send_header("Content-Length", "0")
+        self.end_headers()
+
+    def log_message(self, *args: object) -> None:
+        pass
+
+
+@pytest.fixture
+def quality_receiver() -> Iterator[None]:
+    """The journey's committed `sclpl.toml` fires its webhook at this fixed port."""
+    server = ThreadingHTTPServer(("127.0.0.1", 8903), _NotifyHandler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        yield
+    finally:
+        server.shutdown()
+        thread.join(timeout=5)
+
+
+def _run_quality_check(fixture: str, out: Path, *, home: Path) -> subprocess.CompletedProcess[str]:
+    return run_cli(
+        "run",
+        str(JOURNEY_3 / "workflows" / "quality_check.sclpll"),
+        "--var",
+        "base=http://127.0.0.1:8904",
+        "--out",
+        f"report={out}",
+        "--replay",
+        str(JOURNEY_3 / "fixtures" / fixture),
+        "--strict-replay",
+        "--no-record",
+        "--no-cache",
+        cwd=JOURNEY_3,
+        home=home,
+    )
+
+
+def test_api_quality_monitoring_passes_quietly_when_the_schema_holds(
+    tmp_path: Path, home: Path
+) -> None:
+    out = tmp_path / "report.json"
+    result = _run_quality_check("orders_ok", out, home=home)
+    assert result.returncode == 0, result.stderr
+    assert "notification" not in result.stderr
+    assert json.loads(out.read_text(encoding="utf-8")) == {"checked_rows": 2, "status": "ok"}
+
+
+def test_api_quality_monitoring_fails_and_notifies_on_a_breaking_change(
+    tmp_path: Path, home: Path, quality_receiver: None
+) -> None:
+    """SPEC 7: "Breaking schema change fails CI"; the webhook fires and is delivered."""
+    out = tmp_path / "report.json"
+    result = _run_quality_check("orders_breaking", out, home=home)
+    assert result.returncode == 4, result.stdout + result.stderr
+    assert "missing column: total" in result.stdout + result.stderr
+    assert "notification quality_alert: delivered" in result.stderr
+    assert not out.exists()
+
+
+def test_api_quality_monitoring_delivery_failure_does_not_change_the_result(
+    tmp_path: Path, home: Path
+) -> None:
+    """SPEC 7: "delivery failure is separately recorded" -- exit code is unaffected
+    by whether anything was listening for the notification."""
+    out = tmp_path / "report.json"
+    result = _run_quality_check("orders_breaking", out, home=home)
+    assert result.returncode == 4, result.stdout + result.stderr
+    assert "notification quality_alert: failed" in result.stderr
     assert not out.exists()

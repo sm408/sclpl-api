@@ -1,0 +1,14 @@
+{
+  "body_digest": "468c65178ba6109f84a00be9cb13118277e60ea00658513712a6c0199df17ef7",
+  "headers": {
+    "content-length": "74",
+    "content-type": "application/json",
+    "date": "Sun, 13 Sep 2026 08:46:40 GMT",
+    "server": "BaseHTTP/0.6 Python/3.11.5"
+  },
+  "method": "GET",
+  "occurrence": 0,
+  "schema": 1,
+  "status": 200,
+  "url": "http://127.0.0.1:8902/orders"
+}

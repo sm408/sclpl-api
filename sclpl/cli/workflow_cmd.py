@@ -25,6 +25,7 @@ from sclpl.notifications.sink import NotificationSink
 from sclpl.project import context as project_context
 from sclpl.project import identity, lock
 from sclpl.project import scripts as project_scripts
+from sclpl.render.events import LogRecord
 from sclpl.render.reporter import build_reporter
 from sclpl.run import compile_json
 from sclpl.run.ir import WorkflowDoc
@@ -257,7 +258,24 @@ def run(
             # safely await anything itself.
             await reporter.drain()
             if notification_sink is not None:
-                await notification_sink.wait()
+                receipts = await notification_sink.wait()
+                # Delivery is best effort and never rewrites `result.exit_code` (I4):
+                # a webhook nobody can reach must not turn a passing run into a
+                # failing one, or a failing run into a silently passing one. It is
+                # still recorded, not merely swallowed, so an operator watching this
+                # run's log can see a notification never went out.
+                for receipt in receipts:
+                    detail = f": {receipt.error}" if receipt.error else ""
+                    reporter.emit(
+                        LogRecord(
+                            level="info" if receipt.status == "delivered" else "warning",
+                            message=(
+                                f"notification {receipt.name}: {receipt.status} "
+                                f"in {receipt.attempts} attempt(s){detail}"
+                            ),
+                        )
+                    )
+                await reporter.drain()
             return result.exit_code
 
     try:
