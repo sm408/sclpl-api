@@ -479,7 +479,24 @@ See [the decision log](DECISION-LOG.md) for implementation tradeoffs and evidenc
   a `PACKAGE.json` manifest listing every entry's own SHA-256 plus one aggregate
   digest, so "did the content change" never requires re-downloading the archive to
   check. ADR 0011 budgets `sclpl/packages` at 1,600 lines.
-- [ ] H2 validation/install: not started.
+- [x] H2 validation/install: new `sclpl/packages/install.py`. `validate()` checks a
+  package archive without extracting or executing anything from it: unsupported
+  schema, an undeclared or missing archive entry, a per-file digest mismatch
+  against the manifest (tamper/corruption detection), path traversal (`../`,
+  absolute, or drive-letter entry names), a symlink/device/FIFO/socket entry
+  (refused by its Unix mode bits; a mode with no type bits set -- the common case
+  for a plain `zipfile.writestr` -- is treated as an ordinary file, not refused),
+  a case-insensitive filename collision, and archive-bomb ceilings (entry count,
+  total uncompressed size, per-entry compression ratio). `install()` validates
+  first, extracts into a fresh staging directory, and only does one atomic
+  `Path.replace` into `<into>/<name>/<version>` -- a validation failure never
+  creates a staging directory at all, and any failure during extraction is
+  cleaned up before the exception propagates, so an existing good install (or no
+  install at all) is always what remains. Reinstalling the same name/version is
+  refused rather than silently overwritten. New `sclpl package validate` and
+  `sclpl package install` CLI commands. Compatibility (declared `sclpl` version
+  constraints) and capability-policy comparison against a prior install are H3's
+  concern, deferred until there is a "prior install" to compare against.
 - [ ] H3 plugin lifecycle (inspect/verify/update/remove): not started.
 - [ ] H4 shared distribution (registry client): not started.
 - [ ] H5 registry release workflow: not started.
