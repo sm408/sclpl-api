@@ -8,6 +8,7 @@ spreadsheet formula depends on, so a change to either is a breaking change.
 from __future__ import annotations
 
 import json
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -289,3 +290,19 @@ def test_sqlite_points_at_the_plugin(tmp_path: Path) -> None:
     with pytest.raises(ValidationError) as caught:
         io.write([{"a": 1}], tmp_path / "out.sqlite")
     assert "plugin" in str(caught.value)
+
+
+def test_a_missing_pandas_extra_is_a_clear_error_not_a_traceback(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """J2 sentinel: `[data]` is optional, so a bare install genuinely lacks pandas on
+    any platform. `Table` operations must name the extra to install, not crash inside
+    someone else's ImportError."""
+    from sclpl.tables.base import MissingExtra
+
+    path = tmp_path / "data.csv"
+    path.write_text("a\n1\n", encoding="utf-8")
+    monkeypatch.setitem(sys.modules, "pandas", None)
+    with pytest.raises(MissingExtra) as caught:
+        io.read(path, "csv")
+    assert "sclpl[data]" in str(caught.value)
