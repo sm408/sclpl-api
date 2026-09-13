@@ -47,9 +47,10 @@ BUDGETS: dict[str, int] = {
     "functions": 1200,
     "plugins_bundled": 600,
     "project": 1200,
+    "packages": 1600,
 }
 
-TOTAL_BUDGET = 21720
+TOTAL_BUDGET = 23320
 
 _HAS_DOCSTRING = (ast.Module, ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef)
 

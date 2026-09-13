@@ -463,3 +463,23 @@ See [the decision log](DECISION-LOG.md) for implementation tradeoffs and evidenc
   planning, resume execution, and publication crash-recovery are all real,
   tested, and wired end to end through the CLI (`sclpl run --resume-from`,
   `sclpl runs resume-plan`, `sclpl runs recover-publication`).
+
+## Batch H
+
+- [x] H1 package manifest/build: new `sclpl/packages/build.py` bundles a project's
+  declared workflow/test directories, conventional `docs`/`schemas`/`fixtures`/
+  `plugins` directories, `[package.include]` globs, and locally-registered Python
+  scripts into one `.sclplpkg` zip archive. New `sclpl package build` CLI command
+  (`cli/package_cmd.py`). Accept criteria verified: two builds of unchanged content
+  are byte-identical (fixed ZIP timestamps, fixed `create_system`, sorted entries,
+  fixed compresslevel -- `test_build_is_byte_identical_across_repeated_builds`);
+  secrets (`.env*`, `*.pem`, `*.key`), hidden files/dirs, `__pycache__`, and
+  declared `[policy] output_roots` are excluded even when an `[package.include]`
+  glob would otherwise sweep them up (`test_build_excludes_*`). The archive embeds
+  a `PACKAGE.json` manifest listing every entry's own SHA-256 plus one aggregate
+  digest, so "did the content change" never requires re-downloading the archive to
+  check. ADR 0011 budgets `sclpl/packages` at 1,600 lines.
+- [ ] H2 validation/install: not started.
+- [ ] H3 plugin lifecycle (inspect/verify/update/remove): not started.
+- [ ] H4 shared distribution (registry client): not started.
+- [ ] H5 registry release workflow: not started.
