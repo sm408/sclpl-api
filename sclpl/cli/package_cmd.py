@@ -12,6 +12,7 @@ from sclpl.errors import ValidationError
 from sclpl.packages import build as build_mod
 from sclpl.packages import install as install_mod
 from sclpl.packages import lifecycle
+from sclpl.packages import registry as registry_mod
 from sclpl.project import context
 from sclpl.state.db import default_root
 
@@ -211,6 +212,49 @@ def update(
         typer.echo(f"  - {name}")
     for name in changes.changed:
         typer.echo(f"  ~ {name}")
+
+
+@app.command("pull")
+def pull(
+    name: Annotated[str, typer.Argument()],
+    version: Annotated[str, typer.Argument()],
+    from_registry: Annotated[
+        str, typer.Option("--registry", help="A local directory path or an https:// base URL.")
+    ],
+    into: IntoOption = None,
+    offline: Annotated[
+        bool, typer.Option("--offline", help="Only use the local registry cache.")
+    ] = False,
+    json_mode: Annotated[bool, typer.Option("--json", help="Emit the result as JSON.")] = False,
+) -> None:
+    """Fetch a package from a registry index, then install it.
+
+    The downloaded artifact's own bytes are hashed and checked against the
+    registry's declared digest before installation ever sees it -- a registry
+    serving something other than what it advertised is refused. A private
+    HTTPS registry authenticates with a bearer token from SCLPL_REGISTRY_TOKEN;
+    the token is never written to the index, the cache, or a log line.
+    """
+    cache = default_root() / "registry-cache"
+    fetched = registry_mod.fetch(from_registry, name, version, cache=cache, offline=offline)
+    result = install_mod.install(fetched.path, into=into or default_root() / "packages")
+    if json_mode:
+        typer.echo(
+            json.dumps(
+                {
+                    "path": str(result.path),
+                    "name": result.name,
+                    "version": result.version,
+                    "digest": result.digest,
+                },
+                indent=2,
+                sort_keys=True,
+            )
+        )
+        return
+    typer.echo(f"installed {result.name} {result.version} from {from_registry}")
+    typer.echo(f"  {result.path}")
+    typer.echo(f"  digest sha256:{result.digest}")
 
 
 def _requires(project: Path | None) -> dict[str, str] | None:

@@ -513,5 +513,23 @@ See [the decision log](DECISION-LOG.md) for implementation tradeoffs and evidenc
   `update` installs a new version *alongside* any existing ones (never
   removes or replaces silently) and prints the file diff against the
   previously installed version. ADR 0012 budgets `cli` at 2,450 lines.
-- [ ] H4 shared distribution (registry client): not started.
+- [x] H4 shared distribution (registry client): new `sclpl/packages/registry.py`.
+  A registry is one static `index.json` (schema, `packages.<name>.<version> ->
+  {digest, url}`) served from a local directory or an `https://` base -- a
+  client and documented hosting layout, not a new registry server. `fetch()`
+  downloads (or copies, for a local-directory base) the declared artifact into
+  a `~/.sclpl/registry-cache`, then hashes the downloaded bytes and compares
+  them against the index's declared digest before returning -- a registry
+  serving something other than what it advertised is refused, not trusted on
+  the strength of a successful download. `--offline` never contacts the
+  registry at all; a cache miss offline is a `CacheMiss` (exit 5), same as the
+  resource cache's own offline contract. A private HTTPS registry
+  authenticates with a bearer token read from `SCLPL_REGISTRY_TOKEN` --
+  credentials never enter the index, the cache, or a log line. New
+  `sclpl package pull NAME VERSION --registry BASE` CLI command (fetch, then
+  H2's `install`). Client-side trust-on-first-use pinning across registry
+  updates (detecting an index that changed what a name/version *used* to
+  point to) is out of scope for this pass -- "two clean workspaces install the
+  same pinned digest" is satisfied by good-faith fetch from one index, not by
+  a separate pinning ledger.
 - [ ] H5 registry release workflow: not started.
