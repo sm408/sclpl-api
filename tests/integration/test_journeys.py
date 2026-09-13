@@ -221,3 +221,64 @@ def test_api_quality_monitoring_delivery_failure_does_not_change_the_result(
     assert result.returncode == 4, result.stdout + result.stderr
     assert "notification quality_alert: failed" in result.stderr
     assert not out.exists()
+
+
+# -- Journey 4: Lightweight ingestion ------------------------------------------------
+
+JOURNEY_4 = JOURNEYS / "04-lightweight-ingestion"
+
+
+def _run_ingest(fixture: str, out: Path, *, home: Path) -> subprocess.CompletedProcess[str]:
+    return run_cli(
+        "run",
+        str(JOURNEY_4 / "workflows" / "ingest.sclpll"),
+        "--var",
+        "base=http://127.0.0.1:8905",
+        "--out",
+        f"dataset={out}",
+        "--replay",
+        str(JOURNEY_4 / "fixtures" / fixture),
+        "--strict-replay",
+        "--no-record",
+        "--no-cache",
+        cwd=JOURNEY_4,
+        home=home,
+    )
+
+
+def _parquet_row_count(path: Path) -> int:
+    import pyarrow.parquet as pq
+
+    return int(pq.read_table(path).num_rows)
+
+
+def test_lightweight_ingestion_publishes_a_complete_dataset(tmp_path: Path, home: Path) -> None:
+    out = tmp_path / "dataset.parquet"
+    result = _run_ingest("records_full", out, home=home)
+    assert result.returncode == 0, result.stderr
+    assert "published: dataset" in result.stderr
+    assert _parquet_row_count(out) == 3
+
+
+def test_lightweight_ingestion_never_lets_an_incomplete_run_masquerade_as_complete(
+    tmp_path: Path, home: Path
+) -> None:
+    """SPEC 7: "Interrupted output is not mistaken for a completed dataset"."""
+    out = tmp_path / "dataset.parquet"
+
+    # A prior good run already published three rows.
+    first = _run_ingest("records_full", out, home=home)
+    assert first.returncode == 0, first.stderr
+    assert _parquet_row_count(out) == 3
+
+    # A later run that only sees two records fails its row-count gate. The
+    # writer step still ran and produced a value, but the run as a whole did
+    # not succeed, so the staged output is discarded rather than published.
+    second = _run_ingest("records_incomplete", out, home=home)
+    assert second.returncode == 4, second.stdout + second.stderr
+    assert "expected at least 3 rows, found 2" in second.stdout + second.stderr
+    assert "discarded staged output(s): dataset" in second.stderr
+
+    # The destination is exactly what the last good run left -- not touched,
+    # not truncated, not silently replaced with the two-row attempt.
+    assert _parquet_row_count(out) == 3

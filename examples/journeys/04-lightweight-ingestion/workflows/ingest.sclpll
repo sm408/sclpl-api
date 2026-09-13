@@ -1,0 +1,18 @@
+@workflow ingest "Ingest typed records into a dataset, publishing only if the whole run succeeds"
+
+@var base = "https://api.example.invalid"
+
+@output dataset:parquet
+
+@step fetch_records
+  get {{base}}/records
+  assert @fetch_records.status == 200
+
+@step typed
+  cast_schema @fetch_records.body {"id": "integer", "value": "number"}
+
+@step write -> dataset
+  save_parquet @typed
+
+@step quality_gate
+  let assert_rowcount(@typed, min=3)
