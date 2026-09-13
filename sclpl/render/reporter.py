@@ -186,6 +186,7 @@ def build_reporter(
     stream: TextIO | None = None,
     caps: Caps | None = None,
     log_path: Path | None = None,
+    extra_sinks: Sequence[Sink] = (),
 ) -> Reporter:
     """Choose the sink for this invocation and wire it up.
 
@@ -197,6 +198,11 @@ def build_reporter(
     the human sees. That is what makes history greppable without the database -- and it
     records everything regardless of verbosity, because a log that dropped the retry you
     needed cannot be re-run.
+
+    ``extra_sinks`` appends further sinks unconditionally (e.g. I4's
+    `NotificationSink`) -- every sink receives every event regardless of
+    verbosity; a display sink decides what to *show* for itself via
+    `visible_at`, and a non-display sink like this is free to act on anything.
     """
     stream = stream if stream is not None else sys.stderr
     caps = caps if caps is not None else probe(stream)
@@ -234,6 +240,7 @@ def build_reporter(
         except OSError:
             # A log is a convenience. A run that cannot write one has still run.
             pass
+    sinks.extend(extra_sinks)
 
     return Reporter(sinks, guard=guard)
 

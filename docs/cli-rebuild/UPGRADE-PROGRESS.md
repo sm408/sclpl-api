@@ -636,5 +636,30 @@ release-index`).
   `sclpl.run.preflight.preflight` in the test suite, and the CLI command was
   exercised end to end against a real scratch project (import, inspect the
   generated file for the absence of the secret, `sclpl validate` it).
-- [ ] I4 notification hooks: not started.
+- [x] I4 notification hooks: new `sclpl/notifications/` (config.py, delivery.py,
+  sink.py). `[notifications.<name>]` project manifest tables (kind =
+  webhook/slack/smtp, `on` = event names, `enabled`) are opt-in -- nothing
+  sends unless `enabled = true`. `NotificationSink` implements
+  `sclpl.render.reporter`'s `Sink` protocol and is appended via a new
+  `build_reporter(extra_sinks=...)` parameter, so it receives the exact same
+  already-redacted event stream every other sink does -- a notification
+  payload is `RunStarted`/`RunFinished`/failed-`StepFinished` event data
+  (status, counts, timings), never a raw response body. Delivery
+  (`deliver()`) retries up to 3 times with jittered backoff (reusing
+  `run/retry.py`'s `Clock` for a deterministic test clock) and never raises:
+  a `DeliveryReceipt` with `status="failed"` is the worst case, so a broken
+  notifier cannot rewrite the run's own exit code. Each attempt carries a
+  deterministic `Idempotency-Key` (hash of run id + notifier + event) a
+  receiver can use to dedupe a resend. Delivery is scheduled from `handle()`
+  (never blocking the reporter's pump) and awaited once, explicitly, by the
+  `run` command itself via `reporter.drain()` then `notification_sink.wait()`
+  -- `Sink.close()` is synchronous and cannot safely await anything, so it is
+  only a last-resort cancellation net. Verified for real: a local
+  `ThreadingHTTPServer` receiver (retry-until-success, and exhaustion-without-
+  raising), a monkeypatched `smtplib.SMTP` (connection-failure-then-recovery),
+  and a full `sclpl run` against a real scratch project with a live local
+  receiver confirming the exact JSON payload and idempotency key delivered.
+  Delivery is explicitly best effort -- nothing here retries across process
+  restarts; durable post-process delivery needs the deferred operations layer
+  this batch does not build. ADR 0014 budgets `notifications` at 500 lines.
 - [ ] I5 CI output and templates: not started.
