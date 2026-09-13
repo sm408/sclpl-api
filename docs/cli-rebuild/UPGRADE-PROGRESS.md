@@ -532,4 +532,26 @@ See [the decision log](DECISION-LOG.md) for implementation tradeoffs and evidenc
   point to) is out of scope for this pass -- "two clean workspaces install the
   same pinned digest" is satisfied by good-faith fetch from one index, not by
   a separate pinning ledger.
-- [ ] H5 registry release workflow: not started.
+- [x] H5 registry release workflow: new `sclpl/packages/release.py`. `build_index`
+  re-validates a directory of already-built `.sclplpkg` archives (H2's full
+  archive-safety check, so a malicious archive can never enter a published
+  index), stages them plus a generated `index.json` into an output directory,
+  and refuses two archives claiming the same name/version with different file
+  bytes rather than silently keeping whichever was scanned last (a rebuild with
+  identical bytes is fine and deduplicates). New `sclpl package release-index
+  SOURCE_DIR --out DIR` CLI command. Never uploads or publishes anything --
+  that stays an existing team CI/storage tool's job, kept explicit and separate
+  from build/install/pull. Bug caught by a round-trip test (stage an index,
+  then fetch it back through H4's client) and fixed before merge: the index's
+  digest field must be the archive *file's* bytes (what a client downloads and
+  `registry.fetch` verifies), not H1's internal per-file content digest used
+  for build determinism and update diffing -- the two are different notions
+  that happened to share a name. Verified end to end with the real CLI: staged
+  two real versions, then pulled one back through `sclpl package pull` against
+  the freshly staged directory.
+
+**Batch H complete** (H1-H5): package build, validated atomic install, lifecycle
+(list/show/verify/remove/update), a registry client, and a release/staging
+workflow are all real, tested, and wired end to end through the CLI (`sclpl
+package build/validate/install/list/show/verify/remove/update/pull/
+release-index`).

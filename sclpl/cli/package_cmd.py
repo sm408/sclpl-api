@@ -13,6 +13,7 @@ from sclpl.packages import build as build_mod
 from sclpl.packages import install as install_mod
 from sclpl.packages import lifecycle
 from sclpl.packages import registry as registry_mod
+from sclpl.packages import release as release_mod
 from sclpl.project import context
 from sclpl.state.db import default_root
 
@@ -255,6 +256,45 @@ def pull(
     typer.echo(f"installed {result.name} {result.version} from {from_registry}")
     typer.echo(f"  {result.path}")
     typer.echo(f"  digest sha256:{result.digest}")
+
+
+@app.command("release-index")
+def release_index(
+    source: Annotated[
+        Path, typer.Argument(help="Directory containing already-built .sclplpkg archives.")
+    ],
+    out: Annotated[
+        Path, typer.Option("--out", help="Directory to stage the index and artifacts into.")
+    ],
+    json_mode: Annotated[bool, typer.Option("--json", help="Emit the result as JSON.")] = False,
+) -> None:
+    """Stage a registry index.json plus its artifacts for an existing team tool to publish.
+
+    Never uploads or publishes anything -- that stays a separate, explicit step
+    using whatever a team already deploys files with (blob storage, an internal
+    HTTP server, GitHub Pages, ...). Two archives claiming the same name and
+    version with different content are refused, not silently resolved by
+    keeping whichever was scanned last.
+    """
+    archives = sorted(source.glob("*.sclplpkg"))
+    if not archives:
+        raise ValidationError(f"no .sclplpkg archives found under {source}")
+    result = release_mod.build_index(archives, out=out)
+    if json_mode:
+        typer.echo(
+            json.dumps(
+                {
+                    "index": str(result.index_path),
+                    "packages": [{"name": n, "version": v} for n, v in result.entries],
+                },
+                indent=2,
+                sort_keys=True,
+            )
+        )
+        return
+    typer.echo(f"staged {len(result.entries)} package version(s) at {result.index_path}")
+    for name, version in result.entries:
+        typer.echo(f"  {name} {version}")
 
 
 def _requires(project: Path | None) -> dict[str, str] | None:
