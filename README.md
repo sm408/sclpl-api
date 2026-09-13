@@ -190,16 +190,24 @@ An assertion failure exits **4**, not 1. Automation can tell "the API failed" ap
 
 | Area | Commands |
 |---|---|
-| Workflows | `sclpl run`, `validate`, `explain`, `fmt`, `convert` |
+| Workflows | `sclpl run`, `validate`, `explain`, `graph`, `fmt`, `convert` |
 | Python scripts | `sclpl python NAME [ARGS...]`; registered `python` workflow steps |
 | One request | `sclpl call` |
-| Catalogue | `sclpl import`, `list`, `show`, `remove` |
+| Catalogue | `sclpl import [--from curl\|openapi\|postman]`, `list`, `show`, `remove` |
 | History | `sclpl runs list`, `show`, `search`, `diff`, `replay`, `export`, `pin`, `prune` |
 | Secrets | `sclpl secret set`, `get`, `list`, `remove` |
 | Plugins | `sclpl plugin list`, `describe`, `scaffold`, `install` |
-| Admin | `sclpl doctor`, `completion`, `docs build` |
+| Packages | `sclpl package build`, `validate`, `install`, `list`, `show`, `verify`, `remove`, `update`, `pull`, `release-index` |
+| Project | `sclpl project check`, `ci-template`; `sclpl test list`, `validate`, `run [--junit\|--json\|--html]` |
+| Admin | `sclpl doctor`, `completion`, `docs build`, `env`, `resource` |
 
 Nothing is stubbed: if `--help` lists a command, that command works.
+
+**Notifications.** A `[notifications.<name>]` table in a project manifest can fire a
+webhook, Slack webhook, or SMTP message on `run_started`, `run_finished`, or
+`step_failed`. Delivery is best effort with bounded retries; a notification failing
+never rewrites the run's own exit code, and the CLI logs whether it was delivered
+either way. See `examples/journeys/03-api-quality-monitoring/` for a worked example.
 
 ## What Feels Different
 
@@ -236,6 +244,21 @@ Start with:
 | [`examples/playbook-01.sclpll`](examples/playbook-01.sclpll) | Paginated API to CSV |
 | [`examples/playbook-02.sclpll`](examples/playbook-02.sclpll) | API rows joined with SQLite |
 | [`examples/12-text-plugin-library.sclpll`](examples/12-text-plugin-library.sclpll) | Bundled text plugin helpers |
+
+Five complete, end-to-end business scenarios live under
+[`examples/journeys/`](examples/journeys/) -- each one packaged as its own tiny
+project with a recorded offline fixture, a README, and a required failure case (a
+disappearing field, a duplicate join key, a breaking schema change, an interrupted
+ingestion, a missing fixture) that must never silently produce a trustworthy-looking
+result:
+
+| Journey | Shows |
+|---|---|
+| [`01-api-to-csv-reporting`](examples/journeys/01-api-to-csv-reporting/) | Contract-checked fetch to CSV |
+| [`02-api-reconciliation`](examples/journeys/02-api-reconciliation/) | API vs. local-CSV reconciliation with lineage |
+| [`03-api-quality-monitoring`](examples/journeys/03-api-quality-monitoring/) | Schema break wired to a webhook notification |
+| [`04-lightweight-ingestion`](examples/journeys/04-lightweight-ingestion/) | Validated publish: a failing run never overwrites a good dataset |
+| [`05-integration-regression-testing`](examples/journeys/05-integration-regression-testing/) | Auth + retry + pagination, packaged, installed, and replayed offline |
 
 ## Extending
 

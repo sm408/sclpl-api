@@ -794,3 +794,25 @@ CI template are all real, tested, and wired end to end through the CLI.
   completeness.py` already covers what a cancelled outcome *means*
   (`Outcome(status="cancelled")` -> completeness `"unknown"`); what remains
   unverified is the OS-signal-to-that-outcome path on Windows specifically.
+- [x] J4 Documentation and migration: `python -m sclpl docs build --check` was
+  already correct (no expression/function drift from Batches H/I -- they
+  added CLI surface and Python modules, not new `@function`-registered
+  operators) but was not actually gated in CI; added as a `static`-job step.
+  README's Command Surface table predated `sclpl package`, `sclpl test`,
+  `sclpl project`, and `[notifications.*]` entirely -- verified against a
+  real `sclpl --help`/subcommand `--help` rather than guessed, then updated,
+  plus a new Examples entry for all five `examples/journeys/`. `docs/
+  limitations.md` gained the J3 Windows CTRL_BREAK/SIGBREAK finding, in the
+  same voice as its existing "explicit follow-up areas, not silent stubs"
+  entries. `SPEC.md` (whose own Milestones section ends at M9, predating
+  the unified upgrade plan entirely) gained a short "After M9" pointer to
+  `UNIFIED-UPGRADE-PLAN.md`/this file rather than a line-by-line rewrite of
+  a 699-line planning document whose command list was already stale before
+  this session for reasons unrelated to Batches H-J. Migration and format-
+  rejection requirements ("old history upgrades", "new formats reject older
+  incompatible readers clearly") were verified rather than assumed: all 6
+  of `tests/unit/test_migrations.py` pass, covering exactly those two
+  properties. "Verify examples execute as well as parse": the full example
+  and journey suite (`test_playbooks.py` + `test_journeys.py`, 43 tests)
+  reran clean after every doc edit above. ADRs needed no update -- nothing
+  in J1-J4 added `sclpl/` package code, so no budget moved.
