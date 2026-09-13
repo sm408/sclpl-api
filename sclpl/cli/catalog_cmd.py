@@ -13,6 +13,7 @@ from sclpl.catalog import store
 from sclpl.errors import SclplError, ValidationError
 from sclpl.importers import curl as curl_importer
 from sclpl.importers import openapi as openapi_importer
+from sclpl.importers import postman as postman_importer
 from sclpl.run.preflight import preflight
 
 app = typer.Typer(help="Register and inspect workflows.", no_args_is_help=True)
@@ -44,20 +45,33 @@ def import_workflow(
             "--from",
             help="Source format: a plain workflow file is registered as-is; 'curl' parses a"
             " saved curl command; 'openapi' parses one operation from a local JSON OpenAPI"
-            " 3.x document (see --operation).",
+            " 3.x document (see --operation); 'postman' parses one request from a local"
+            " Postman v2.1 collection (see --request and --environment).",
         ),
     ] = None,
     operation: Annotated[
         str | None,
         typer.Option("--operation", help="OpenAPI operationId to import (with --from openapi)."),
     ] = None,
+    request: Annotated[
+        str | None,
+        typer.Option(
+            "--request", help="Postman request name, 'Folder/Name' if nested (with --from postman)."
+        ),
+    ] = None,
+    environment: Annotated[
+        Path | None,
+        typer.Option(
+            "--environment", help="A Postman environment file to merge (with --from postman)."
+        ),
+    ] = None,
 ) -> None:
     if scope not in ("project", "user"):
         typer.echo(f"unknown scope {scope!r}: expected 'project' or 'user'", err=True)
         raise typer.Exit(2)
-    if from_format not in (None, "curl", "openapi"):
+    if from_format not in (None, "curl", "openapi", "postman"):
         raise ValidationError(
-            f"unknown --from format {from_format!r}", remedies=["expected: curl, openapi"]
+            f"unknown --from format {from_format!r}", remedies=["expected: curl, openapi, postman"]
         )
 
     try:
@@ -70,6 +84,15 @@ def import_workflow(
                     remedies=["pass the OpenAPI operationId to import"],
                 )
             entry = _import_openapi(source, operation, name=name, scope=scope, overwrite=overwrite)
+        elif from_format == "postman":
+            if not request:
+                raise ValidationError(
+                    "--request is required with --from postman",
+                    remedies=["pass the Postman request name to import"],
+                )
+            entry = _import_postman(
+                source, request, environment, name=name, scope=scope, overwrite=overwrite
+            )
         else:
             entry = store.import_workflow(source, scope=scope, name=name, overwrite=overwrite)
     except SclplError as error:
@@ -89,24 +112,42 @@ def _import_curl(source: Path, *, name: str | None, scope: str, overwrite: bool)
     parsed = curl_importer.parse(command)
     workflow_name = name or source.stem
     result = curl_importer.render(parsed, name=workflow_name)
+    _report_import(
+        result.warnings, result.auth_manifest, result.extracted_secret, source="the command"
+    )
+    return _register_rendered(
+        result.workflow, workflow_name, name=name, scope=scope, overwrite=overwrite
+    )
 
-    for warning in result.warnings:
+
+def _report_import(
+    warnings: tuple[str, ...],
+    auth_manifest: str | None,
+    extracted_secret: tuple[str, str] | None,
+    *,
+    source: str,
+) -> None:
+    for warning in warnings:
         typer.echo(f"warning: {warning}", err=True)
-    if result.auth_manifest:
+    if auth_manifest:
         typer.echo("add this to your project manifest (sclpl.toml):", err=True)
-        typer.echo(result.auth_manifest, err=True)
-    if result.extracted_secret:
-        secret_name, _ = result.extracted_secret
+        typer.echo(auth_manifest, err=True)
+    if extracted_secret:
+        secret_name, _ = extracted_secret
         typer.echo(
-            "a credential was extracted from the command into an auth reference; "
+            f"a credential was extracted from {source} into an auth reference; "
             "this tool never prints or stores it -- copy it from the original "
-            f"command yourself and run: sclpl secret set {secret_name}",
+            f"source yourself and run: sclpl secret set {secret_name}",
             err=True,
         )
 
+
+def _register_rendered(
+    workflow: str, workflow_name: str, *, name: str | None, scope: str, overwrite: bool
+) -> store.Entry:
     with tempfile.TemporaryDirectory() as scratch:
         rendered = Path(scratch) / f"{workflow_name}.sclpll"
-        rendered.write_text(result.workflow, encoding="utf-8")
+        rendered.write_text(workflow, encoding="utf-8")
         return store.import_workflow(rendered, scope=scope, name=name, overwrite=overwrite)
 
 
@@ -122,14 +163,37 @@ def _import_openapi(
     document = openapi_importer.load(source)
     workflow_name = name or operation_id
     result = openapi_importer.render(document, operation_id, name=workflow_name)
+    _report_import(result.warnings, None, None, source="the document")
+    return _register_rendered(
+        result.workflow, workflow_name, name=name, scope=scope, overwrite=overwrite
+    )
 
-    for warning in result.warnings:
-        typer.echo(f"warning: {warning}", err=True)
 
-    with tempfile.TemporaryDirectory() as scratch:
-        rendered = Path(scratch) / f"{workflow_name}.sclpll"
-        rendered.write_text(result.workflow, encoding="utf-8")
-        return store.import_workflow(rendered, scope=scope, name=name, overwrite=overwrite)
+def _import_postman(
+    source: Path,
+    request_name: str,
+    environment: Path | None,
+    *,
+    name: str | None,
+    scope: str,
+    overwrite: bool,
+) -> store.Entry:
+    """Convert one request of a local Postman v2.1 collection into a workflow.
+
+    Never fetches anything and never evaluates a pre-request or test script --
+    both are reported as diagnostics only. A credential in the request's own
+    `auth` block, or an environment variable marked `"type": "secret"`, is
+    handled the same way as curl's: reported once, never written to disk.
+    """
+    collection = postman_importer.load(source, environment=environment)
+    workflow_name = name or request_name.rsplit("/", 1)[-1]
+    result = postman_importer.render(collection, request_name, name=workflow_name)
+    _report_import(
+        result.warnings, result.auth_manifest, result.extracted_secret, source="the request"
+    )
+    return _register_rendered(
+        result.workflow, workflow_name, name=name, scope=scope, overwrite=overwrite
+    )
 
 
 def list_workflows(

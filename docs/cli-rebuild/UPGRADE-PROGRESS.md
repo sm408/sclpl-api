@@ -610,6 +610,31 @@ release-index`).
   `$ref`, a bare required query param) are rendered and run through
   `sclpl.run.preflight.preflight` in the test suite, and the CLI command was
   exercised end to end against a real scratch project.
-- [ ] I3 Postman import: not started.
+- [x] I3 Postman import: new `sclpl/importers/postman.py`. Supports collection
+  format v2.1 (schema URL checked): recursively walks nested folders into
+  `"Folder/Subfolder/Request Name"`-named requests, so a request can be
+  selected unambiguously by `--request`. Postman's `{{variable}}` templating
+  is textually identical to SCLPLL's own interpolation, so a collection or
+  merged-in environment variable becomes a `@var` declaration and every
+  reference to it passes through unchanged -- no rewriting needed. A
+  pre-request or test script (`event`) is data here, never code: reported as
+  a diagnostic ("never executed"), never parsed as JavaScript or run --
+  verified by a test collection whose scripts would visibly misbehave if ever
+  evaluated. An environment variable marked `"type": "secret"` is never read
+  into the merged variable map at all (the dict comprehension's value
+  expression is never evaluated for a filtered-out entry, not merely
+  discarded after reading) -- only its name is reported as a diagnostic.
+  `request.auth` (bearer/basic/apikey) is extracted exactly as I1 extracts a
+  curl credential: a named `[auth.imported]` profile reference in the
+  workflow, the actual value returned once for the CLI to tell the operator
+  to register themselves. New `--from postman --request NAME [--environment
+  FILE]` on the existing `sclpl import` command; the near-identical
+  credential-reporting CLI logic across I1/I2/I3 was factored into one
+  `_report_import` helper rather than copied a third time. Accept criterion
+  verified for real: 4 representative requests (plain GET, JSON body, basic
+  auth, api-key auth) are rendered and run through
+  `sclpl.run.preflight.preflight` in the test suite, and the CLI command was
+  exercised end to end against a real scratch project (import, inspect the
+  generated file for the absence of the secret, `sclpl validate` it).
 - [ ] I4 notification hooks: not started.
 - [ ] I5 CI output and templates: not started.
