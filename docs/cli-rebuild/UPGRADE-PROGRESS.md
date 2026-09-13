@@ -816,3 +816,25 @@ CI template are all real, tested, and wired end to end through the CLI.
   and journey suite (`test_playbooks.py` + `test_journeys.py`, 43 tests)
   reran clean after every doc edit above. ADRs needed no update -- nothing
   in J1-J4 added `sclpl/` package code, so no budget moved.
+- [x] J5 Release artifact verification: version set once, at the user's
+  direction, to `1.0.2` (`pyproject.toml`, `sclpl/__init__.py`; the README
+  install URL and a new `CHANGELOG.md` entry updated to match). `build`
+  was not a declared dev dependency (the plan's own callout: "not currently
+  a declared development dependency") -- added, then used for real: built
+  both `sclpl-1.0.2-py3-none-any.whl` and `sclpl-1.0.2.tar.gz` via `python
+  -m build`. Verified the wheel contains all four bundled plugin manifests
+  (`sclpl/plugins_bundled/*/plugin.toml`) rather than assuming hatchling's
+  default inclusion covers them. Installed the wheel into a genuinely
+  clean, from-scratch venv (not this dev environment, which already has
+  every optional extra) and, from a directory with no relationship to the
+  checkout: confirmed `sclpl --version` reports 1.0.2, `sclpl plugin list`
+  loads all four bundled plugins from the installed package, `sclpl doctor`
+  correctly reports the optional extras as absent, `sclpl init` scaffolds a
+  project, a representative workflow (`validate` then `run`) executes and
+  writes its output, and a full `package build` -> `install` -> `verify`
+  round trip succeeds against the newly-scaffolded project. Repeated the
+  install-and-smoke-test from the sdist in a second clean venv (`sclpl
+  --version`, `plugin list`) to confirm it is not wheel-only. Full unit
+  suite (1055 tests), lint, and the line budget all rerun green after the
+  version bump. Squashing this branch's history and merging it to `main`
+  is a separate, explicit decision left to the user -- not taken here.
