@@ -278,17 +278,26 @@ def test_concurrency_is_possible_where_the_urls_are_computable(strategy: str) ->
     assert paginate.unsupported_concurrency(spec) is None
 
 
-def test_offset_without_a_size_cannot_advance_and_says_so() -> None:
+@pytest.mark.parametrize(
+    ("spec", "expected"),
+    [
+        pytest.param(
+            Pagination(strategy="offset", param="offset"), ("size=",), id="offset-no-size"
+        ),
+        pytest.param(
+            Pagination(strategy="cursor", param="cursor"),
+            ("cursor_path", "link_header"),
+            id="cursor-no-path",
+        ),
+    ],
+)
+def test_a_strategy_missing_what_it_needs_cannot_advance(
+    spec: Pagination, expected: tuple[str, ...]
+) -> None:
     with pytest.raises(ValidationError) as caught:
-        paginate.check(Pagination(strategy="offset", param="offset"))
-    assert "size=" in str(caught.value)
-
-
-def test_a_cursor_without_a_path_cannot_find_its_token() -> None:
-    with pytest.raises(ValidationError) as caught:
-        paginate.check(Pagination(strategy="cursor", param="cursor"))
-    assert "cursor_path" in str(caught.value)
-    assert "link_header" in str(caught.value)
+        paginate.check(spec)
+    for substring in expected:
+        assert substring in str(caught.value)
 
 
 def test_a_complete_spec_passes() -> None:
