@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import tempfile
 from pathlib import Path
 from typing import Annotated
 
@@ -9,7 +10,8 @@ import typer
 
 from sclpl.catalog import resolve as resolver
 from sclpl.catalog import store
-from sclpl.errors import SclplError
+from sclpl.errors import SclplError, ValidationError
+from sclpl.importers import curl as curl_importer
 from sclpl.run.preflight import preflight
 
 app = typer.Typer(help="Register and inspect workflows.", no_args_is_help=True)
@@ -35,16 +37,62 @@ def import_workflow(
     overwrite: Annotated[
         bool, typer.Option("--overwrite", help="Replace without keeping the previous version.")
     ] = False,
+    from_format: Annotated[
+        str | None,
+        typer.Option(
+            "--from",
+            help="Source format: a plain workflow file is registered as-is; 'curl' parses"
+            " and converts a saved curl command instead.",
+        ),
+    ] = None,
 ) -> None:
     if scope not in ("project", "user"):
         typer.echo(f"unknown scope {scope!r}: expected 'project' or 'user'", err=True)
         raise typer.Exit(2)
+    if from_format not in (None, "curl"):
+        raise ValidationError(f"unknown --from format {from_format!r}", remedies=["expected: curl"])
+
     try:
-        entry = store.import_workflow(source, scope=scope, name=name, overwrite=overwrite)
+        if from_format == "curl":
+            entry = _import_curl(source, name=name, scope=scope, overwrite=overwrite)
+        else:
+            entry = store.import_workflow(source, scope=scope, name=name, overwrite=overwrite)
     except SclplError as error:
         typer.echo(str(error), err=True)
         raise typer.Exit(error.exit_code) from error
     typer.echo(f"registered {entry.name} ({entry.steps} steps) at {entry.path}", err=True)
+
+
+def _import_curl(source: Path, *, name: str | None, scope: str, overwrite: bool) -> store.Entry:
+    """Convert a saved curl command into a workflow, then register it normally.
+
+    Never runs the command. A credential the command carried is reported once,
+    on stderr, for the operator to register with a secret store themselves --
+    it is never written into the generated workflow, the manifest, or the catalog.
+    """
+    command = source.read_text(encoding="utf-8")
+    parsed = curl_importer.parse(command)
+    workflow_name = name or source.stem
+    result = curl_importer.render(parsed, name=workflow_name)
+
+    for warning in result.warnings:
+        typer.echo(f"warning: {warning}", err=True)
+    if result.auth_manifest:
+        typer.echo("add this to your project manifest (sclpl.toml):", err=True)
+        typer.echo(result.auth_manifest, err=True)
+    if result.extracted_secret:
+        secret_name, _ = result.extracted_secret
+        typer.echo(
+            "a credential was extracted from the command into an auth reference; "
+            "this tool never prints or stores it -- copy it from the original "
+            f"command yourself and run: sclpl secret set {secret_name}",
+            err=True,
+        )
+
+    with tempfile.TemporaryDirectory() as scratch:
+        rendered = Path(scratch) / f"{workflow_name}.sclpll"
+        rendered.write_text(result.workflow, encoding="utf-8")
+        return store.import_workflow(rendered, scope=scope, name=name, overwrite=overwrite)
 
 
 def list_workflows(

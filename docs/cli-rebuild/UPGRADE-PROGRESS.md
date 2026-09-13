@@ -555,3 +555,35 @@ See [the decision log](DECISION-LOG.md) for implementation tradeoffs and evidenc
 workflow are all real, tested, and wired end to end through the CLI (`sclpl
 package build/validate/install/list/show/verify/remove/update/pull/
 release-index`).
+
+## Batch I
+
+- [x] I1 cURL import: new `sclpl/importers/shell.py` tokenizes a copied `curl`
+  command into argv without ever invoking a shell -- POSIX (`shlex`-based,
+  handling `\`-continuation and both quote styles) and Windows (both `cmd`'s
+  `^`-continuation/`\"`-escaping and PowerShell's backtick-continuation/`` `" ``-
+  escaping normalize to one Windows-C-runtime argv parser). New
+  `sclpl/importers/curl.py` parses the resulting argv into data (method, URL,
+  headers, query, JSON/form body, file-upload fields as data) and renders one
+  complete, runnable `.sclpll` workflow. An `Authorization` header or `-u
+  user:pass` is extracted into a named `[auth.imported]` profile reference --
+  the credential value is returned once, in memory, for the CLI to tell the
+  operator to register themselves (`sclpl secret set NAME`); it is never
+  printed again, and never written into the generated workflow or manifest
+  text (verified by a dedicated test asserting the secret value is absent from
+  both). An unsupported curl option (`-o`, `-k`, `-x`, an unrecognized `-X`
+  method, ...) is reported as a diagnostic, never raised -- a partially
+  supported command still produces a working, if incomplete, import. New
+  `--from curl` option on the existing `sclpl import` command (additive, not a
+  new top-level command, since `import` already exists for registering plain
+  workflow files). Accept criterion verified for real, not just asserted:
+  every one of 6 representative curl shapes (GET, POST+JSON body, query
+  string, bearer auth, basic auth, multipart form) is rendered and then run
+  through `sclpl.run.preflight.preflight` in the test suite, and the CLI
+  command was exercised end to end against a real scratch project (import,
+  inspect the generated file, `sclpl validate` it). ADR 0013 budgets
+  `sclpl/importers` at 2,600 lines.
+- [ ] I2 OpenAPI import: not started.
+- [ ] I3 Postman import: not started.
+- [ ] I4 notification hooks: not started.
+- [ ] I5 CI output and templates: not started.
