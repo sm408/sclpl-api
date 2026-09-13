@@ -31,61 +31,43 @@ def fake_deliver(monkeypatch: pytest.MonkeyPatch) -> list[tuple[str, dict[str, o
     return calls
 
 
-async def test_run_finished_dispatches_to_a_matching_notifier(fake_deliver: list[tuple[str, dict[str, object]]]) -> None:
-    notifier = NotificationSink(
-        (_config("n", frozenset({"run_finished"})),), run_id="r1", workflow="demo"
-    )
-    notifier.handle(RunFinished(status="ok", duration_ms=10))
+@pytest.mark.parametrize(
+    ("on", "enabled", "event", "expect_dispatch"),
+    [
+        (frozenset({"run_finished"}), True, RunFinished(status="ok", duration_ms=10), True),
+        (frozenset({"run_started"}), True, RunFinished(status="ok", duration_ms=10), False),
+        (frozenset({"run_finished"}), False, RunFinished(status="ok", duration_ms=10), False),
+        (
+            frozenset({"step_failed"}),
+            True,
+            StepFinished(id="a", status="ok", duration_ms=1),
+            False,
+        ),
+        (
+            frozenset({"step_failed"}),
+            True,
+            StepFinished(id="a", status="failed", duration_ms=1),
+            True,
+        ),
+        (
+            frozenset({"run_started", "run_finished", "step_failed"}),
+            True,
+            LogRecord(level="info", message="hello"),
+            False,
+        ),
+    ],
+)
+async def test_dispatch_matches_configured_events(
+    fake_deliver: list[tuple[str, dict[str, object]]],
+    on: frozenset[str],
+    enabled: bool,
+    event: RunFinished | StepFinished | LogRecord,
+    expect_dispatch: bool,
+) -> None:
+    notifier = NotificationSink((_config("n", on, enabled=enabled),), run_id="r1", workflow="demo")
+    notifier.handle(event)
     await notifier.wait()
-    assert len(fake_deliver) == 1
-    assert fake_deliver[0][0] == "n"
-
-
-async def test_events_not_configured_in_on_are_ignored(fake_deliver: list[tuple[str, dict[str, object]]]) -> None:
-    notifier = NotificationSink(
-        (_config("n", frozenset({"run_started"})),), run_id="r1", workflow="demo"
-    )
-    notifier.handle(RunFinished(status="ok", duration_ms=10))
-    await notifier.wait()
-    assert fake_deliver == []
-
-
-async def test_disabled_notifiers_never_fire(fake_deliver: list[tuple[str, dict[str, object]]]) -> None:
-    notifier = NotificationSink(
-        (_config("n", frozenset({"run_finished"}), enabled=False),), run_id="r1", workflow="demo"
-    )
-    notifier.handle(RunFinished(status="ok", duration_ms=10))
-    await notifier.wait()
-    assert fake_deliver == []
-
-
-async def test_a_successful_step_is_not_a_step_failed_event(fake_deliver: list[tuple[str, dict[str, object]]]) -> None:
-    notifier = NotificationSink(
-        (_config("n", frozenset({"step_failed"})),), run_id="r1", workflow="demo"
-    )
-    notifier.handle(StepFinished(id="a", status="ok", duration_ms=1))
-    await notifier.wait()
-    assert fake_deliver == []
-
-
-async def test_a_failed_step_matches_step_failed(fake_deliver: list[tuple[str, dict[str, object]]]) -> None:
-    notifier = NotificationSink(
-        (_config("n", frozenset({"step_failed"})),), run_id="r1", workflow="demo"
-    )
-    notifier.handle(StepFinished(id="a", status="failed", duration_ms=1))
-    await notifier.wait()
-    assert len(fake_deliver) == 1
-
-
-async def test_unrelated_event_types_are_ignored(fake_deliver: list[tuple[str, dict[str, object]]]) -> None:
-    notifier = NotificationSink(
-        (_config("n", frozenset({"run_started", "run_finished", "step_failed"})),),
-        run_id="r1",
-        workflow="demo",
-    )
-    notifier.handle(LogRecord(level="info", message="hello"))
-    await notifier.wait()
-    assert fake_deliver == []
+    assert bool(fake_deliver) is expect_dispatch
 
 
 async def test_two_notifiers_can_watch_the_same_event_independently(

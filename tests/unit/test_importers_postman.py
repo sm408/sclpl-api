@@ -122,30 +122,23 @@ def test_prerequest_and_test_scripts_are_reported_never_executed(tmp_path: Path)
     assert all("never executed" in item for item in request.unsupported)
 
 
-def test_bearer_auth_is_extracted(tmp_path: Path) -> None:
+@pytest.mark.parametrize(
+    ("request_name", "kind", "attrs"),
+    [
+        ("Orders/List Orders", "bearer", {"secret_value": "sekret-token"}),
+        ("Basic Auth Request", "basic", {"username": "alice", "secret_value": "hunter2"}),
+        ("Api Key Request", "api_key", {"header": "X-Api-Key", "secret_value": "abc123"}),
+    ],
+)
+def test_auth_is_extracted_by_kind(
+    tmp_path: Path, request_name: str, kind: str, attrs: dict[str, str]
+) -> None:
     collection = postman.load(_write(tmp_path))
-    request = next(r for r in collection.requests if r.name == "Orders/List Orders")
+    request = next(r for r in collection.requests if r.name == request_name)
     assert request.auth is not None
-    assert request.auth.kind == "bearer"
-    assert request.auth.secret_value == "sekret-token"
-
-
-def test_basic_auth_is_extracted(tmp_path: Path) -> None:
-    collection = postman.load(_write(tmp_path))
-    request = next(r for r in collection.requests if r.name == "Basic Auth Request")
-    assert request.auth is not None
-    assert request.auth.kind == "basic"
-    assert request.auth.username == "alice"
-    assert request.auth.secret_value == "hunter2"
-
-
-def test_api_key_auth_is_extracted(tmp_path: Path) -> None:
-    collection = postman.load(_write(tmp_path))
-    request = next(r for r in collection.requests if r.name == "Api Key Request")
-    assert request.auth is not None
-    assert request.auth.kind == "api_key"
-    assert request.auth.header == "X-Api-Key"
-    assert request.auth.secret_value == "abc123"
+    assert request.auth.kind == kind
+    for field, value in attrs.items():
+        assert getattr(request.auth, field) == value
 
 
 def test_variable_becomes_a_var_declaration(tmp_path: Path) -> None:

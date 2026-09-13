@@ -81,29 +81,35 @@ def test_bearer_token_is_extracted_from_the_authorization_header() -> None:
     assert parsed.auth.secret_value == "sekret-token"
 
 
-def test_user_flag_is_extracted_as_basic_auth() -> None:
-    parsed = curl.parse("curl https://api.example.com/x -u alice:hunter2")
+_BASIC_TOKEN = base64.b64encode(b"alice:hunter2").decode()
+
+
+@pytest.mark.parametrize(
+    ("command", "kind", "attrs"),
+    [
+        (
+            "curl https://api.example.com/x -u alice:hunter2",
+            "basic",
+            {"username": "alice", "secret_value": "hunter2"},
+        ),
+        (
+            f"curl https://api.example.com/x -H 'Authorization: Basic {_BASIC_TOKEN}'",
+            "basic",
+            {"username": "alice", "secret_value": "hunter2"},
+        ),
+        (
+            "curl https://api.example.com/x -H 'Authorization: Token xyz'",
+            "header",
+            {"secret_value": "xyz", "prefix": "Token "},
+        ),
+    ],
+)
+def test_auth_is_extracted_by_kind(command: str, kind: str, attrs: dict[str, str]) -> None:
+    parsed = curl.parse(command)
     assert parsed.auth is not None
-    assert parsed.auth.kind == "basic"
-    assert parsed.auth.username == "alice"
-    assert parsed.auth.secret_value == "hunter2"
-
-
-def test_basic_auth_header_is_decoded_into_username_and_password() -> None:
-    token = base64.b64encode(b"alice:hunter2").decode()
-    parsed = curl.parse(f"curl https://api.example.com/x -H 'Authorization: Basic {token}'")
-    assert parsed.auth is not None
-    assert parsed.auth.kind == "basic"
-    assert parsed.auth.username == "alice"
-    assert parsed.auth.secret_value == "hunter2"
-
-
-def test_unrecognized_auth_scheme_is_extracted_as_a_generic_header() -> None:
-    parsed = curl.parse("curl https://api.example.com/x -H 'Authorization: Token xyz'")
-    assert parsed.auth is not None
-    assert parsed.auth.kind == "header"
-    assert parsed.auth.secret_value == "xyz"
-    assert parsed.auth.prefix == "Token "
+    assert parsed.auth.kind == kind
+    for field, value in attrs.items():
+        assert getattr(parsed.auth, field) == value
 
 
 @pytest.mark.parametrize(
