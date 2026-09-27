@@ -44,7 +44,7 @@ from sclpl.run.transport import Pool, TransportLimits
 from sclpl.state import db, locking, safe_args
 from sclpl.tables.io import STDIO
 from sclpl.values import cache, governor
-from sclpl.values.governor import parse_budget
+from sclpl.values.governor import parse_budget, parse_load
 from sclpl.values.ref import Scratch
 from sclpl.values.store import ValueStore
 
@@ -781,6 +781,12 @@ def _limits(doc: WorkflowDoc, options: Options) -> Limits:
         tags=dict(doc.limits.tags),
         keep_going=options.keep_going,
         memory_budget=parse_budget(budget),
+        load=parse_load(
+            doc.limits.cpu_soft,
+            doc.limits.cpu_hard,
+            doc.limits.loop_lag_soft,
+            doc.limits.loop_lag_hard,
+        ),
     )
 
 

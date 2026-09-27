@@ -59,6 +59,18 @@ Defines a named expression for `assert`, `when`, `skip_if`, or `retry_if`.
 These are ceilings, not promises that the runner will always use the maximum. The governor and
 remote responses may reduce concurrency.
 
+The governor can also watch CPU and event-loop lag. Both are off unless a threshold is set:
+
+```sclpll
+@limits cpu_soft=70% cpu_hard=90% loop_lag_soft=100ms loop_lag_hard=250ms
+```
+
+At a soft threshold one fewer step is admitted; at a hard one, half as many, never fewer than
+one. Running steps always finish, and admissions climb back one step at a time once every
+signal is clear. Each change is logged with the measured value. CPU needs `psutil`
+(`pip install 'sclpl[monitor]'`); without it the run warns once that CPU is not watched and
+carries on. Lag thresholds need a unit (`ms` or `s`).
+
 ### `@mode`
 
 ```sclpll

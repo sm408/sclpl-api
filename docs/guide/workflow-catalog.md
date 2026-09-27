@@ -123,8 +123,9 @@ expressions. Selectors accept IDs, globs, and `tag:NAME`.
 | `limit NAME=VALUE` | Override a scalar limit. |
 | `stub NAME=VALUE` | Supply a value for a pruned producer. |
 
-`@limits` accepts `concurrency`, `host_concurrency`, `timeout`, `retries`, `max_pages`, and
-`memory_budget`. These are ceilings; the governor or remote service may run below them.
+`@limits` accepts `concurrency`, `host_concurrency`, `timeout`, `retries`, `max_pages`,
+`memory_budget`, and the optional governor thresholds `cpu_soft`, `cpu_hard`, `loop_lag_soft`,
+and `loop_lag_hard`. These are ceilings; the governor or remote service may run below them.
 
 ## Step headers and common clauses
 
