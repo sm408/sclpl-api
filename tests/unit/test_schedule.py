@@ -317,3 +317,44 @@ async def test_a_diamond_runs_each_node_once() -> None:
     async with reporter() as rep:
         await Scheduler(plan, ValueStore(), rep, Limits(concurrency=4)).run(runner)
     assert sorted(ran) == ["join", "left", "right", "top"]
+
+
+async def test_a_lowered_host_limit_lets_running_requests_finish_and_gates_new_ones() -> None:
+    """Issue #7: shrinking a host's ceiling never interrupts work, only admission."""
+    from sclpl.run.schedule import _Gate
+
+    gate = _Gate(Limits(host_concurrency=4))
+    slots = gate._host("api")
+    for _ in range(3):
+        await slots.acquire()
+    assert gate.set_host_limit("api", 2) == (4, 2)
+
+    admitted = asyncio.create_task(slots.acquire())
+    await asyncio.sleep(0)
+    slots.release()  # 2 still running: at the new limit, so still waiting
+    await asyncio.sleep(0)
+    assert not admitted.done()
+    slots.release()
+    await asyncio.wait_for(admitted, timeout=1)
+
+    assert gate.set_host_limit("api", 99) == (2, 4)  # never above the static cap
+    assert gate.set_host_limit("api", 0) == (4, 1)  # nor below one
+
+
+async def test_a_host_limit_change_is_reported_once() -> None:
+    from sclpl.render.events import HostLimitChanged
+
+    seen: list[object] = []
+
+    class Collect:
+        def handle(self, event: object) -> None:
+            seen.append(event)
+
+        def close(self) -> None:
+            pass
+
+    async with Reporter([Collect()]) as rep:
+        scheduler = Scheduler(build([]), ValueStore(), rep, Limits(host_concurrency=6))
+        scheduler.limit_host("api", 3, "HTTP 429")
+        scheduler.limit_host("api", 3, "HTTP 429")  # no change, no event
+    assert seen == [HostLimitChanged("api", 6, 3, 6, "HTTP 429")]

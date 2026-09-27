@@ -5,6 +5,12 @@ release lineage begins at `v1.0.0`.
 
 ## Unreleased
 
+- Fixed: adaptive per-host concurrency is now applied (#7). A 429 or 503 halves
+  the number of requests admitted to that host (requests already in flight
+  finish), and it climbs back one step per window of steady responses, never
+  above `host_concurrency`. Each change is reported as a `host_limit_changed`
+  event in terminal output and the NDJSON run log.
+
 ## 1.0.2
 
 - Added: `sclpl package build|validate|install|list|show|verify|remove|update|

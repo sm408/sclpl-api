@@ -17,6 +17,7 @@ from typing import TextIO
 
 from sclpl.render.events import (
     Event,
+    HostLimitChanged,
     LogRecord,
     ResourceWarning,
     RunFinished,
@@ -173,6 +174,9 @@ class HumanSink:
                 return caps.paint(f"   freed {event.name} {format_bytes(event.bytes)}", "grey")
             case ResourceWarning():
                 return caps.paint(f" ! {event.kind} at {event.current} of {event.budget}", "yellow")
+            case HostLimitChanged():
+                change = f"{event.previous} -> {event.limit}"
+                return caps.paint(f" ! {event.host} concurrency {change}: {event.reason}", "yellow")
             case LogRecord():
                 label = caps.paint(event.level, _LEVEL_STYLE[event.level])
                 where = caps.paint(f" [{event.step}]", "grey") if event.step else ""

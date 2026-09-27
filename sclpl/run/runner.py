@@ -358,6 +358,7 @@ async def run_workflow(doc: WorkflowDoc, options: Options, reporter: Reporter) -
                 return None if value is SKIPPED else value
 
             scheduler = Scheduler(execution_plan, store, reporter, limits)
+            pool.follow_limits(scheduler.limit_host, limits.host_concurrency)
 
             def expand(
                 parent: str, specs: list[ExpandSpec], tag_limit: tuple[str, int] | None

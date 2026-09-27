@@ -204,6 +204,15 @@ def test_it_recovers_when_latency_is_flat() -> None:
     assert control.limit > lowered
 
 
+def test_recovery_is_one_step_per_window() -> None:
+    """A host that just said 429 is not back at full concurrency a few responses later."""
+    control = Adaptive(ceiling=8, window=4)
+    control.record(0.1, 429)
+    changes = [control.record(0.1, 200) for _ in range(12)]
+    assert changes == [False, False, False, True] * 3
+    assert control.limit == 7
+
+
 def test_a_503_is_treated_like_a_429() -> None:
     control = Adaptive(ceiling=8)
     control.record(0.1, 503)
