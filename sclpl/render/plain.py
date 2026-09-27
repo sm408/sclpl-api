@@ -12,6 +12,7 @@ from typing import TextIO
 
 from sclpl.render.events import (
     Event,
+    HostLimitChanged,
     LogRecord,
     ResourceWarning,
     RunFinished,
@@ -106,6 +107,8 @@ class PlainSink:
                 return f"  freed {event.name} {format_bytes(event.bytes)}"
             case ResourceWarning():
                 return f"  warn {event.kind} at {event.current} of {event.budget}"
+            case HostLimitChanged():
+                return f"  limit {event.host} {event.previous} -> {event.limit}: {event.reason}"
             case LogRecord():
                 where = f" [{event.step}]" if event.step else ""
                 return f"{event.level}{where}: {event.message}"

@@ -450,6 +450,7 @@ StepFinished(id, status, duration_ms, summary, cached)
 StepRetrying(id, attempt, max, reason, delay_s)
 ValueFreed(name, bytes)
 ResourceWarning(kind, current, budget)
+HostLimitChanged(host, previous, limit, ceiling, reason)   # adaptive per-host limit moved
 LogRecord(level, message, step)
 RunFinished(status, duration_ms, counts, exit_code)
 ```
