@@ -64,6 +64,9 @@ class Injected:
     #: An expression evaluated in the iteration's scope, whose value is the iteration's
     #: result instead of the last step's. Only ever set alongside `result_of`.
     collect: str | None = None
+    #: `Runtime` fields this node runs with instead of the run's own -- set for the
+    #: steps of a used workflow (`subflow.py`), and inherited by anything they expand.
+    scope: dict[str, Any] | None = None
 
 
 @dataclass(slots=True)
@@ -81,6 +84,7 @@ class Expansion:
     #: - `last` -- the most recent pass's value (`while`: a loop that runs until
     #:   something is true is asking for the state at the end, and the intermediate
     #:   states are what it was getting past)
+    #: - `outputs` -- `{port: value}`, one entry per declared output (`use`)
     produces: str = "list"
     #: What the loop itself produced, for the barrier to publish. `None` means "collect
     #: the iteration results", which is the normal case.

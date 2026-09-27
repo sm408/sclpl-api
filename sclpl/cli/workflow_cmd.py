@@ -231,6 +231,7 @@ def run(
         resume_from=resume_from,
         force_resume=frozenset(force_resume or ()),
         resource_base=located.origin_uri,
+        origin=located.path,
     )
     globals_ = options_of(ctx)
     notification_sink = _notification_sink(
@@ -295,7 +296,12 @@ def validate(
     located = _locate(workflow)
     doc = located.doc
     report = preflight(
-        doc, mode=mode, check_files=False, require_ports=False, resource_base=located.origin_uri
+        doc,
+        mode=mode,
+        check_files=False,
+        require_ports=False,
+        resource_base=located.origin_uri,
+        origin=located.path,
     )
     del ctx
 
@@ -324,7 +330,12 @@ def explain(
     located = _locate(workflow)
     doc = located.doc
     report = preflight(
-        doc, mode=mode, check_files=False, require_ports=False, resource_base=located.origin_uri
+        doc,
+        mode=mode,
+        check_files=False,
+        require_ports=False,
+        resource_base=located.origin_uri,
+        origin=located.path,
     )
     del ctx
     if not report.ok:

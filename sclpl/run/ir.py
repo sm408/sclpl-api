@@ -192,11 +192,18 @@ class ParallelConfig(Base):
 
 
 class UseConfig(Base):
-    """Invoke another workflow as a step."""
+    """Invoke another workflow as a step.
 
-    workflow: str
-    mode: str | None = None
-    inputs: dict[str, JsonValue] = Field(default_factory=dict)
+    Its steps are injected into this graph (ADR 0016), so every limit still applies. The
+    step's value is `{output: value}` for each output the workflow declares, or its last
+    step's value when it declares none.
+    """
+
+    workflow: str = Field(description="Catalogue name or path, resolved like `sclpl run`.")
+    mode: str | None = Field(default=None, description="The used workflow's mode.")
+    inputs: dict[str, JsonValue] = Field(
+        default_factory=dict, description="Values for its `@input`s and `@var`s, by name."
+    )
 
 
 StepConfig: TypeAlias = (

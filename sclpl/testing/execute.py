@@ -44,6 +44,7 @@ def run(manifest: Manifest, project: ProjectContext, *, update_snapshots: bool =
         no_cache=True,
         offline=True,
         scratch_dir=state_dir,
+        origin=located.path,
     )
 
     async def execute() -> Result:

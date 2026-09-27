@@ -21,7 +21,7 @@ from sclpl.project.auth import Profile as AuthProfile
 from sclpl.render.events import StepProgress
 from sclpl.render.reporter import Reporter
 from sclpl.run import checkpoints as checkpoints_mod
-from sclpl.run import control, lanes, paginate
+from sclpl.run import control, lanes, paginate, subflow
 from sclpl.run.ir import (
     FnConfig,
     ForeachConfig,
@@ -141,6 +141,10 @@ class Runtime:
     script_cache_read: bool = True
     script_cache_write: bool = True
     script_cache_require_hit: bool = False
+    #: `use` step id -> the workflow it runs, as preflight located and checked it.
+    children: dict[str, subflow.Child] = field(default_factory=dict)
+    #: Set while running a used workflow's step: the fields `run_injected` swapped in.
+    scope: dict[str, Any] | None = None
 
     def metric(self, step_id: str) -> StepMetrics:
         return self.metrics.setdefault(step_id, StepMetrics())
@@ -308,11 +312,8 @@ async def _dispatch(step: Step, node: Node, runtime: Runtime, node_id: str) -> A
             # store by the time anything after it starts, which the graph already
             # guarantees -- the step exists so the author can say where that matters.
             return control.gate_reason(config)
-        case UseConfig():
-            raise StepFailed(
-                f"step {step.id!r} calls another workflow, which is not implemented in this build",
-                remedies=["inline the steps for now, or run the two workflows in sequence"],
-            )
+        case UseConfig() as config:
+            return await _use(node_id, step, config, runtime)
         case _:
             raise StepFailed(f"step {step.id!r} has an unsupported kind {step.kind!r}")
 
@@ -671,6 +672,10 @@ async def _fn(step: Step, config: FnConfig, runtime: Runtime) -> Any:
             f"step {step.id!r} calls {config.name!r}, which is not registered",
             remedies=["run 'sclpl fn list' to see what is available"],
         )
+    if step.writes and runtime.scope is not None:
+        # A used workflow returns its outputs instead of writing them: the value this
+        # step would have written is the output's value, and the caller decides.
+        return args[0] if args else next(iter(kwargs.values()), None)
     args, kwargs = _bind_output(step, args, kwargs, runtime)
     try:
         return await _in_lane(step, config, args, kwargs, runtime)
@@ -865,6 +870,18 @@ async def _loop_condition(config: WhileConfig, runtime: Runtime, passes: int) ->
     return await evaluate(parse(config.condition), context)
 
 
+async def _use(node: str, step: Step, config: UseConfig, runtime: Runtime) -> Any:
+    """Run another workflow's steps as nodes of this graph (see `subflow.py`)."""
+    child = runtime.children.get(step.id)
+    if child is None:
+        raise StepFailed(
+            f"step {step.id!r} uses {config.workflow!r}, which preflight did not resolve",
+            remedies=["run it through `sclpl run` or `sclpl validate`, which resolve it"],
+        )
+    args = {name: await _resolve(value, runtime) for name, value in config.inputs.items()}
+    return _grow(node, subflow.expand(step, node, child, args), runtime)
+
+
 async def _parallel(node: str, step: Step, config: ParallelConfig, runtime: Runtime) -> Any:
     """Run every branch at once."""
     return _grow(node, control.expand_parallel(step, config, runtime), runtime)
@@ -877,6 +894,15 @@ def _grow(node: str, expansion: control.Expansion, runtime: Runtime) -> Any:
     if runtime.expand is None:  # pragma: no cover - the runner always supplies one
         raise StepFailed(f"node {node!r} cannot expand outside a scheduled run")
 
+    for entry in expansion.injected.values():
+        if entry.scope is None:
+            entry.scope = runtime.scope
+    if runtime.scope is not None:
+        # Inside a used workflow, names resolve from its frame, never the run's store,
+        # so only the decorated node ids (the edges) are kept. A plain name would hold
+        # open -- or free -- the parent's value of the same name.
+        for spec in expansion.specs:
+            spec.reads = frozenset(name for name in spec.reads if control.MARK in name)
     runtime.injected.update(expansion.injected)
     runtime.results[node] = expansion.results
     runtime.joins[node] = expansion.produces
@@ -887,7 +913,7 @@ def _grow(node: str, expansion: control.Expansion, runtime: Runtime) -> Any:
 async def run_injected(node_id: str, runtime: Runtime) -> Any:
     """Run a node the graph grew for itself, in the scope it belongs to."""
     entry = runtime.injected[node_id]
-    scoped = replace(runtime, frame=entry.frame)
+    scoped = replace(runtime, frame=entry.frame, scope=entry.scope, **(entry.scope or {}))
     value = await run_step(entry.step, Node(id=node_id), scoped, node_id=node_id)
     if value is SKIPPED:
         return value
@@ -915,6 +941,19 @@ def collect(parent: str, runtime: Runtime) -> Any:
     order for a `parallel` -- never the order they happened to finish in. A loop whose
     results came back shuffled would be a loop nobody could use.
     """
+    value = _collected(parent, runtime)
+    entry = runtime.injected.get(parent)
+    if entry is not None and entry.parent != entry.step.id:
+        # A control step that is itself a copy -- a loop inside a loop, or inside a used
+        # workflow -- published `None` into its frame when it expanded. Its siblings read
+        # it from that frame, so the finished value goes there too.
+        entry.frame.values[entry.step.id] = value
+        if entry.result_of is not None and entry.collect is None:
+            runtime.produced[parent] = value
+    return value
+
+
+def _collected(parent: str, runtime: Runtime) -> Any:
     produces = runtime.joins.pop(parent, "list")
     results = runtime.results.pop(parent, {})
 
@@ -922,6 +961,8 @@ def collect(parent: str, runtime: Runtime) -> Any:
         made = (runtime.injected[node] for node in results.values() if node in runtime.injected)
         owner = next((entry.parent for entry in made), parent)
         return runtime.settled.get(owner)
+    if produces == "outputs":
+        return {port: runtime.produced.pop(node, None) for port, node in results.items()}
 
     values = [
         runtime.produced.pop(results[key], None) for key in sorted(results, key=_iteration_order)

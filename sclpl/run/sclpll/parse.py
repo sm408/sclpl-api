@@ -28,6 +28,7 @@ from sclpl.run.ir import (
     Port,
     Retry,
     Step,
+    UseConfig,
     WhileConfig,
     WorkflowDoc,
 )
@@ -354,6 +355,10 @@ class _Parser:
         elif head == "parallel":
             step["kind"] = "parallel"
             step["config"] = self._parallel(first, body[1:], step)
+        elif head == "use":
+            step["kind"] = "use"
+            step["config"] = self._use(first)
+            self._common_body(step, body[1:])
         elif head == "gate":
             step["kind"] = "gate"
             reason = unquote(first.rest.strip())
@@ -411,6 +416,30 @@ class _Parser:
                     config["verify"] = _literal(line.rest.strip())
                 case "stream":
                     config["stream_to"] = unquote(line.rest)
+
+    def _use(self, first: Token) -> dict[str, Any]:
+        """`use <workflow> [mode=<name>] [input=value ...]`."""
+        args = self.args(first.rest, first)
+        if not args or "=" in args[0]:
+            raise self.error(
+                "use needs a workflow: a catalogue name or a path",
+                first,
+                ["e.g. `use news_filter symbols=@watchlist`"],
+            )
+        config: dict[str, Any] = {"workflow": unquote(args[0]), "inputs": {}}
+        for item in args[1:]:
+            key, separator, value = item.partition("=")
+            if not separator or not key.isidentifier():
+                raise self.error(
+                    f"use takes name=value arguments, found {item!r}",
+                    first,
+                    ["each argument names one of the workflow's inputs or @vars"],
+                )
+            if key == "mode":
+                config["mode"] = _literal(value)
+            else:
+                config["inputs"][key] = _literal(value)
+        return UseConfig.model_validate(config).model_dump(exclude_defaults=True)
 
     def _paginate(self, line: Token) -> dict[str, Any]:
         args = self.args(line.rest, line)

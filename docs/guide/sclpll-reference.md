@@ -97,6 +97,30 @@ The first body line selects the kind:
 | `while`, `do_while` | Loop | Repeat a bounded body |
 | `parallel` | Parallel branches | Express independent branches explicitly |
 | `gate` | Barrier | Name a synchronization point |
+| `use` | Sub-workflow | Run another workflow's steps as part of this one |
+
+## Using another workflow
+
+```sclpll
+@step filtered
+  use news_filter symbols=@watchlist days=1
+
+@step report -> report
+  save_csv @filtered.kept
+```
+
+`use` takes a catalogue name or a path, resolved like `sclpl run` resolves its argument but
+with the using file's directory searched first. `mode=<name>` picks the used workflow's mode;
+every other `name=value` binds one of its `@input`s (as a value, not a file) or overrides one of
+its `@var`s. The step's value is an object with one entry per output the used workflow declares
+-- the value its `-> port` step would have written; a used workflow never writes its own
+outputs. A workflow with no declared outputs produces its last step's value.
+
+The used workflow's steps run as nodes of the calling run, named `<step>::use::<child step>`,
+so the run's concurrency, host, and tag limits apply to them and run history records them.
+`sclpl validate` checks the used workflow too, and names the `use` step when it is missing, is
+given an unknown argument, lacks a required input, fails its own checks, or leads back to a
+workflow already using it.
 
 ## HTTP clauses
 

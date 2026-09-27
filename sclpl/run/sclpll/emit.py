@@ -174,8 +174,11 @@ def _step(step: Step, depth: int) -> list[str]:
                 for child in branch:
                     lines.extend(_step(child, depth + 2))
         case UseConfig() as config:
-            suffix = f" mode={config.mode}" if config.mode else ""
-            lines.append(f"{body}use {config.workflow}{suffix}")
+            parts = [_value(config.workflow)]
+            if config.mode:
+                parts.append(f"mode={_value(config.mode)}")
+            parts.extend(f"{key}={_value(value)}" for key, value in config.inputs.items())
+            lines.append(f"{body}use {' '.join(parts)}")
         case GateConfig() as config:
             lines.append(f"{body}gate {_quote(config.reason)}" if config.reason else f"{body}gate")
 

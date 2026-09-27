@@ -16,7 +16,7 @@ from pathlib import Path
 
 from sclpl.errors import ValidationError, did_you_mean
 from sclpl.project.policy import Policy
-from sclpl.run import eligibility, paginate
+from sclpl.run import eligibility, paginate, subflow
 from sclpl.run.compile_plan import compile_plan, function_names, hosts
 from sclpl.run.ir import WorkflowDoc
 from sclpl.run.modes import Resolved, resolve
@@ -41,6 +41,8 @@ class Report:
     #: that is validated -- keyed by port name. Analysis only; nothing here defers
     #: or gates a write.
     eligibility: dict[str, eligibility.Eligibility] = field(default_factory=dict)
+    #: `use` step id -> the workflow it runs, checked. Nested uses hang off each child.
+    children: dict[str, subflow.Child] = field(default_factory=dict)
 
     @property
     def ok(self) -> bool:
@@ -77,14 +79,21 @@ def preflight(
     require_ports: bool = True,
     policy: Policy | None = None,
     resource_base: str | None = None,
+    origin: Path | None = None,
+    stack: tuple[tuple[Path, str], ...] = (),
 ) -> Report:
     """Check a workflow end to end without executing it.
 
     Stops at the first failure in each phase rather than pressing on: a workflow whose
     ports do not bind cannot have its graph meaningfully checked, and reporting the
     consequences alongside the cause makes the cause harder to find.
+
+    ``origin`` is the file the workflow came from, which is where a `use` step looks
+    first; ``stack`` is the chain of workflows using this one, for cycle detection.
     """
     report = Report(workflow=doc.name, mode=mode)
+    if not stack and origin is not None:
+        stack = ((origin.resolve(), doc.name),)
 
     # 1. Ports. Everything else depends on knowing what is bound.
     #
@@ -153,6 +162,10 @@ def preflight(
     # is correct, but a stub never runs the `assert` it stands in for.
     report.problems.extend(eligibility.check_stubbed_validation(doc, report.resolved))
     report.eligibility = eligibility.derive(doc, report.plan)
+
+    # 5c. Used workflows: found, given what they need, and checked the same way.
+    report.children, used = subflow.check(doc, report.resolved, origin, stack)
+    report.problems.extend(used)
 
     # 6. Files: inputs readable, output directories present. Never writes.
     if check_files and report.bindings is not None:

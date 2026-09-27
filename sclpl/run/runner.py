@@ -109,6 +109,8 @@ class Options:
     remote_generation: bool = False
     #: Logical base URI of a remotely loaded workflow, if any.
     resource_base: str | None = None
+    #: The file the workflow was read from, where a `use` step looks first.
+    origin: Path | None = None
 
 
 @dataclass(slots=True)
@@ -139,6 +141,7 @@ async def run_workflow(doc: WorkflowDoc, options: Options, reporter: Reporter) -
         check_files=options.validate,
         policy=project_policy,
         resource_base=options.resource_base,
+        origin=options.origin,
     )
     for note in report.notes:
         reporter.log("info", note)
@@ -332,6 +335,7 @@ async def run_workflow(doc: WorkflowDoc, options: Options, reporter: Reporter) -
                 script_cache_read=resource_policy.read,
                 script_cache_write=resource_policy.write,
                 script_cache_require_hit=resource_policy.require_hit,
+                children=report.children,
             )
             runtime.completeness.extend(resume_completeness)
             for name, value in stubs.items():
@@ -344,12 +348,13 @@ async def run_workflow(doc: WorkflowDoc, options: Options, reporter: Reporter) -
             async def runner(node: Node) -> Any:
                 # Three kinds of node reach here. Most are steps someone wrote. The
                 # rest the run grew for itself: a copy of a loop body, and the barrier
-                # that gathers one. Only the first kind is in the document.
-                if node.id.endswith(JOIN_SUFFIX):
-                    return collect(node.id[: -len(JOIN_SUFFIX)], runtime)
+                # that gathers one. Only the first kind is in the document. Copies are
+                # checked first: a copied step may itself be called `join`.
                 if node.id in runtime.injected:
                     value = await run_injected(node.id, runtime)
                     return None if value is SKIPPED else value
+                if node.id.endswith(JOIN_SUFFIX):
+                    return collect(node.id[: -len(JOIN_SUFFIX)], runtime)
 
                 step = doc.step(node.id)
                 if step is None:  # pragma: no cover - the plan is built from these steps

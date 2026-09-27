@@ -229,6 +229,37 @@ def test_a_missing_required_port_shows_the_usage(tmp_path: Path) -> None:
 # -- fmt and convert -------------------------------------------------------------
 
 
+def test_use_resolves_beside_the_using_file_and_validate_names_the_step(tmp_path: Path) -> None:
+    flows = tmp_path / "flows"
+    flows.mkdir()
+    (flows / "child.sclpll").write_text(
+        "@workflow child\n@var n = 1\n@output out:json\n\n@step double\n  let n * 2\n\n"
+        "@step value -> out\n  save_json @double\n",
+        encoding="utf-8",
+    )
+    (flows / "parent.sclpll").write_text(
+        "@workflow parent\n@output result:json\n\n@step c\n  use child n=21\n\n"
+        "@step write -> result\n  save_json @c.out\n",
+        encoding="utf-8",
+    )
+    result = tmp_path / "result.json"
+    ran = run_cli(
+        "run", str(flows / "parent.sclpll"), "--out", f"result={result}", "--no-record",
+        cwd=tmp_path, home=tmp_path,
+    )  # fmt: skip
+    assert ran.returncode == 0, ran.stderr
+    assert json.loads(result.read_text(encoding="utf-8")) == 42
+    assert not (tmp_path / "out").exists()
+
+    (flows / "child.sclpll").write_text(
+        "@workflow child\n@var n = 1\n\n@step back\n  use parent\n", encoding="utf-8"
+    )
+    checked = run_cli("validate", str(flows / "parent.sclpll"), cwd=tmp_path, home=tmp_path)
+    assert checked.returncode == EXIT_VALIDATION
+    assert "step 'c' uses 'child'" in checked.stderr
+    assert "parent -> child -> parent" in checked.stderr
+
+
 def test_fmt_is_idempotent(workflow: Path) -> None:
     first = run_cli("fmt", str(workflow))
     assert first.returncode == 0
