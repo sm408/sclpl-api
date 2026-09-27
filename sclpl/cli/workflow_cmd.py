@@ -8,8 +8,11 @@ report is what `run` would actually do.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import io
+import signal
 import sys
+from collections.abc import Iterator
 from pathlib import Path
 from typing import Annotated, Any
 from urllib.parse import urlsplit
@@ -251,6 +254,10 @@ def run(
     )
 
     async def go() -> int:
+        with _break_as_interrupt():
+            return await _go()
+
+    async def _go() -> int:
         async with reporter:
             result = await run_workflow(doc, options, reporter)
             # I4: every event through RunFinished has reached notification_sink's
@@ -285,6 +292,33 @@ def run(
         raise typer.Exit(EXIT_INTERRUPTED) from None
     if code:
         raise typer.Exit(code)
+
+
+@contextlib.contextmanager
+def _break_as_interrupt() -> Iterator[None]:
+    """Windows: send CTRL_BREAK_EVENT down the same path as Ctrl-C (#13).
+
+    CTRL_BREAK is the only console event a supervisor can aim at a child in another
+    process group, and Python raises nothing for its `SIGBREAK`, so unhandled it is a
+    hard kill. Here it gets whatever `asyncio.run` installed for SIGINT: cancel the
+    main task (in-flight steps cancelled, staged output discarded, the run recorded),
+    wake the loop from its I/O wait, and on a second press raise at once. Taken before
+    the reporter arms its terminal guard, which chains SIGINT but knows no SIGBREAK.
+    """
+    signum = getattr(signal, "SIGBREAK", None)
+    handler = signal.getsignal(signal.SIGINT)
+    if signum is None or not callable(handler):
+        yield
+        return
+    try:
+        previous = signal.signal(signum, handler)
+    except ValueError:  # not the main thread, so asyncio installed nothing to share
+        yield
+        return
+    try:
+        yield
+    finally:
+        signal.signal(signum, previous if previous is not None else signal.SIG_DFL)
 
 
 def validate(

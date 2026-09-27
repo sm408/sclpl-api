@@ -7,6 +7,7 @@ in how they gather the arguments, not in what happens afterwards.
 
 from __future__ import annotations
 
+import asyncio
 import sys
 import time
 from dataclasses import dataclass, field
@@ -363,6 +364,7 @@ async def run_workflow(doc: WorkflowDoc, options: Options, reporter: Reporter) -
                 return None if value is SKIPPED else value
 
             scheduler = Scheduler(execution_plan, store, reporter, limits)
+            pool.follow_limits(scheduler.limit_host, limits.host_concurrency)
 
             def expand(
                 parent: str, specs: list[ExpandSpec], tag_limit: tuple[str, int] | None
@@ -370,8 +372,15 @@ async def run_workflow(doc: WorkflowDoc, options: Options, reporter: Reporter) -
                 scheduler.expand(parent, specs, tag_limit=tag_limit)
 
             runtime.expand = expand
+            interrupted = False
             try:
                 outcome = await scheduler.run(runner)
+            except asyncio.CancelledError:
+                # Ctrl-C, or CTRL_BREAK on Windows (#13): finish the bookkeeping below
+                # -- discard staged output, close the stores, record the run as
+                # cancelled -- and only then let the cancellation carry on outwards.
+                outcome = scheduler.outcome
+                interrupted = True
             finally:
                 # Pools outlive the event loop unless closed, and a lingering process
                 # pool keeps the interpreter alive after the CLI has printed its summary.
@@ -408,7 +417,7 @@ async def run_workflow(doc: WorkflowDoc, options: Options, reporter: Reporter) -
         and _completeness_of(runtime, outcome) != "complete"
     ):
         exit_code = EXIT_INCOMPLETE
-    if options.strict_replay and fixtures is not None and fixtures.unused():
+    if options.strict_replay and not interrupted and fixtures is not None and fixtures.unused():
         raise ValidationError("strict replay left unused fixtures")
     reporter.emit(
         RunFinished(
@@ -431,6 +440,8 @@ async def run_workflow(doc: WorkflowDoc, options: Options, reporter: Reporter) -
             runtime,
             publication_state,
         )
+    if interrupted:
+        raise asyncio.CancelledError
     return Result(outcome=outcome, report=report, store=store, exit_code=exit_code)
 
 
