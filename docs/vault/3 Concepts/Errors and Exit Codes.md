@@ -17,7 +17,7 @@ next, which is why there are eight rather than two.
 | 4 | `EXIT_ASSERTION` | The **data** was wrong | Look at the data, not the request |
 | 5 | `EXIT_CACHE_MISS` | `--from-cache` had nothing | Run without it once |
 | 6 | `EXIT_UNKNOWN_TARGET` | No such workflow | Check the name; a suggestion is printed |
-| 130 | `EXIT_INTERRUPTED` | Ctrl-C | — |
+| 130 | `EXIT_INTERRUPTED` | Ctrl-C, or `CTRL_BREAK_EVENT` on Windows | — |
 
 **3 and 4 are the two that earn their keep.** 3 means nothing happened, so re-running
 after a fix costs nothing. 4 means the requests succeeded and the answers were wrong,

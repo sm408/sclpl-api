@@ -16,6 +16,14 @@ release lineage begins at `v1.0.0`.
   climbs back one step at a time once clear, and logs every change with the
   measured value. Off unless set. CPU needs the new `sclpl[monitor]` extra
   (psutil); without it the run warns once and carries on (ADR 0016).
+- Fixed: on Windows, `CTRL_BREAK_EVENT` (what a supervisor or service wrapper
+  sends to stop a child in another process group) now stops `sclpl run` the
+  same way Ctrl-C does: in-flight steps are cancelled, staged output is
+  discarded, the run is recorded in history as `cancelled`, and the exit code
+  is `EXIT_INTERRUPTED` (130) instead of a hard `STATUS_CONTROL_C_EXIT` kill.
+- Fixed: an interrupted `sclpl run` (Ctrl-C included) is now recorded in run
+  history, and its checkpoint and cache handles are closed, rather than the
+  run vanishing without a row.
 
 ## 1.0.2
 
