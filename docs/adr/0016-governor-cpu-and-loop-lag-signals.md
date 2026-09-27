@@ -61,8 +61,13 @@ timer is started, and `admits(ceiling) == ceiling`: behaviour is unchanged.
 
 `sclpl/values` goes from 1,000 to 1,100 lines (1,040 used after this change), and the
 total source budget from 26,720 to 26,820. The signals, their parsing, and the loop timer
-live next to the memory policy they extend; `run` takes only the wiring (about 25 lines,
-inside its existing budget).
+live next to the memory policy they extend; `run` takes only the wiring (about 25 lines).
+
+That wiring no longer fits once #7 (adaptive host limits, which added a resizable host
+gate) and #13 (recording interrupted runs) landed first: together `run` reached 5,046
+lines against 5,000. `run` therefore goes from 5,000 to 5,100 and the total from 26,820
+to 26,920. None of the three changes is removable, and splitting the scheduler's admission
+logic out of `run` would be a larger change than this budget line is worth.
 
 ## Consequences
 
