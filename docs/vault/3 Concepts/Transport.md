@@ -36,9 +36,20 @@ retrying.
 
 ## Adaptive concurrency
 
-AIMD per host: additive increase while p95 is flat, multiplicative decrease on 429/503.
-It never exceeds the static caps — `--no-adaptive` pins it. Every admission decision is
-logged at `-vvv`.
+AIMD per host (`Adaptive` in `run/retry.py`): a 429 or 503 halves the host's limit, and
+it climbs back one step per window of responses (32) while p95 latency stays flat.
+The pool measures; the scheduler admits. `Pool.follow_limits` hands each change to
+`Scheduler.limit_host`, which resizes that host's slot in the ordered gate. Requests
+already in flight finish normally; only new admissions wait for the lower limit, the
+same contract as memory-pressure throttling.
+
+It never exceeds the static per-host cap (`--host-concurrency`, `limits.host_concurrency`)
+and never goes below one. Each change is a `host_limit_changed` event (host, previous,
+limit, ceiling, reason), shown at the default verbosity and recorded in the NDJSON run
+log, so a run that slowed down says why. A step whose URL host is only known after
+interpolation has no host bucket and is governed by the global ceiling alone.
+
+There is no CLI switch to turn adaptation off; embedders pass `Pool(adaptive=False)`.
 
 ## Decoding
 

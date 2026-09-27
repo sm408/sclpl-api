@@ -5,6 +5,11 @@ release lineage begins at `v1.0.0`.
 
 ## Unreleased
 
+- Fixed: adaptive per-host concurrency is now applied (#7). A 429 or 503 halves
+  the number of requests admitted to that host (requests already in flight
+  finish), and it climbs back one step per window of steady responses, never
+  above `host_concurrency`. Each change is reported as a `host_limit_changed`
+  event in terminal output and the NDJSON run log.
 - Added: the governor can watch CPU and event-loop lag as well as memory.
   `@limits cpu_soft=70% cpu_hard=90% loop_lag_soft=100ms loop_lag_hard=250ms`
   admits one fewer step at soft and half as many at hard (never below 1),
