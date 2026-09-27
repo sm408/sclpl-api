@@ -10,6 +10,12 @@ release lineage begins at `v1.0.0`.
   finish), and it climbs back one step per window of steady responses, never
   above `host_concurrency`. Each change is reported as a `host_limit_changed`
   event in terminal output and the NDJSON run log.
+- Added: the governor can watch CPU and event-loop lag as well as memory.
+  `@limits cpu_soft=70% cpu_hard=90% loop_lag_soft=100ms loop_lag_hard=250ms`
+  admits one fewer step at soft and half as many at hard (never below 1),
+  climbs back one step at a time once clear, and logs every change with the
+  measured value. Off unless set. CPU needs the new `sclpl[monitor]` extra
+  (psutil); without it the run warns once and carries on (ADR 0016).
 - Fixed: on Windows, `CTRL_BREAK_EVENT` (what a supervisor or service wrapper
   sends to stop a child in another process group) now stops `sclpl run` the
   same way Ctrl-C does: in-flight steps are cancelled, staged output is

@@ -13,9 +13,17 @@ from __future__ import annotations
 
 from typing import Any, Literal, TypeAlias
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    ValidationInfo,
+    field_validator,
+    model_validator,
+)
 
 from sclpl.tables.io import Format
+from sclpl.values.governor import parse_lag, parse_percent
 
 JsonValue: TypeAlias = Any
 
@@ -84,6 +92,18 @@ class Limits(Base):
     max_pages: int | None = Field(default=None, ge=1)
     memory_budget: str | None = Field(default=None, description="e.g. '4G'.")
     tags: dict[str, int] = Field(default_factory=dict, description="Per-tag ceilings.")
+    cpu_soft: str | float | None = Field(default=None, description="e.g. '70%'; admit one fewer.")
+    cpu_hard: str | float | None = Field(default=None, description="e.g. '90%'; halve.")
+    loop_lag_soft: str | float | None = Field(default=None, description="e.g. '100ms'; one fewer.")
+    loop_lag_hard: str | float | None = Field(default=None, description="e.g. '250ms'; halve.")
+
+    @field_validator("cpu_soft", "cpu_hard", "loop_lag_soft", "loop_lag_hard")
+    @classmethod
+    def _load_threshold(cls, value: str | float | None, info: ValidationInfo) -> str | float | None:
+        """Checked here so a bad threshold is a validation error, not a failed run."""
+        if value is not None:
+            (parse_percent if (info.field_name or "").startswith("cpu") else parse_lag)(value)
+        return value
 
 
 class Pagination(Base):

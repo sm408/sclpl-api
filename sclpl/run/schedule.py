@@ -38,7 +38,7 @@ from sclpl.render.events import (
 )
 from sclpl.render.reporter import Reporter
 from sclpl.run.plan import Node, Plan
-from sclpl.values.governor import Governor, human
+from sclpl.values.governor import Governor, Load, human
 from sclpl.values.store import ValueStore
 
 #: What a worker calls to run one node. Returns the value the node produced.
@@ -75,6 +75,8 @@ class Limits:
     #: Bytes a run may hold before it starts writing intermediates to disk. None turns
     #: the governor off entirely, which is for tests and for `--keep-all`.
     memory_budget: int | None = None
+    #: CPU and event-loop-lag thresholds (ADR 0016). None, the default, watches neither.
+    load: Load | None = None
 
 
 @dataclass(slots=True)
@@ -250,7 +252,8 @@ class Scheduler:
         self._wakeup = asyncio.Event()
         self._inflight = 0
         budget = self._limits.memory_budget
-        self._governor = Governor(budget=budget) if budget else None
+        load = self._limits.load
+        self._governor = Governor(budget=budget or 0, load=load) if budget or load else None
         self._ceiling = max(1, self._limits.concurrency)
 
     async def run(self, runner: Runner) -> Outcome:
@@ -264,6 +267,8 @@ class Scheduler:
 
         workers = max(1, self._limits.concurrency)
         cancelled = False
+        if self._governor is not None:
+            self._governor.start()
         try:
             async with asyncio.TaskGroup() as group:
                 for index in range(workers):
@@ -277,6 +282,8 @@ class Scheduler:
             for error in group_error.exceptions:
                 self._reporter.log("error", str(error))
             self._outcome.status = "failed"
+        if self._governor is not None:
+            self._governor.stop()
 
         self._conclude(started_at)
         if cancelled and _we_were_cancelled():
@@ -327,7 +334,8 @@ class Scheduler:
         finishes and either pushes work or empties the graph.
         """
         while True:
-            if self._ready and not self._stopping and self._inflight < self._ceiling:
+            ceiling = self._governor.admits(self._ceiling) if self._governor else self._ceiling
+            if self._ready and not self._stopping and self._inflight < ceiling:
                 _, _, node_id = heapq.heappop(self._ready)
                 self._inflight += 1
                 return node_id
@@ -403,6 +411,18 @@ class Scheduler:
         instead finishes, slower, which is the trade the budget exists to make.
         """
         if self._governor is None:
+            return
+        for decision in self._governor.pace(self._ceiling):
+            self._reporter.log(decision.severity, decision.describe())
+            if decision.lowered:
+                self._reporter.emit(
+                    ResourceWarning(
+                        kind=decision.signal,
+                        current=round(decision.value),
+                        budget=round(decision.threshold),
+                    )
+                )
+        if not self._governor.budget:
             return
         pressure = self._governor.sample(self._store.stats().bytes_live)
         if pressure.level == "ok":

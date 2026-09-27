@@ -28,6 +28,19 @@ info: memory at 327.2MB of 400.0MB (82%); spilled 65.4MB to disk
 
 "Memory pressure" is not actionable. A figure, a budget, and what was done about it are.
 
+## CPU and loop lag
+
+Memory is not always what runs out first. `@limits cpu_soft=70% cpu_hard=90%
+loop_lag_hard=250ms` adds two optional signals (ADR 0016): system CPU (via `psutil`, the
+`sclpl[monitor]` extra) and how late a 100 ms loop timer fires. They never spill; they
+only pace admission -- one fewer at soft, half at hard, never below 1, one step back up
+once every signal is clear. Off unless a threshold is set.
+
+```
+warning: cpu at 95% (hard 90%); concurrency 8 -> 4
+info: cpu at 40% (below 70%); concurrency 4 -> 5
+```
+
 ## The budget
 
 `--memory-budget 4G`, or `@limits memory_budget=4G`, or **half the machine**. There is

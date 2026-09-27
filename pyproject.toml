@@ -36,6 +36,11 @@ keyring = [
 crypto = [
     "cryptography>=42,<46",
 ]
+# CPU pressure for the governor (ADR 0016). Without it, `cpu_soft`/`cpu_hard` log once
+# that CPU is not watched and the run carries on; loop lag needs nothing extra.
+monitor = [
+    "psutil>=5.9,<8",
+]
 dev = [
     "pytest>=8,<9",
     "pytest-asyncio>=0.24,<2",
@@ -63,7 +68,9 @@ exclude = "docs/attic"
 warn_unreachable = true
 
 [[tool.mypy.overrides]]
-module = ["pyarrow.*", "pandas.*", "numpy", "numpy.*", "keyring.*", "cryptography.*"]
+module = [
+    "pyarrow.*", "pandas.*", "numpy", "numpy.*", "keyring.*", "cryptography.*", "psutil",
+]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]

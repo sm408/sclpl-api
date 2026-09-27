@@ -696,7 +696,7 @@ Batch F's reporting and lineage commands is recorded in
 | `catalog/` | 500 | | `tables/` | 900 |
 | `contracts/` | 700 | | | |
 | `testing/` | 700 | | | |
-| `run/` | 5,000 | | `ext/` | 700 |
+| `run/` | 5,100 | | `ext/` | 700 |
 | `run/sclpll/` | 1,200 | | `state/` | 900 |
 | `values/` | 1,000 | | `plugins_bundled/` | 600 |
 | `project/` | 1,200 | | | |
