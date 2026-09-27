@@ -5,6 +5,10 @@ release lineage begins at `v1.0.0`.
 
 ## Unreleased
 
+- Fixed: a mode body now accepts `vars` as an alias of `var` (`sclpl fmt`
+  writes it back as `var`), and the SCLPLL reference documents `var` and the
+  `@mode name key=value` header form (#14).
+
 ## 1.0.2
 
 - Added: `sclpl package build|validate|install|list|show|verify|remove|update|
