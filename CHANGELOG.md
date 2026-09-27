@@ -11,6 +11,19 @@ release lineage begins at `v1.0.0`.
   `Retry-After` holds every request to a budgeted host until then. Budgets appear in
   `Pool.stats()` and as `step_throttled` events at `-v`. Same field in the JSON
   surface; `fmt`/`convert` round-trip it. See ADR 0017.
+- Fixed: adaptive per-host concurrency is now applied (#7). A 429 or 503 halves
+  the number of requests admitted to that host (requests already in flight
+  finish), and it climbs back one step per window of steady responses, never
+  above `host_concurrency`. Each change is reported as a `host_limit_changed`
+  event in terminal output and the NDJSON run log.
+- Fixed: on Windows, `CTRL_BREAK_EVENT` (what a supervisor or service wrapper
+  sends to stop a child in another process group) now stops `sclpl run` the
+  same way Ctrl-C does: in-flight steps are cancelled, staged output is
+  discarded, the run is recorded in history as `cancelled`, and the exit code
+  is `EXIT_INTERRUPTED` (130) instead of a hard `STATUS_CONTROL_C_EXIT` kill.
+- Fixed: an interrupted `sclpl run` (Ctrl-C included) is now recorded in run
+  history, and its checkpoint and cache handles are closed, rather than the
+  run vanishing without a row.
 
 ## 1.0.2
 

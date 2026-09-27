@@ -58,12 +58,13 @@ steps or guessing a concurrency that happened to stay under the rate.
 
 ## Line budget
 
-`sclpl/run/`'s budget rises from 5,000 to 5,200 lines and the total source budget from
-26,720 to 26,920 lines. The feature itself is about 130 lines of `run` (the window
-log, IR validation, and the transport hook), which the package's 54 remaining lines
-could not hold; the rest is headroom for the in-flight adaptive host-limit work (#7),
-which touches the same transport and scheduler, so the two can merge without a second
-budget revision.
+`sclpl/run/`'s budget rises from 5,000 to 5,200 lines and the total source budget by
+the same 200 lines (26,720 to 26,920 on the lineage of ADR 0015). The feature is about
+130 lines of `run` (the window log, IR validation, and the transport hook). With the
+adaptive host-limit fix (#7) merged, `run` measured about 5,000 lines before this
+change and 5,138 after it, so it cannot fit the old number; the remaining ~60 lines
+are ordinary headroom, not a reservation. If another budget revision to the total
+lands first, this one still adds 200 lines to whatever the total then is.
 
 ## Consequences
 

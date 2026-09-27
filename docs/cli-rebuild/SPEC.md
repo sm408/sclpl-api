@@ -451,6 +451,7 @@ StepRetrying(id, attempt, max, reason, delay_s)
 StepThrottled(id, budget, delay_s)            # ADR 0017: waited for a rate budget
 ValueFreed(name, bytes)
 ResourceWarning(kind, current, budget)
+HostLimitChanged(host, previous, limit, ceiling, reason)   # adaptive per-host limit moved
 LogRecord(level, message, step)
 RunFinished(status, duration_ms, counts, exit_code)
 ```

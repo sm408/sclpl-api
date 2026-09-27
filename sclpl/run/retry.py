@@ -182,6 +182,9 @@ class Adaptive:
     #: p95 samples, newest last. Bounded so an hour-long run does not accumulate.
     latencies: list[float] = field(default_factory=list)
     window: int = 32
+    #: Samples since the limit last moved. Recovery is one step per full window, so a
+    #: host that just said 429 is not back at full concurrency a few responses later.
+    since: int = field(default=0, init=False)
 
     def __post_init__(self) -> None:
         self.current = float(self.ceiling)
@@ -197,10 +200,13 @@ class Adaptive:
         if len(self.latencies) > self.window:
             del self.latencies[0]
 
+        self.since += 1
         if status in (429, 503):
             self.current = max(self.minimum, self.current / 2)
-        elif self._latency_is_flat():
+            self.since = 0
+        elif self.since >= self.window and self._latency_is_flat():
             self.current = min(self.ceiling, self.current + 1)
+            self.since = 0
         return self.limit != before
 
     def _latency_is_flat(self) -> bool:
