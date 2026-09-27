@@ -15,6 +15,7 @@ from typing import Any, Literal, TypeAlias
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
+from sclpl.run.rate import parse_rate
 from sclpl.tables.io import Format
 
 JsonValue: TypeAlias = Any
@@ -84,6 +85,17 @@ class Limits(Base):
     max_pages: int | None = Field(default=None, ge=1)
     memory_budget: str | None = Field(default=None, description="e.g. '4G'.")
     tags: dict[str, int] = Field(default_factory=dict, description="Per-tag ceilings.")
+    rate: list[str] = Field(
+        default_factory=list,
+        description="Request budgets, e.g. 'api.example.com:3/s' or 'tag:api:120/m' (ADR 0017).",
+    )
+
+    @field_validator("rate")
+    @classmethod
+    def _rates_parse(cls, value: list[str]) -> list[str]:
+        for spec in value:
+            parse_rate(spec)
+        return value
 
 
 class Pagination(Base):

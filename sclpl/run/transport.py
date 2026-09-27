@@ -25,10 +25,11 @@ import httpx
 
 from sclpl.errors import PolicyDenied, StepFailed
 from sclpl.project.policy import Policy
-from sclpl.render.events import StepRetrying
+from sclpl.render.events import StepRetrying, StepThrottled
 from sclpl.render.reporter import Reporter
 from sclpl.run.fixtures import Fixture
 from sclpl.run.fixtures import Store as FixtureStore
+from sclpl.run.rate import Budgets
 from sclpl.run.retry import (
     REAL_CLOCK,
     Adaptive,
@@ -162,6 +163,7 @@ class Pool:
         "_occurrences",
         "_clock",
         "_policy",
+        "_rates",
     )
 
     def __init__(
@@ -174,6 +176,7 @@ class Pool:
         recorder: FixtureStore | None = None,
         clock: Clock | None = None,
         policy: Policy | None = None,
+        rates: Budgets | None = None,
     ) -> None:
         self._limits = limits if limits is not None else TransportLimits()
         self._retry = retry if retry is not None else Retry()
@@ -188,6 +191,7 @@ class Pool:
         self._occurrences: dict[tuple[str, str], int] = {}
         self._clock = clock if clock is not None else REAL_CLOCK
         self._policy = policy
+        self._rates = rates if rates is not None else Budgets(clock=self._clock)
 
     async def client(self, profile: Profile) -> httpx.AsyncClient:
         """The client for this profile, created once."""
@@ -256,6 +260,7 @@ class Pool:
         auth: str = "",
         proxy: str | None = None,
         verify: bool | None = None,
+        tags: frozenset[str] = frozenset(),
         **kwargs: Any,
     ) -> Attempt:
         """Send a request, retrying per policy. Returns the final response.
@@ -310,6 +315,7 @@ class Pool:
 
         last_error: BaseException | None = None
         for attempt in range(policy.max + 1):
+            await self._throttle(profile.host, tags, reporter, step)
             attempt_started = self._clock.now()
             try:
                 response = await client.request(method, url, **kwargs)
@@ -333,6 +339,7 @@ class Pool:
 
             latency = self._clock.now() - attempt_started
             self._observe(profile.host, latency, response.status_code)
+            self._close_on_429(profile.host, response)
 
             if policy.should_retry_status(response.status_code) and attempt < policy.max:
                 breaker.record_failure()
@@ -383,6 +390,7 @@ class Pool:
         auth: str = "",
         proxy: str | None = None,
         verify: bool | None = None,
+        tags: frozenset[str] = frozenset(),
         **kwargs: Any,
     ) -> Streamed:
         """Write a response body straight to ``destination``, one chunk at a time.
@@ -414,8 +422,10 @@ class Pool:
         for attempt in range(policy.max + 1):
             scratch = destination.with_name(f"{destination.name}.partial-{os.getpid()}")
             done = False
+            await self._throttle(profile.host, tags, reporter, step)
             try:
                 async with client.stream(method, url, **kwargs) as response:
+                    self._close_on_429(profile.host, response)
                     if policy.should_retry_status(response.status_code) and attempt < policy.max:
                         # `async with` closes the streamed response on the way out,
                         # whether that is this `continue` or the exception below.
@@ -480,6 +490,21 @@ class Pool:
 
         raise self._exhausted(method, url, policy.max, last_error, None)
 
+    async def _throttle(
+        self, host: str, tags: frozenset[str], reporter: Reporter | None, step: str
+    ) -> None:
+        """Wait for a slot in every rate budget this request falls under (ADR 0017)."""
+        if not self._rates:
+            return
+        waited, budget = await self._rates.take(host, tags)
+        if waited > 0 and reporter is not None:
+            reporter.emit(StepThrottled(id=step, budget=budget, delay_s=waited))
+
+    def _close_on_429(self, host: str, response: httpx.Response) -> None:
+        retry_after = response_retry_after(response)
+        if response.status_code == 429 and retry_after is not None:
+            self._rates.close_until(host, retry_after)
+
     def _observe(self, host: str, latency: float, status: int) -> None:
         if not self._adaptive_on:
             return
@@ -534,6 +559,7 @@ class Pool:
             "hosts": sorted({profile.host for profile in self._clients}),
             "breakers": {host: breaker.state for host, breaker in self._breakers.items()},
             "limits": {host: control.limit for host, control in self._adaptive.items()},
+            "rates": self._rates.stats(),
         }
 
     async def aclose(self) -> None:

@@ -68,6 +68,15 @@ class StepRetrying:
 
 
 @dataclass(frozen=True, slots=True)
+class StepThrottled:
+    """A request waited ``delay_s`` for room in a rate budget (ADR 0017)."""
+
+    id: str
+    budget: str
+    delay_s: float
+
+
+@dataclass(frozen=True, slots=True)
 class ValueFreed:
     name: str
     bytes: int
@@ -101,6 +110,7 @@ Event: TypeAlias = (
     | StepProgress
     | StepFinished
     | StepRetrying
+    | StepThrottled
     | ValueFreed
     | ResourceWarning
     | LogRecord
@@ -118,6 +128,7 @@ VERBOSITY: dict[type, int] = {
     StepProgress: 0,
     StepFinished: 0,
     StepRetrying: 1,
+    StepThrottled: 1,
     ValueFreed: 1,
     ResourceWarning: -1,
     LogRecord: 0,

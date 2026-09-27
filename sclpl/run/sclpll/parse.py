@@ -31,6 +31,7 @@ from sclpl.run.ir import (
     WhileConfig,
     WorkflowDoc,
 )
+from sclpl.run.rate import parse_rate
 from sclpl.run.sclpll.lex import Kind, Token, split_args, tokenize, unquote
 
 METHODS = ("get", "post", "put", "patch", "delete", "head", "options")
@@ -132,7 +133,7 @@ class _Parser:
                 case "output":
                     doc["outputs"].append(self.port(token))
                 case "limits":
-                    limits.update(self.limits(token))
+                    self.limits(token, limits)
                 case "mode":
                     mode_name, spec = self.mode(token)
                     doc["modes"][mode_name] = spec
@@ -187,14 +188,21 @@ class _Parser:
         Port.model_validate(port)
         return port
 
-    def limits(self, token: Token) -> dict[str, Any]:
-        out: dict[str, Any] = {}
+    def limits(self, token: Token, out: dict[str, Any]) -> None:
         for item in self.args(token.rest, token):
             key, separator, value = item.partition("=")
             if not separator:
                 raise self.error(f"@limits takes key=value pairs, found {item!r}", token)
+            if key.strip() == "rate":
+                # Repeatable, across one line or several: every window applies (ADR 0017).
+                spec = unquote(value.strip())
+                try:
+                    parse_rate(spec)
+                except ValueError as problem:
+                    raise self.error(str(problem), token) from None
+                out.setdefault("rate", []).append(spec)
+                continue
             out[key.strip()] = _literal(value.strip())
-        return out
 
     def mode(self, token: Token) -> tuple[str, dict[str, Any]]:
         args = self.args(token.rest, token)

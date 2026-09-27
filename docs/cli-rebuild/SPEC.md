@@ -448,6 +448,7 @@ StepStarted(id, kind, lane)
 StepProgress(id, detail, current, total)      # pages, rows, bytes
 StepFinished(id, status, duration_ms, summary, cached)
 StepRetrying(id, attempt, max, reason, delay_s)
+StepThrottled(id, budget, delay_s)            # ADR 0017: waited for a rate budget
 ValueFreed(name, bytes)
 ResourceWarning(kind, current, budget)
 LogRecord(level, message, step)

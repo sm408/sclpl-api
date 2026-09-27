@@ -5,6 +5,13 @@ release lineage begins at `v1.0.0`.
 
 ## Unreleased
 
+- Added: `@limits rate=HOST:N/UNIT` and `rate=tag:NAME:N/UNIT` (repeatable; `UNIT` is
+  `s`, `m`, `h`, or `d`) -- requests-per-window budgets enforced on every HTTP attempt,
+  retries and pages included, with no window ever exceeding `N`. A `429` with
+  `Retry-After` holds every request to a budgeted host until then. Budgets appear in
+  `Pool.stats()` and as `step_throttled` events at `-v`. Same field in the JSON
+  surface; `fmt`/`convert` round-trip it. See ADR 0017.
+
 ## 1.0.2
 
 - Added: `sclpl package build|validate|install|list|show|verify|remove|update|

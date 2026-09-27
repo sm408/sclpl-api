@@ -1,0 +1,23 @@
+# Requests-per-window budgets for a host and a tag.
+
+@workflow 14-rate-budgets "Stay under a published API rate limit"
+
+@var base = "https://api.example.com"
+
+@output orders:json
+
+# At most 3 requests a second and 120 a minute to the host, and 2 a second to
+# anything tagged `search`. Retries and pages count too.
+@limits concurrency=8 rate=api.example.com:3/s rate=api.example.com:120/m rate=tag:search:2/s
+
+@step fetch
+  get {{base}}/orders
+  paginate cursor cursor_path=next param=cursor max_pages=40
+
+@step found
+  get {{base}}/search
+  query q=late
+  tag search
+
+@step write -> orders
+  save_json @fetch.body

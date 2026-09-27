@@ -22,3 +22,4 @@ network-facing workflows use placeholder hosts so `sclpl validate` works offline
 | `11-cache-retry-and-secret.sclpll` | Cache, retry, and secret interpolation |
 | `12-text-plugin-library.sclpll` | Text plugin helpers |
 | `13-python-script.sclpll` | Registered, SHA-256-pinned Python script as a JSON-connected workflow step |
+| `14-rate-budgets.sclpll` | Requests-per-window budgets for a host and a tag |

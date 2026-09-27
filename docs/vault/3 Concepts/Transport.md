@@ -40,6 +40,19 @@ AIMD per host: additive increase while p95 is flat, multiplicative decrease on 4
 It never exceeds the static caps — `--no-adaptive` pins it. Every admission decision is
 logged at `-vvv`.
 
+## Rate budgets
+
+`run/rate.py`, [ADR 0017](../../adr/0017-rate-budgets.md). `@limits rate=HOST:N/UNIT` and
+`rate=tag:NAME:N/UNIT` count *requests sent*, where concurrency counts requests in flight.
+Every attempt takes a slot, retries and pages included, just before it is sent.
+
+A sliding-window log rather than a refilling bucket: a bucket of N can spend 2N-1 in one
+window, the log never more than N. Slots are taken from every applicable budget at once, in
+the same host-then-sorted-tags order as the scheduler's semaphores, or not at all -- nothing
+is held while waiting, so there is nothing to deadlock on. A 429 with `Retry-After` closes a
+budgeted host until then. `Pool.stats()["rates"]` and the `step_throttled` event show what
+was left and what was waited.
+
 ## Decoding
 
 `decode()` turns a body into a typed value. → [[Typed Values]]

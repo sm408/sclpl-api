@@ -20,6 +20,7 @@ from sclpl.render.events import (
     StepProgress,
     StepRetrying,
     StepStarted,
+    StepThrottled,
     ValueFreed,
     visible_at,
 )
@@ -102,6 +103,8 @@ class PlainSink:
                     f"  retry {event.id} {event.attempt}/{event.max} "
                     f"in {event.delay_s:.1f}s: {event.reason}"
                 )
+            case StepThrottled():
+                return f"  wait {event.id} {event.delay_s:.1f}s for rate {event.budget}"
             case ValueFreed():
                 return f"  freed {event.name} {format_bytes(event.bytes)}"
             case ResourceWarning():

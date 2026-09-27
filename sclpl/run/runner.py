@@ -39,6 +39,7 @@ from sclpl.run.ir import HttpConfig, WorkflowDoc
 from sclpl.run.plan import Node, Plan
 from sclpl.run.preflight import Report, preflight
 from sclpl.run.publication import Ledger, discard, publish
+from sclpl.run.rate import Budgets
 from sclpl.run.schedule import JOIN_SUFFIX, ExpandSpec, Limits, Outcome, Scheduler
 from sclpl.run.transport import Pool, TransportLimits
 from sclpl.state import db, locking, safe_args
@@ -313,6 +314,7 @@ async def run_workflow(doc: WorkflowDoc, options: Options, reporter: Reporter) -
             if options.record_fixture_root
             else None,
             policy=project_policy if project_policy.restricts_hosts else None,
+            rates=Budgets(doc.limits.rate),
         ) as pool:
             runtime = Runtime(
                 doc=doc,

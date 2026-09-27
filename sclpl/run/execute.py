@@ -428,6 +428,7 @@ async def _http(step: Step, config: HttpConfig, node: Node, runtime: Runtime, no
             auth=config.auth or "",
             proxy=proxy,
             verify=config.verify,
+            tags=frozenset(step.tags),
             **kwargs,
         )
         metric = runtime.metric(node_id)
@@ -467,6 +468,7 @@ async def _http(step: Step, config: HttpConfig, node: Node, runtime: Runtime, no
             auth=config.auth or "",
             proxy=proxy,
             verify=config.verify,
+            tags=frozenset(step.tags),
             **call,
         )
         response = attempt.response

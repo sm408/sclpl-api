@@ -59,6 +59,18 @@ Defines a named expression for `assert`, `when`, `skip_if`, or `retry_if`.
 These are ceilings, not promises that the runner will always use the maximum. The governor and
 remote responses may reduce concurrency.
 
+Rate budgets cap requests per time window, per host or per tag. `rate=` repeats, and a request
+needs room in every budget that applies:
+
+```sclpll
+@limits rate=api.example.com:3/s rate=api.example.com:120/m rate=tag:api:10/s
+```
+
+The forms are `HOST:N/UNIT` and `tag:NAME:N/UNIT`, with `UNIT` one of `s`, `m`, `h`, `d`. Every
+HTTP attempt counts, including retries and each page of a paginated step, and no window of that
+length ever holds more than `N` of them. A `429` with `Retry-After` holds every request to a
+budgeted host until then. Waits are reported at `-v` (see [ADR 0017](../adr/0017-rate-budgets.md)).
+
 ### `@mode`
 
 ```sclpll

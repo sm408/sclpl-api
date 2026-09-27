@@ -25,6 +25,7 @@ from sclpl.render.events import (
     StepProgress,
     StepRetrying,
     StepStarted,
+    StepThrottled,
     ValueFreed,
     visible_at,
 )
@@ -169,6 +170,9 @@ class HumanSink:
                     "yellow",
                 )
                 return f" {mark} {event.id} {detail}"
+            case StepThrottled():
+                detail = f"wait {event.delay_s:.1f}s for rate {event.budget}"
+                return caps.paint(f"   {event.id} {detail}", "grey")
             case ValueFreed():
                 return caps.paint(f"   freed {event.name} {format_bytes(event.bytes)}", "grey")
             case ResourceWarning():

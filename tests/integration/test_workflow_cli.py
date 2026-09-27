@@ -480,3 +480,44 @@ def test_a_foreach_concurrency_must_be_a_literal(tmp_path: Path, server_url: str
     result = run_cli("validate", str(path))
     assert result.returncode == EXIT_VALIDATION
     assert "literal" in result.stderr
+
+
+# -- issue #8: rate budgets, through the real runner ------------------------------
+
+RATED = """
+@workflow rated
+
+@var base = "{base}"
+
+@output last:json
+
+@limits concurrency=8 rate=tag:api:2/s
+
+@step a
+  get {{{{base}}}}/json
+  tag api
+
+@step b
+  get {{{{base}}}}/json
+  tag api
+
+@step c
+  get {{{{base}}}}/json
+  tag api
+
+@step write -> last
+  save_json @c.status
+"""
+
+
+def test_a_tag_rate_budget_holds_the_third_request_and_says_so(
+    tmp_path: Path, server_url: str
+) -> None:
+    """Three concurrent steps under `tag:api:2/s`: the third waits about a second."""
+    path = tmp_path / "rated.sclpll"
+    path.write_text(RATED.format(base=server_url), encoding="utf-8")
+    # Own cache: a response cached by an earlier run would send no request at all.
+    result = run_cli("-v", "run", str(path), str(tmp_path / "last.json"), home=tmp_path)
+    assert result.returncode == 0, result.stderr
+    assert "for rate tag:api:2/s" in result.stderr
+    assert json.loads((tmp_path / "last.json").read_text(encoding="utf-8")) == 200

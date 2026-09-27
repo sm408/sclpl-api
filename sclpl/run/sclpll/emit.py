@@ -58,7 +58,12 @@ def emit(doc: WorkflowDoc) -> str:
     limits = doc.limits.model_dump(exclude_defaults=True)
     if limits:
         lines.append("")
-        rendered = " ".join(f"{key}={_value(value)}" for key, value in limits.items())
+        rendered = " ".join(
+            " ".join(f"rate={_value(spec)}" for spec in value)
+            if key == "rate"
+            else f"{key}={_value(value)}"
+            for key, value in limits.items()
+        )
         lines.append(f"@limits {rendered}")
 
     for name, mode in doc.modes.items():
