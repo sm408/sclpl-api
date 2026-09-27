@@ -5,6 +5,15 @@ release lineage begins at `v1.0.0`.
 
 ## Unreleased
 
+- Fixed: on Windows, `CTRL_BREAK_EVENT` (what a supervisor or service wrapper
+  sends to stop a child in another process group) now stops `sclpl run` the
+  same way Ctrl-C does: in-flight steps are cancelled, staged output is
+  discarded, the run is recorded in history as `cancelled`, and the exit code
+  is `EXIT_INTERRUPTED` (130) instead of a hard `STATUS_CONTROL_C_EXIT` kill.
+- Fixed: an interrupted `sclpl run` (Ctrl-C included) is now recorded in run
+  history, and its checkpoint and cache handles are closed, rather than the
+  run vanishing without a row.
+
 ## 1.0.2
 
 - Added: `sclpl package build|validate|install|list|show|verify|remove|update|
