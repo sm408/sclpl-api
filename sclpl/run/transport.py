@@ -16,6 +16,7 @@ import asyncio
 import contextlib
 import hashlib
 import os
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 from types import TracebackType
@@ -162,6 +163,8 @@ class Pool:
         "_occurrences",
         "_clock",
         "_policy",
+        "_on_limit",
+        "_host_ceiling",
     )
 
     def __init__(
@@ -188,6 +191,18 @@ class Pool:
         self._occurrences: dict[tuple[str, str], int] = {}
         self._clock = clock if clock is not None else REAL_CLOCK
         self._policy = policy
+        self._on_limit: Callable[[str, int, str], None] | None = None
+        self._host_ceiling = self._limits.max_connections
+
+    def follow_limits(self, apply: Callable[[str, int, str], None], ceiling: int) -> None:
+        """Hand each adaptive limit change to ``apply(host, limit, reason)``.
+
+        The pool only measures; the scheduler admits. ``ceiling`` is the scheduler's
+        per-host cap, so the first 429 halves the concurrency actually in use rather
+        than a connection-pool size the host never reached.
+        """
+        self._on_limit = apply
+        self._host_ceiling = ceiling
 
     async def client(self, profile: Profile) -> httpx.AsyncClient:
         """The client for this profile, created once."""
@@ -415,7 +430,10 @@ class Pool:
             scratch = destination.with_name(f"{destination.name}.partial-{os.getpid()}")
             done = False
             try:
+                attempt_started = self._clock.now()
                 async with client.stream(method, url, **kwargs) as response:
+                    latency = self._clock.now() - attempt_started
+                    self._observe(profile.host, latency, response.status_code)
                     if policy.should_retry_status(response.status_code) and attempt < policy.max:
                         # `async with` closes the streamed response on the way out,
                         # whether that is this `continue` or the exception below.
@@ -483,7 +501,11 @@ class Pool:
     def _observe(self, host: str, latency: float, status: int) -> None:
         if not self._adaptive_on:
             return
-        self.adaptive(host, self._limits.max_connections).record(latency, status)
+        control = self.adaptive(host, self._host_ceiling)
+        before = control.limit
+        if control.record(latency, status) and self._on_limit is not None:
+            reason = f"HTTP {status}" if control.limit < before else "latency steady"
+            self._on_limit(host, control.limit, reason)
 
     async def _wait(
         self,
