@@ -5,6 +5,11 @@ release lineage begins at `v1.0.0`.
 
 ## Unreleased
 
+- Fixed: adaptive per-host concurrency is now applied (#7). A 429 or 503 halves
+  the number of requests admitted to that host (requests already in flight
+  finish), and it climbs back one step per window of steady responses, never
+  above `host_concurrency`. Each change is reported as a `host_limit_changed`
+  event in terminal output and the NDJSON run log.
 - Fixed: on Windows, `CTRL_BREAK_EVENT` (what a supervisor or service wrapper
   sends to stop a child in another process group) now stops `sclpl run` the
   same way Ctrl-C does: in-flight steps are cancelled, staged output is

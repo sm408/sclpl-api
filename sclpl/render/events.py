@@ -81,6 +81,17 @@ class ResourceWarning:
 
 
 @dataclass(frozen=True, slots=True)
+class HostLimitChanged:
+    """Adaptive concurrency moved a host's ceiling: down on a 429/503, back up after."""
+
+    host: str
+    previous: int
+    limit: int
+    ceiling: int
+    reason: str
+
+
+@dataclass(frozen=True, slots=True)
 class LogRecord:
     level: Level
     message: str
@@ -103,6 +114,7 @@ Event: TypeAlias = (
     | StepRetrying
     | ValueFreed
     | ResourceWarning
+    | HostLimitChanged
     | LogRecord
     | RunFinished
 )
@@ -120,6 +132,8 @@ VERBOSITY: dict[type, int] = {
     StepRetrying: 1,
     ValueFreed: 1,
     ResourceWarning: -1,
+    # Default level: a run that slowed down should say why without being asked.
+    HostLimitChanged: 0,
     LogRecord: 0,
     RunFinished: -1,
 }

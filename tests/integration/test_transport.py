@@ -367,3 +367,78 @@ async def test_stream_to_file_retries_a_flaky_endpoint(server_url: str, tmp_path
     assert streamed.status == 200
     assert streamed.attempts == 3
     assert list(tmp_path.iterdir()) == [destination]
+
+
+# -- adaptive per-host limit (issue #7) --------------------------------------------
+
+
+async def test_a_429_halves_host_concurrency_then_it_climbs_back(server_url: str) -> None:
+    """Peak in-flight requests to a rate-limiting host drop, then recover step by step."""
+    from sclpl.render.jsonl import JsonlSink
+    from sclpl.run.plan import Node, StepSpec, build
+    from sclpl.run.schedule import Limits, Scheduler
+    from sclpl.values.store import ValueStore
+
+    host = Profile.of(server_url).host
+    plan = build([StepSpec(id=f"s{index}", host=host) for index in range(120)])
+    timeline: list[tuple[str, int]] = []
+    inflight = 0
+
+    log = io.StringIO()
+    async with Reporter([JsonlSink(log)]) as rep, Pool(retry=Retry(max=0)) as pool:
+        scheduler = Scheduler(plan, ValueStore(), rep, Limits(concurrency=16, host_concurrency=4))
+
+        def apply(changed: str, limit: int, reason: str) -> None:
+            timeline.append(("limit", limit))
+            scheduler.limit_host(changed, limit, reason)
+
+        pool.follow_limits(apply, 4)
+        pool.adaptive(host, 4).window = 4  # recover one step per 4 responses, not 32
+
+        async def runner(node: Node) -> int:
+            nonlocal inflight
+            inflight += 1
+            timeline.append(("start", inflight))
+            try:
+                attempt = await pool.request("GET", f"{server_url}/pressure/6")
+            finally:
+                inflight -= 1
+            return attempt.response.status_code
+
+        outcome = await scheduler.run(runner)
+    assert outcome.ok
+
+    # Peak concurrency admitted between consecutive limit changes.
+    segments: list[tuple[int | None, int]] = [(None, 0)]
+    for kind, value in timeline:
+        if kind == "limit":
+            segments.append((value, 0))
+        else:
+            limit, peak = segments[-1]
+            segments[-1] = (limit, max(peak, value))
+    assert segments[0][1] == 4  # full concurrency before the host pushed back
+    # From the first change on, nothing is admitted above the limit in force.
+    assert all(peak <= limit for limit, peak in segments[1:] if limit is not None)
+    assert min(limit for limit, _ in segments[1:] if limit is not None) <= 2
+    lowest_at = min(range(1, len(segments)), key=lambda at: segments[at][0] or 0)
+    steps = [limit or 0 for limit, _ in segments[lowest_at:]]
+    assert steps == list(range(steps[0], 5))  # recovery: one step per window
+    assert segments[-1][0] == 4  # climbed back to the static cap
+    assert segments[-1][1] == 4
+
+    events = [json.loads(line) for line in log.getvalue().splitlines()]
+    changes = [event for event in events if event["event"] == "host_limit_changed"]
+    assert changes[0]["previous"] == 4 and changes[0]["limit"] == 2
+    assert changes[0]["reason"] == "HTTP 429" and changes[0]["ceiling"] == 4
+    assert changes[-1]["limit"] == 4 and changes[-1]["reason"] == "latency steady"
+    assert all(abs(c["limit"] - c["previous"]) >= 1 for c in changes)
+
+
+async def test_adaptive_false_never_touches_the_host_limit(server_url: str) -> None:
+    calls: list[tuple[str, int, str]] = []
+    async with Pool(retry=Retry(max=0), adaptive=False) as pool:
+        pool.follow_limits(lambda *change: calls.append(change), 4)
+        for _ in range(3):
+            await pool.request("GET", f"{server_url}/rate-limited")
+    assert calls == []
+    assert pool.stats()["limits"] == {}

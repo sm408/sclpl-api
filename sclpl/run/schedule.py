@@ -29,6 +29,7 @@ from typing import Any
 
 from sclpl.errors import SclplError
 from sclpl.render.events import (
+    HostLimitChanged,
     ResourceWarning,
     RunFinished,
     StepFinished,
@@ -104,6 +105,37 @@ class Outcome:
         }
 
 
+class _Slots:
+    """A per-host counting gate whose size can change while slots are held.
+
+    `asyncio.Semaphore` cannot shrink: swapping in a smaller one would forget the
+    requests already in flight and let everything queued on the old one through. Here
+    lowering `size` stops new admissions until enough in-flight requests have finished,
+    and nothing running is interrupted -- the same contract as `_govern()`.
+    """
+
+    __slots__ = ("size", "_held", "_freed")
+
+    def __init__(self, size: int) -> None:
+        self.size = size
+        self._held = 0
+        self._freed = asyncio.Event()
+
+    async def acquire(self) -> None:
+        while self._held >= self.size:
+            self._freed.clear()
+            await self._freed.wait()
+        self._held += 1
+
+    def release(self) -> None:
+        self._held -= 1
+        self._freed.set()
+
+    def resize(self, size: int) -> None:
+        self.size = size
+        self._freed.set()
+
+
 class _Gate:
     """The ordered semaphore set.
 
@@ -117,13 +149,13 @@ class _Gate:
     def __init__(self, limits: Limits) -> None:
         self._limits = limits
         self._global = asyncio.Semaphore(max(1, limits.concurrency))
-        self._hosts: dict[str, asyncio.Semaphore] = {}
+        self._hosts: dict[str, _Slots] = {}
         self._tags: dict[str, asyncio.Semaphore] = {}
 
-    def _host(self, host: str) -> asyncio.Semaphore:
+    def _host(self, host: str) -> _Slots:
         existing = self._hosts.get(host)
         if existing is None:
-            existing = asyncio.Semaphore(max(1, self._limits.host_concurrency))
+            existing = _Slots(max(1, self._limits.host_concurrency))
             self._hosts[host] = existing
         return existing
 
@@ -146,14 +178,20 @@ class _Gate:
         """
         self._limits.tags.setdefault(tag, ceiling)
 
-    def set_host_limit(self, host: str, ceiling: int) -> None:
-        """Adaptive concurrency lowers a host's ceiling; it never raises it above the cap."""
-        ceiling = max(1, min(ceiling, self._limits.host_concurrency))
-        self._hosts[host] = asyncio.Semaphore(ceiling)
+    def set_host_limit(self, host: str, ceiling: int) -> tuple[int, int]:
+        """Adaptive concurrency lowers a host's ceiling; it never raises it above the cap.
+
+        Returns (previous, applied). Applies to the next admission, not to requests
+        already running.
+        """
+        slots = self._host(host)
+        previous = slots.size
+        slots.resize(max(1, min(ceiling, self._limits.host_concurrency)))
+        return previous, slots.size
 
     @contextlib.asynccontextmanager
     async def hold(self, node: Node) -> Any:
-        wanted: list[asyncio.Semaphore] = [self._global]
+        wanted: list[asyncio.Semaphore | _Slots] = [self._global]
         if node.host:
             wanted.append(self._host(node.host))
         for tag in sorted(node.tags):
@@ -161,15 +199,15 @@ class _Gate:
             if semaphore is not None:
                 wanted.append(semaphore)
 
-        acquired: list[asyncio.Semaphore] = []
+        acquired: list[asyncio.Semaphore | _Slots] = []
         try:
-            for semaphore in wanted:
-                await semaphore.acquire()
-                acquired.append(semaphore)
+            for slot in wanted:
+                await slot.acquire()
+                acquired.append(slot)
             yield
         finally:
-            for semaphore in reversed(acquired):
-                semaphore.release()
+            for slot in reversed(acquired):
+                slot.release()
 
 
 class Scheduler:
@@ -406,6 +444,13 @@ class Scheduler:
             if self._indegree[dependent] == 0:
                 self._push(dependent)
         self._wakeup.set()
+
+    def limit_host(self, host: str, limit: int, reason: str) -> None:
+        """Apply an adaptive per-host limit (issue #7) and say so in the event stream."""
+        previous, applied = self._gate.set_host_limit(host, limit)
+        if applied != previous:
+            ceiling = self._limits.host_concurrency
+            self._reporter.emit(HostLimitChanged(host, previous, applied, ceiling, reason))
 
     # -- runtime expansion -------------------------------------------------------
 

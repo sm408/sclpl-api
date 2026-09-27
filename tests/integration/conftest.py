@@ -69,6 +69,15 @@ class Handler(BaseHTTPRequestHandler):
             else:
                 self._respond(200, json.dumps({"attempts": seen + 1}).encode())
             return
+        if self.path.startswith("/pressure/"):
+            # /pressure/<n>: the first n requests get 429, the rest 200, all after the
+            # same short delay -- a host that rate-limits for a while, then recovers.
+            budget = int(self.path.rsplit("/", 1)[1])
+            seen = ATTEMPTS.get(self.path, 0)
+            ATTEMPTS[self.path] = seen + 1
+            time.sleep(0.01)
+            self._respond(429 if seen < budget else 200, b"{}")
+            return
         if self.path == "/slow":
             time.sleep(0.5)
             self._respond(200, b"{}")
