@@ -278,13 +278,22 @@ class Scheduler:
                 self._reporter.log("error", str(error))
             self._outcome.status = "failed"
 
+        self._conclude(started_at)
         if cancelled and _we_were_cancelled():
             # This task was the one cancelled, so the cancellation has to keep going.
             # Swallowing it would leave `asyncio.run` believing the run finished
             # normally, and Ctrl-C would appear to do nothing. Raised out here rather
             # than inside the `except*` block, which would re-wrap it in a group.
+            # `outcome` is already settled, so the caller can still record the run.
             raise asyncio.CancelledError
+        return self._outcome
 
+    @property
+    def outcome(self) -> Outcome:
+        """What happened so far; complete once `run` has returned or been cancelled."""
+        return self._outcome
+
+    def _conclude(self, started_at: float) -> None:
         never_ran = [
             node_id
             for node_id in self._plan.order
@@ -296,7 +305,6 @@ class Scheduler:
         if self._outcome.failed and self._outcome.status == "ok":
             self._outcome.status = "failed"
         self._outcome.duration_ms = int((time.perf_counter() - started_at) * 1000)
-        return self._outcome
 
     # -- the worker loop ---------------------------------------------------------
 

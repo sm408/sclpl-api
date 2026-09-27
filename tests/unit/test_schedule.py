@@ -277,6 +277,10 @@ async def test_cancellation_leaves_a_clean_outcome() -> None:
         task.cancel()
         with pytest.raises(asyncio.CancelledError):
             await task
+    # Settled before the cancellation propagates, so the runner can still record it.
+    assert scheduler.outcome.status == "cancelled"
+    assert sorted(scheduler.outcome.skipped) == sorted(f"s{index}" for index in range(8))
+    assert scheduler.outcome.duration_ms >= 0
 
 
 async def test_an_empty_plan_finishes_immediately() -> None:
