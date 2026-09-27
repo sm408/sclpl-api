@@ -68,8 +68,27 @@ remote responses may reduce concurrency.
   limit max_pages=1
 ```
 
-Modes support `all`, `include`, `exclude`, `extends`, `limit`, `vars`, and `stub`. Modes can only
-remove work or override scalar settings.
+A mode body line starts with one of `describe`, `include`, `exclude`, `extends`, `limit`, `var`,
+or `stub`. `var name=value` overrides a workflow `@var` while the mode is active; `vars` is
+accepted as an alias, and `sclpl fmt` writes it back as `var`.
+
+The header can carry the same settings inline: `all` selects every step, `+name` includes,
+`-name` excludes, a bare name includes, and `key=value` sets a var. This header-only mode:
+
+```sclpll
+@mode bearish "Short side only" all -long_entry bias=bearish
+```
+
+is the same as this one written with a body:
+
+```sclpll
+@mode bearish all
+  describe "Short side only"
+  exclude long_entry
+  var bias=bearish
+```
+
+Modes can only remove work or override scalar settings.
 
 ## Step headers
 

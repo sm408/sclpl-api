@@ -5,6 +5,9 @@ release lineage begins at `v1.0.0`.
 
 ## Unreleased
 
+- Fixed: a mode body now accepts `vars` as an alias of `var` (`sclpl fmt`
+  writes it back as `var`), and the SCLPLL reference documents `var` and the
+  `@mode name key=value` header form (#14).
 - Fixed: adaptive per-host concurrency is now applied (#7). A 429 or 503 halves
   the number of requests admitted to that host (requests already in flight
   finish), and it climbs back one step per window of steady responses, never

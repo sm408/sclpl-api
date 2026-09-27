@@ -10,7 +10,7 @@ from sclpl.errors import ValidationError
 from sclpl.run.ir import WorkflowDoc
 from sclpl.run.modes import resolve
 from sclpl.run.ports import bind, check_readable
-from sclpl.run.sclpll import parse
+from sclpl.run.sclpll import emit, parse
 
 SOURCE = """
 @workflow orders
@@ -116,6 +116,54 @@ def test_a_mode_extends_loop_is_refused() -> None:
     with pytest.raises(ValidationError) as caught:
         resolve(doc, "a")
     assert "loop" in str(caught.value)
+
+
+# -- mode vars (issue #14) -------------------------------------------------------
+
+REFERENCE = Path(__file__).parents[2] / "docs" / "guide" / "sclpll-reference.md"
+
+HEADER_FORM = '@mode bearish "Short side only" all -long_entry bias=bearish'
+BODY_FORM = """@mode bearish all
+  describe "Short side only"
+  exclude long_entry
+  var bias=bearish"""
+
+MODE_STEPS = """
+@workflow trades
+@var bias = "bullish"
+
+{mode}
+
+@step long_entry
+  let 1
+
+@step short_entry
+  let 2
+"""
+
+
+def test_the_documented_mode_examples_are_in_the_reference() -> None:
+    reference = REFERENCE.read_text(encoding="utf-8")
+    assert HEADER_FORM in reference
+    assert BODY_FORM in reference
+
+
+@pytest.mark.parametrize("mode", [HEADER_FORM, BODY_FORM, BODY_FORM.replace("  var ", "  vars ")])
+def test_header_body_and_alias_forms_agree(mode: str) -> None:
+    doc = parse(MODE_STEPS.format(mode=mode))
+    spec = doc.modes["bearish"]
+    assert spec.vars == {"bias": "bearish"}
+    assert spec.description == "Short side only"
+    resolved = resolve(doc, "bearish")
+    assert resolved.keep == {"short_entry"}
+    assert resolved.vars == {"bias": "bearish"}
+
+
+def test_fmt_writes_the_vars_alias_back_as_var() -> None:
+    doc = parse(MODE_STEPS.format(mode=BODY_FORM.replace("  var ", "  vars ")))
+    rendered = emit(doc)
+    assert "  var bias=" in rendered
+    assert "  vars " not in rendered
 
 
 # -- the closure check -----------------------------------------------------------

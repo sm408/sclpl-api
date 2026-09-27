@@ -243,8 +243,9 @@ class _Parser:
                 spec["extends"] = args[0] if args else None
             case "describe":
                 spec["description"] = unquote(line.rest)
-            case "var" | "limit" | "stub":
-                target = {"var": "vars", "limit": "limit", "stub": "stub"}[line.head]
+            case "var" | "vars" | "limit" | "stub":
+                # `vars` is an accepted alias; `sclpl fmt` writes it back as `var`.
+                target = "vars" if line.head in {"var", "vars"} else line.head
                 for item in args:
                     key, separator, value = item.partition("=")
                     if not separator:
